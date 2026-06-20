@@ -10,27 +10,38 @@ Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](http
 
 ## Install
 
-Requires Go 1.22+. The fastest path:
+### macOS (Homebrew)
+
+```bash
+brew install AndrewHannigan/tap/repocache
+```
+
+The macOS binary is signed with a Developer ID Application certificate and notarized by Apple — no Gatekeeper prompts, no `xattr` workarounds, just works.
+
+### Linux
+
+Pre-built tarballs for `linux_amd64` and `linux_arm64` are on the [releases page](https://github.com/AndrewHannigan/repocache/releases/latest):
+
+```bash
+# Pick your arch:
+ARCH=linux_amd64   # or linux_arm64
+VERSION=$(curl -s https://api.github.com/repos/AndrewHannigan/repocache/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/^v//')
+curl -L "https://github.com/AndrewHannigan/repocache/releases/download/v${VERSION}/repocache_${VERSION}_${ARCH}.tar.gz" \
+  | tar -xz -C /tmp
+sudo install /tmp/repocache /usr/local/bin/repocache
+```
+
+### From source (any platform with Go 1.22+)
 
 ```bash
 go install github.com/AndrewHannigan/repocache/cmd/repocache@latest
 ```
 
-This drops the binary at `$(go env GOPATH)/bin/repocache` — usually `~/go/bin/repocache`. If that directory isn't on your `PATH` yet, add it once:
+The binary lands at `$(go env GOPATH)/bin/repocache` (usually `~/go/bin/repocache`). Add that to your `PATH` if needed:
 
 ```bash
-echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 ```
-
-Or build from a clone:
-
-```bash
-git clone https://github.com/AndrewHannigan/repocache
-cd repocache && go build -o /usr/local/bin/repocache ./cmd/repocache
-```
-
-A proper Homebrew install path will land alongside the first tagged release.
 
 ---
 
