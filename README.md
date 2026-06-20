@@ -10,19 +10,27 @@ Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](http
 
 ## Install
 
-Requires Go 1.22+ and `gh` (the repo is currently private):
+Requires Go 1.22+. The fastest path:
 
 ```bash
-gh repo clone AndrewHannigan/repocache /tmp/repocache \
-  && (cd /tmp/repocache && go build -o /usr/local/bin/repocache ./cmd/repocache)
+go install github.com/AndrewHannigan/repocache/cmd/repocache@latest
 ```
 
-Or build by hand:
+This drops the binary at `$(go env GOPATH)/bin/repocache` — usually `~/go/bin/repocache`. If that directory isn't on your `PATH` yet, add it once:
+
+```bash
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Or build from a clone:
 
 ```bash
 git clone https://github.com/AndrewHannigan/repocache
 cd repocache && go build -o /usr/local/bin/repocache ./cmd/repocache
 ```
+
+A proper Homebrew install path will land alongside the first tagged release.
 
 ---
 
