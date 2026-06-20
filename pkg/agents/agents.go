@@ -40,6 +40,9 @@ type Installed struct {
 func All() []Agent {
 	return []Agent{
 		NewClaude(),
+		NewCodex(),
+		NewGemini(),
+		NewOpenCode(),
 	}
 }
 
