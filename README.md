@@ -3,6 +3,8 @@
 A CLI that gives terminal coding agents a **read-only local mirror** of your GitHub repositories, plus a way to **create writable workspaces** from that mirror when the agent wants to edit code.
 
 > **Status:** early scaffold. Design is settled; commands are not implemented yet. See [Status](#status).
+>
+> For the authoritative behavioral spec, see [SPEC.md](./SPEC.md).
 
 ---
 
@@ -20,7 +22,7 @@ Today, agents typically solve (1) by cloning into `/tmp` ad-hoc (wasteful, no ca
 - A **persistent, read-only library** of the repos *you've told it to care about*, kept fresh with one command (`repocache sync`).
 - An **editable workspace** for any (repo, branch) pair, created in O(seconds) via `git clone --reference` so it doesn't duplicate object storage on disk.
 
-Agents discover the tool via an `@REPOCACHE.md` line injected into `~/.claude/CLAUDE.md` (and equivalents for other agents) — see [Agent onboarding](#agent-onboarding).
+Agents discover the tool via `repocache init`, which registers the cache and workspace directories with each detected agent and injects a short `REPOCACHE.md` doc into the agent's always-loaded instructions — see [Agent onboarding](#agent-onboarding).
 
 ## Quick start
 
@@ -29,7 +31,9 @@ Agents discover the tool via an `@REPOCACHE.md` line injected into `~/.claude/CL
 git clone https://github.com/AndrewHannigan/repocache
 cd repocache && go build -o /usr/local/bin/repocache ./cmd/repocache
 
-# Initialize directories and an empty config
+# One-time setup: creates dirs + config, and integrates with detected agents
+# (Claude Code, Codex CLI, Gemini CLI, OpenCode). Prompts before touching
+# their config files. `--no-bg-sync` to skip the Claude SessionStart hook.
 repocache init
 
 # Add a repo to your library
@@ -38,18 +42,13 @@ repocache repo add https://github.com/anthropics/claude-code
 # Pull everything down
 repocache sync
 
-# The cache is now searchable
-rg "slash command" ~/.local/share/repocache/repos/anthropics/claude-code/
+# The cache is now searchable directly with standard tools
+rg "slash command" ~/.local/share/repocache/repos/github.com/anthropics/claude-code/
 
 # Spin up a workspace to make edits
-ws=$(repocache workspace path anthropics/claude-code fix-bug)
-repocache workspace new anthropics/claude-code fix-bug
-cd "$ws"
+cd "$(repocache workspace new anthropics/claude-code fix-bug)"
 # ... edit, commit, push, open PR with `gh` ...
 repocache workspace rm anthropics/claude-code fix-bug
-
-# Tell your agents the tool exists
-repocache install --claude   # or --codex, --opencode, --all
 ```
 
 ## How it works
@@ -103,22 +102,24 @@ The one cost of `--reference`: object storage is shared, and a `git gc` on the c
 
 ## Commands
 
-> Most of these are not implemented yet. This is the target surface.
+> Nothing is implemented yet. This is the target surface. See [SPEC.md](./SPEC.md) for exact behavior of each.
 
 | Command | Purpose |
 |---------|---------|
-| `repocache init` | Create config + data dirs |
-| `repocache repo add <url> [--name <n>]` | Add a repo to the config |
-| `repocache repo rm <name>` | Remove a repo from config (does not delete cache) |
+| `repocache init [--agents=auto\|all\|none\|<list>] [--no-bg-sync] [--print-agent-doc]` | Bootstrap dirs + config; integrate with detected agents |
+| `repocache uninstall [--agents=...]` | Reverse agent integration; leaves data and config in place |
+| `repocache repo add <url> [--name <n>]` | Add a repo to the library |
+| `repocache repo rm <name>` | Remove a repo from the library (does not delete cache) |
 | `repocache repo list [--json]` | List tracked repos, last sync, disk usage |
 | `repocache sync [<name>...] [--if-older-than <dur>] [--jobs N]` | Fetch + update working tree + reapply chmod |
 | `repocache workspace new <repo> <branch> [--base <branch>]` | Create a writable workspace via `git clone --reference` |
-| `repocache workspace list [--json]` | All workspaces, dirty state |
+| `repocache workspace list [--json]` | All workspaces, dirty/unpushed state |
 | `repocache workspace path <repo> <branch>` | Print absolute path (for `cd $(...)`) |
 | `repocache workspace rm <repo> <branch> [--force]` | Delete workspace; refuses if dirty unless `--force` |
-| `repocache install [--claude\|--codex\|--opencode\|--all] [--print]` | Inject `@REPOCACHE.md` into the agent's CLAUDE.md (or equivalent) |
-| `repocache uninstall ...` | Remove the `@REPOCACHE.md` line and file |
-| `repocache help <topic>` | Long-form docs on a specific command/topic |
+| `repocache help [<topic>]` | Long-form docs on a specific command/topic |
+| `repocache --version` | Print version |
+
+Branch listing, content search, PR checkout — `repocache` deliberately does not wrap these. Agents use `git`, `rg`, and `gh` directly against the cache and workspace paths.
 
 ### Exit codes
 
@@ -138,16 +139,24 @@ Every list/show command supports `--json` and emits a stable schema for agent co
 
 ## Agent onboarding
 
-The naive approach — telling the user to paste a paragraph into `~/.claude/CLAUDE.md` — is fragile. The skills approach (Playwright's model) is lazy-loaded, which is wrong for a tool the agent must reach for *before* doing the wrong thing (e.g. cloning into `/tmp` itself).
+`repocache init` auto-detects installed agents and configures each one. For every agent, three things happen:
 
-`repocache install --claude` does what [RTK](https://github.com/rtk-ai/rtk) does:
+1. **Doc injection.** Writes a short `REPOCACHE.md` (~15 lines) and idempotently appends `@REPOCACHE.md` to the agent's always-loaded instructions file. The agent sees this content every session — no lazy skill trigger, no manual paste.
+2. **Directory registration.** Adds `~/.local/share/repocache/repos/` and `~/.local/share/repocache/workspaces/` to the agent's allowed filesystem paths. Without this, the agent can't read or edit anywhere under the cache.
+3. **Background sync** (Claude Code only in v1). Installs a `SessionStart` hook that runs `repocache __bg-sync` — a backgrounded `repocache sync --if-older-than 1h`. Stale-but-fast first byte; the first session ever just prints a hint to run `sync` manually.
 
-1. Writes `~/.claude/REPOCACHE.md` — a short (~15 line) doc telling the agent the tool exists, where the cache lives, and the canonical workflow.
-2. Idempotently appends `@REPOCACHE.md` to `~/.claude/CLAUDE.md` (creating the file if missing).
+| Agent | Doc file | Settings file | Bg-sync? |
+|-------|----------|---------------|----------|
+| Claude Code | `~/.claude/CLAUDE.md` | `~/.claude/settings.json` (`permissions.additionalDirectories`) | Yes |
+| Codex CLI | `~/.codex/AGENTS.md` | `~/.codex/config.toml` (`sandbox_workspace_write.writable_roots`) | No |
+| Gemini CLI | `~/.gemini/GEMINI.md` | `~/.gemini/settings.json` | No |
+| OpenCode | `~/.config/opencode/AGENTS.md` | `~/.config/opencode/opencode.json` (`external_directory`) | No |
 
-Because `CLAUDE.md` is loaded every session, the agent sees the `REPOCACHE.md` content automatically — no skill trigger, no user prompt, no manual paste. `repocache uninstall --claude` cleanly reverses this.
+All edits are idempotent and tagged with a `repocache:managed` marker so `repocache uninstall` reverses them cleanly without touching unrelated user settings.
 
-Equivalent integrations are planned for Codex CLI, OpenCode, and Cursor.
+**OpenCode caveat:** there's an open upstream bug where a project-level `AGENTS.md` silently shadows the global one. In affected projects, the `@REPOCACHE.md` line repocache added won't be loaded. `init` prints a warning when installing for OpenCode.
+
+This pattern (doc injection via `@import`) is borrowed from [RTK](https://github.com/rtk-ai/rtk). Skills-based onboarding (Playwright's model) was rejected because it loads lazily — the agent needs to know about `repocache` *before* it decides to do the wrong thing.
 
 ## Authentication
 
@@ -162,12 +171,22 @@ If `git clone <url>` works at your shell, `repocache` works.
 
 This is an early scaffold. What's currently true:
 
-- ✅ Design settled, documented in this README
+- ✅ Design settled, documented in [SPEC.md](./SPEC.md)
 - ✅ Go module scaffolded (`go build ./cmd/repocache`)
 - ✅ `--version` flag works
 - ❌ No subcommands implemented yet
 
-Next: implement `init`, `repo add`, `repo list`, then `sync`, then `workspace new`.
+Implementation order (each step ends with a buildable, working binary):
+
+1. Config loader + paths + subcommand tree
+2. `repocache init` (dirs + config only — no agent integration yet)
+3. `repocache repo {add,rm,list}`
+4. `repocache sync`
+5. `repocache workspace {new,list,path,rm}`
+6. Claude Code agent integration (doc + dirs)
+7. Codex / Gemini / OpenCode agent integration + auto-detect
+8. `repocache __bg-sync` + Claude SessionStart hook
+9. `repocache help` + polish
 
 ## License
 
