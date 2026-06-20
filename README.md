@@ -10,7 +10,6 @@ Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](http
 - ⚡ **Cheap workspaces** — `git clone --reference` shares the cache's object store, so spinning up an editable clone doesn't re-download history.
 - 🔄 **Repos never stale** — they refresh in the background at session start, so the agent reasons about current code, not a checkout from weeks ago.
 - 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, Gemini CLI, and OpenCode by injecting a short doc into their always-loaded instructions.
-- 🧰 **No wrappers** — search with `rg`, list branches with `git`, open PRs with `gh`. Repocache only does what only it can do.
 - 📦 **Persistent shared library** — caches each repo once and reuses it across sessions instead of re-cloning into `/tmp`.
 
 ---
