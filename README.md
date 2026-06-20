@@ -6,6 +6,13 @@ Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](http
 
 ![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
 
+- 🔒 **OS-enforced read-only cache** — every repo is checked out `chmod a-w`, so your agent can `rg`/`grep` freely with zero risk of accidental writes.
+- ⚡ **Cheap workspaces** — `git clone --reference` shares the cache's object store, so spinning up an editable clone doesn't re-download history.
+- 🔄 **Never stale** — repos refresh in the background at session start, so the agent reasons about current code, not a checkout from weeks ago.
+- 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, Gemini CLI, and OpenCode by injecting a short doc into their always-loaded instructions.
+- 🧰 **No wrappers** — search with `rg`, list branches with `git`, open PRs with `gh`. Repocache only does what only it can do.
+- 📦 **Persistent shared library** — caches each repo once and reuses it across sessions instead of re-cloning into `/tmp`.
+
 ---
 
 ## Install
@@ -40,18 +47,6 @@ That's the whole loop. Repocache adds exactly two things to your agent's world:
 - A `workspace new` command that returns the path to an editable clone derived from the cache via `git clone --reference`.
 
 Everything else — searching, branch listing, PR creation — uses tools the agent already knows (`rg`, `git`, `gh`). Repocache doesn't wrap them.
-
----
-
-## Why use it
-
-If you've ever watched an agent:
-
-- **Clone a repo into `/tmp` just to grep it once** — repocache caches it persistently and shares it across sessions.
-- **Accidentally edit a file it shouldn't have** — the cache is OS-enforced read-only.
-- **Draw conclusions from a stale checkout it cloned weeks ago** — repocache refreshes repos in the background at session start, so the agent reads current code.
-- **Burn 10 minutes re-cloning a 2 GB monorepo** — `git clone --reference` shares the cache's object store instead of re-downloading history, so workspaces are cheap to create.
-- **Need to be told over and over where things live** — `repocache init` injects a short `@REPOCACHE.md` into every supported agent's always-loaded instructions, so the agent learns the workflow once.
 
 ---
 
