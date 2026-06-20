@@ -15,10 +15,7 @@ import (
 	"github.com/AndrewHannigan/repocache/pkg/paths"
 )
 
-const (
-	bgSyncWorkerEnv = "REPOCACHE_BG_SYNC_WORKER"
-	defaultInterval = time.Hour
-)
+const bgSyncWorkerEnv = "REPOCACHE_BG_SYNC_WORKER"
 
 func newBgSyncCmd() *cobra.Command {
 	return &cobra.Command{
@@ -92,17 +89,21 @@ func everSynced(c *config.Config) bool {
 	return false
 }
 
+// configBgInterval returns the staleness gate passed to `sync
+// --if-older-than`. Default is 0 (no gate): the cache refreshes on every
+// session start. Set bg_sync_interval (e.g. "1h") to skip repos synced
+// within that window instead.
 func configBgInterval() time.Duration {
 	c, err := config.Load()
 	if err != nil {
-		return defaultInterval
+		return 0
 	}
 	if c.Settings.BgSyncInterval == "" {
-		return defaultInterval
+		return 0
 	}
 	d, err := time.ParseDuration(c.Settings.BgSyncInterval)
 	if err != nil {
-		return defaultInterval
+		return 0
 	}
 	return d
 }
