@@ -52,7 +52,9 @@ Rules:
 ```toml
 # Optional settings.
 [settings]
-bg_sync_interval = "1h"   # passed to `sync --if-older-than` from __bg-sync
+bg_sync_interval = "1h"   # optional staleness gate for __bg-sync's `sync
+                          # --if-older-than`. Unset (default) = refresh on
+                          # every session start.
 
 # One [[repo]] block per tracked repository.
 [[repo]]
@@ -305,7 +307,7 @@ Behavior:
    - **Reconcile agent docs** (see §8.7): for every agent in the install
      state, rewrite its `REPOCACHE.md` if it has drifted from the binary's
      embedded copy. Best-effort; logged, never fatal.
-   - Exec `repocache sync --if-older-than <bg_sync_interval>` (default 1h from config).
+   - Exec `repocache sync --if-older-than <bg_sync_interval>`. If `bg_sync_interval` is unset (the default), no `--if-older-than` gate is applied and the cache refreshes on every session start.
    - Release lock on exit.
 
 Exit codes: 0 (always; bg failures don't propagate).
