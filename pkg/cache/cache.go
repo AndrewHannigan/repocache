@@ -152,6 +152,31 @@ func chmodTree(root string, writable bool) error {
 	})
 }
 
+// Remove deletes the cache repo directory from disk. It first restores
+// write permissions on the working tree (sync leaves it chmod a-w, which
+// would block os.RemoveAll from unlinking entries in read-only dirs),
+// then takes the exclusive lock so a concurrent sync can't race the
+// delete. Returns nil if the cache is already absent.
+func Remove(name string, timeout time.Duration) error {
+	if !Exists(name) {
+		return nil
+	}
+	lock, err := AcquireLock(name, true, timeout)
+	if err != nil {
+		return err
+	}
+	defer lock.Unlock()
+	if err := UnlockTree(name); err != nil {
+		return err
+	}
+	p := paths.CacheRepoPath(name)
+	if err := os.RemoveAll(p); err != nil {
+		return err
+	}
+	paths.PruneEmptyDirs(filepath.Dir(p), paths.ReposDir())
+	return nil
+}
+
 // Clone runs `git clone --no-checkout --config gc.auto=0 <url> <path>`.
 // If the destination exists, treats it as success (race with another sync).
 func Clone(url, name string) error {

@@ -149,10 +149,11 @@ Does NOT delete ~/.config/repocache/ or ~/.local/share/repocache/.
     derived from URL. --name overrides. Does not fetch — run 'sync'.
     Exit 3 if the name already exists.
 
-  repocache repo rm <name>
-    Remove a config entry. Does not delete the cache from disk; prints
-    the path so you can rm it yourself if desired (you'll need to
-    chmod -R u+w first — see 'help locking').
+  repocache repo rm <name> [--force]
+    Remove a repo completely: the config entry, the cache on disk, and
+    every workspace derived from it. Refuses if any workspace has
+    uncommitted or unpushed changes unless --force is given. Restores
+    write permissions on the read-only cache tree automatically.
 
   repocache repo list [--json]
     Show tracked repos with last sync, on-disk size, branch count.

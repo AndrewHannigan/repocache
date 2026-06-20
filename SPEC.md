@@ -139,17 +139,20 @@ Output: `added <name> (run \`repocache sync\` to fetch)`
 JSON: `--json` emits the added entry.
 Exit codes: 0; 3 (name exists); 7 (config error).
 
-### 5.4 `repocache repo rm <name>`
+### 5.4 `repocache repo rm <name> [--force]`
 
-Removes a config entry. Does not delete the cache on disk.
+Removes a repo completely: the config entry, the cache on disk, and every workspace derived from it.
 
 Behavior:
-1. Acquire exclusive lock on config.
-2. Resolve `<name>` per §5.0. If not found → exit 2; if ambiguous → exit 2 listing candidates.
-3. Remove entry; release lock.
-4. Print the cache path so the user can `rm -rf` it manually if desired.
+1. Resolve `<name>` per §5.0. If not found → exit 2; if ambiguous → exit 2 listing candidates.
+2. Inspect the repo's workspaces. Unless `--force` is given, refuse (exit 4) if any workspace has uncommitted or unpushed changes, listing the offending branches.
+3. Delete all workspaces for the repo (`rm -rf` the per-repo workspaces dir).
+4. Delete the cache on disk: acquire the exclusive per-cache-repo lock, restore writability (`chmod -R u+w`, since the working tree is left read-only between syncs — see §8.3), then `rm -rf` the cache dir.
+5. Acquire the exclusive config lock, remove the entry, release.
 
-Exit codes: 0; 2; 7.
+On-disk artifacts are removed before the config entry so a failure partway through leaves the entry as a record of remaining cleanup rather than orphaning untracked files.
+
+Exit codes: 0; 2; 4 (workspace has unsaved work, no `--force`); 5 (cache lock contended); 7.
 
 ### 5.5 `repocache repo list [--json]`
 

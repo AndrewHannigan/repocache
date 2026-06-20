@@ -102,6 +102,20 @@ func DefaultName(rawURL string) (string, error) {
 	return host + "/" + path, nil
 }
 
+// PruneEmptyDirs removes dir and each now-empty ancestor, walking up
+// until (but not including) stop. It stops at the first directory that
+// is non-empty or cannot be removed. Used to clean up the intermediate
+// host/owner dirs left behind when a repo's leaf dir is deleted.
+func PruneEmptyDirs(dir, stop string) {
+	stopPrefix := stop + string(filepath.Separator)
+	for dir != stop && strings.HasPrefix(dir, stopPrefix) {
+		if err := os.Remove(dir); err != nil {
+			return // non-empty or gone; nothing more to prune
+		}
+		dir = filepath.Dir(dir)
+	}
+}
+
 // Display returns a path with $HOME collapsed to "~" for human-readable output.
 func Display(p string) string {
 	h, err := os.UserHomeDir()
