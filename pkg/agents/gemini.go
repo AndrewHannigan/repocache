@@ -25,6 +25,7 @@ func (g *Gemini) Detected() bool {
 }
 
 func (g *Gemini) docFile() string      { return filepath.Join(g.dir, "REPOCACHE.md") }
+func (g *Gemini) DocPath() string      { return g.docFile() }
 func (g *Gemini) memoryFile() string   { return filepath.Join(g.dir, "GEMINI.md") }
 func (g *Gemini) settingsFile() string { return filepath.Join(g.dir, "settings.json") }
 

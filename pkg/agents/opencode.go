@@ -30,6 +30,7 @@ func (o *OpenCode) Detected() bool {
 }
 
 func (o *OpenCode) docFile() string      { return filepath.Join(o.dir, "REPOCACHE.md") }
+func (o *OpenCode) DocPath() string      { return o.docFile() }
 func (o *OpenCode) memoryFile() string   { return filepath.Join(o.dir, "AGENTS.md") }
 func (o *OpenCode) settingsFile() string { return filepath.Join(o.dir, "opencode.json") }
 

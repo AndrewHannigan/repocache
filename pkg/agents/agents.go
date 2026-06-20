@@ -26,9 +26,10 @@ type InstallOptions struct {
 
 // Agent is the interface every supported agent implements.
 type Agent interface {
-	Key() string    // stable lower-case identifier: "claude", "codex", ...
-	Name() string   // display name: "Claude Code"
-	Detected() bool // is the agent installed (config dir present)?
+	Key() string     // stable lower-case identifier: "claude", "codex", ...
+	Name() string    // display name: "Claude Code"
+	Detected() bool  // is the agent installed (config dir present)?
+	DocPath() string // absolute path to this agent's managed REPOCACHE.md
 	Install(opts InstallOptions) (Installed, error)
 	Uninstall(prev Installed) error
 }

@@ -302,10 +302,19 @@ Behavior:
 3. Otherwise:
    - Double-fork to detach from the session.
    - Redirect stdout/stderr to `~/.local/share/repocache/logs/bg-sync.log` (append, with rotation at e.g. 5 MB).
+   - **Reconcile agent docs** (see §8.7): for every agent in the install
+     state, rewrite its `REPOCACHE.md` if it has drifted from the binary's
+     embedded copy. Best-effort; logged, never fatal.
    - Exec `repocache sync --if-older-than <bg_sync_interval>` (default 1h from config).
    - Release lock on exit.
 
 Exit codes: 0 (always; bg failures don't propagate).
+
+Note: doc reconcile runs in the detached worker, so it is gated behind
+the "ever synced" check in step 2 — a freshly-upgraded cache that has
+never synced refreshes its docs on the first real sync. The reconcile
+runs under the bg-sync lock, so concurrent sessions can't race on the
+doc writes.
 
 ## 6. Read-only enforcement
 
@@ -504,7 +513,31 @@ installing the Codex hook.
 Sidecar state records each successful hook addition; uninstall reverses
 exactly those entries.
 
-### 8.7 Failure modes
+### 8.7 Doc reconcile on upgrade
+
+Upgrading the repocache binary (brew, `go install`, `install.sh`) swaps
+in a possibly newer embedded `REPOCACHE.md`, but nothing re-runs `init`,
+so each agent's on-disk `REPOCACHE.md` drifts from what the binary ships.
+
+To self-heal without requiring `repocache init` after every upgrade, the
+detached `__bg-sync` worker reconciles docs (§5.12): for every agent in
+the sidecar install state, if its `REPOCACHE.md` exists but differs from
+the embedded copy, it is overwritten with the embedded copy.
+
+- The check is **content-based**, not version-based, so `go install`
+  dogfood builds (which stamp `version=dev`) heal too.
+- Only the `REPOCACHE.md` file is touched — never the import line,
+  allowed-dir list, or hooks. Those are presence-checked and effectively
+  never change shape; reconciling them remains the job of `init`.
+- A doc the user **deleted** is left deleted (drift is refreshed, files
+  are not resurrected).
+- Because the worker fires from any agent's SessionStart hook and
+  iterates *all* agents in state, a single session in Claude, Codex, or
+  Gemini refreshes the docs of every integrated agent — **including
+  OpenCode**, which has no hook of its own. The only uncovered case is an
+  OpenCode-only install, which still relies on `repocache init`.
+
+### 8.8 Failure modes
 
 - Agent config file is malformed (invalid JSON/TOML): `init` refuses to modify, prints a clear error pointing at the file and line, exits 7. User must fix manually before re-running.
 - Agent dir does not exist (under `--agents=auto`): silently skip.
