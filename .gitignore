@@ -2,3 +2,7 @@
 /dist/
 *.test
 *.out
+
+# goreleaser snapshot artifacts
+/dist
+

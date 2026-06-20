@@ -10,7 +10,9 @@ import (
 	"github.com/AndrewHannigan/repocache/pkg/errs"
 )
 
-const version = "0.0.0"
+// version is set at link time by goreleaser via -ldflags "-X main.version=…".
+// Default "dev" is what you see when running `go run` / a bare `go build`.
+var version = "dev"
 
 func main() {
 	root := newRootCmd()

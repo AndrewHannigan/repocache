@@ -1,0 +1,64 @@
+version: 2
+
+project_name: repocache
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: repocache
+    main: ./cmd/repocache
+    binary: repocache
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    files:
+      - README.md
+      - SPEC.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+homebrew_casks:
+  - name: repocache
+    binaries: [repocache]
+    repository:
+      owner: AndrewHannigan
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: goreleaser-bot
+      email: bot@goreleaser.com
+    commit_msg_template: "repocache: cask update for {{ .Tag }}"
+    homepage: "https://github.com/AndrewHannigan/repocache"
+    description: "Read-only mirror of git repos for terminal coding agents"
