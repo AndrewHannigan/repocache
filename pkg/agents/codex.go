@@ -25,6 +25,7 @@ func (c *Codex) Detected() bool {
 }
 
 func (c *Codex) docFile() string      { return filepath.Join(c.dir, "REPOCACHE.md") }
+func (c *Codex) DocPath() string      { return c.docFile() }
 func (c *Codex) memoryFile() string   { return filepath.Join(c.dir, "AGENTS.md") }
 func (c *Codex) settingsFile() string { return filepath.Join(c.dir, "config.toml") }
 

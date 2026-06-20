@@ -27,6 +27,7 @@ func (c *Claude) Detected() bool {
 }
 
 func (c *Claude) docFile() string      { return filepath.Join(c.dir, "REPOCACHE.md") }
+func (c *Claude) DocPath() string      { return c.docFile() }
 func (c *Claude) memoryFile() string   { return filepath.Join(c.dir, "CLAUDE.md") }
 func (c *Claude) settingsFile() string { return filepath.Join(c.dir, "settings.json") }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/spf13/cobra"
 
+	"github.com/AndrewHannigan/repocache/pkg/agents"
 	"github.com/AndrewHannigan/repocache/pkg/cache"
 	"github.com/AndrewHannigan/repocache/pkg/config"
 	"github.com/AndrewHannigan/repocache/pkg/paths"
@@ -73,7 +74,29 @@ func bgSyncWorker() error {
 		return nil
 	}
 	defer lock.Unlock()
+	reconcileAgentDocs()
 	return runSync(nil, 4, configBgInterval(), false)
+}
+
+// reconcileAgentDocs refreshes each integrated agent's REPOCACHE.md when
+// it has drifted from the binary's embedded copy — the case after a
+// repocache upgrade, since swapping the binary doesn't re-run init.
+// Best-effort: any error is logged to the bg-sync log and ignored so it
+// never blocks the actual repo sync.
+func reconcileAgentDocs() {
+	state, err := agents.LoadState()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "repocache: doc reconcile: load state: %v\n", err)
+		return
+	}
+	updated, err := agents.ReconcileDocs(state)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "repocache: doc reconcile: %v\n", err)
+		return
+	}
+	for _, k := range updated {
+		fmt.Fprintf(os.Stderr, "repocache: refreshed REPOCACHE.md for %s\n", k)
+	}
 }
 
 func everSynced(c *config.Config) bool {
