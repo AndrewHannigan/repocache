@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 )
 
+const BgSyncCommand = "repocache __bg-sync"
+
 // Claude implements Agent for Claude Code.
 type Claude struct {
 	dir string // ~/.claude
@@ -28,14 +30,14 @@ func (c *Claude) docFile() string      { return filepath.Join(c.dir, "REPOCACHE.
 func (c *Claude) memoryFile() string   { return filepath.Join(c.dir, "CLAUDE.md") }
 func (c *Claude) settingsFile() string { return filepath.Join(c.dir, "settings.json") }
 
-func (c *Claude) Install() (Installed, error) {
+func (c *Claude) Install(opts InstallOptions) (Installed, error) {
 	if err := os.MkdirAll(c.dir, 0755); err != nil {
 		return Installed{}, err
 	}
 	if err := os.WriteFile(c.docFile(), DocContent, 0644); err != nil {
 		return Installed{}, fmt.Errorf("write %s: %w", c.docFile(), err)
 	}
-	added, err := ensureImportLine(c.memoryFile(), "REPOCACHE.md")
+	addedImport, err := ensureImportLine(c.memoryFile(), "REPOCACHE.md")
 	if err != nil {
 		return Installed{}, err
 	}
@@ -44,9 +46,20 @@ func (c *Claude) Install() (Installed, error) {
 	if err != nil {
 		return Installed{}, err
 	}
+	var hooks []string
+	if !opts.NoBgSync {
+		addedHook, err := ensureSessionStartHook(c.settingsFile(), BgSyncCommand)
+		if err != nil {
+			return Installed{}, err
+		}
+		if addedHook {
+			hooks = []string{BgSyncCommand}
+		}
+	}
 	return Installed{
 		AddedPaths:   paths,
-		AddedImports: importLineRecord(added, "REPOCACHE.md"),
+		AddedImports: importLineRecord(addedImport, "REPOCACHE.md"),
+		AddedHooks:   hooks,
 	}, nil
 }
 
@@ -57,6 +70,11 @@ func (c *Claude) Uninstall(prev Installed) error {
 	if len(prev.AddedPaths) > 0 {
 		if err := removeArrayEntries(loadJSONC, saveJSON, c.settingsFile(),
 			[]string{"permissions", "additionalDirectories"}, prev.AddedPaths); err != nil {
+			return err
+		}
+	}
+	for _, hookCmd := range prev.AddedHooks {
+		if err := removeSessionStartHook(c.settingsFile(), hookCmd); err != nil {
 			return err
 		}
 	}

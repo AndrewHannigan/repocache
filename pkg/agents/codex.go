@@ -28,7 +28,7 @@ func (c *Codex) docFile() string      { return filepath.Join(c.dir, "REPOCACHE.m
 func (c *Codex) memoryFile() string   { return filepath.Join(c.dir, "AGENTS.md") }
 func (c *Codex) settingsFile() string { return filepath.Join(c.dir, "config.toml") }
 
-func (c *Codex) Install() (Installed, error) {
+func (c *Codex) Install(_ InstallOptions) (Installed, error) {
 	if err := os.MkdirAll(c.dir, 0755); err != nil {
 		return Installed{}, err
 	}

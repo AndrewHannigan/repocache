@@ -33,7 +33,7 @@ func (o *OpenCode) docFile() string      { return filepath.Join(o.dir, "REPOCACH
 func (o *OpenCode) memoryFile() string   { return filepath.Join(o.dir, "AGENTS.md") }
 func (o *OpenCode) settingsFile() string { return filepath.Join(o.dir, "opencode.json") }
 
-func (o *OpenCode) Install() (Installed, error) {
+func (o *OpenCode) Install(_ InstallOptions) (Installed, error) {
 	if err := os.MkdirAll(o.dir, 0755); err != nil {
 		return Installed{}, err
 	}

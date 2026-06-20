@@ -31,7 +31,11 @@ func New(code int, format string, a ...any) *Coded {
 	return &Coded{Code: code, Err: fmt.Errorf(format, a...)}
 }
 
-// Wrap attaches a code to an existing error.
-func Wrap(code int, err error) *Coded {
+// Wrap attaches a code to an existing error. Returns nil if err is nil
+// so callers can pass through chained error-returning calls.
+func Wrap(code int, err error) error {
+	if err == nil {
+		return nil
+	}
 	return &Coded{Code: code, Err: err}
 }

@@ -28,7 +28,7 @@ func (g *Gemini) docFile() string      { return filepath.Join(g.dir, "REPOCACHE.
 func (g *Gemini) memoryFile() string   { return filepath.Join(g.dir, "GEMINI.md") }
 func (g *Gemini) settingsFile() string { return filepath.Join(g.dir, "settings.json") }
 
-func (g *Gemini) Install() (Installed, error) {
+func (g *Gemini) Install(_ InstallOptions) (Installed, error) {
 	if err := os.MkdirAll(g.dir, 0755); err != nil {
 		return Installed{}, err
 	}

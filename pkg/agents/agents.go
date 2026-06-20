@@ -19,12 +19,17 @@ var DocContent []byte
 // identify entries repocache added. See SPEC §8.5.
 const Marker = "repocache:managed"
 
+// InstallOptions tunes a per-agent install. Most agents ignore most options.
+type InstallOptions struct {
+	NoBgSync bool // Claude only: skip the SessionStart hook.
+}
+
 // Agent is the interface every supported agent implements.
 type Agent interface {
-	Key() string         // stable lower-case identifier: "claude", "codex", ...
-	Name() string        // display name: "Claude Code"
-	Detected() bool      // is the agent installed (config dir present)?
-	Install() (Installed, error)
+	Key() string    // stable lower-case identifier: "claude", "codex", ...
+	Name() string   // display name: "Claude Code"
+	Detected() bool // is the agent installed (config dir present)?
+	Install(opts InstallOptions) (Installed, error)
 	Uninstall(prev Installed) error
 }
 

@@ -111,9 +111,10 @@ func runAgentInstall(flag string, noBgSync bool) error {
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
+	opts := agents.InstallOptions{NoBgSync: noBgSync}
 	for _, a := range list {
 		fmt.Printf("\n%s:\n", a.Name())
-		installed, err := a.Install()
+		installed, err := a.Install(opts)
 		if err != nil {
 			fmt.Printf("  error: %v\n", err)
 			continue
@@ -121,13 +122,7 @@ func runAgentInstall(flag string, noBgSync bool) error {
 		state.Agents[a.Key()] = mergeInstalled(state.Agents[a.Key()], installed)
 		printInstalled(installed)
 	}
-	if err := agents.SaveState(state); err != nil {
-		return errs.Wrap(errs.Config, err)
-	}
-	if noBgSync {
-		fmt.Fprintln(os.Stderr, "\nnote: --no-bg-sync acknowledged (Claude SessionStart hook lands in a follow-up step)")
-	}
-	return nil
+	return errs.Wrap(errs.Config, agents.SaveState(state))
 }
 
 func mergeInstalled(prev, now agents.Installed) agents.Installed {
