@@ -49,7 +49,6 @@ If you've ever watched an agent:
 
 - **Clone a repo into `/tmp` just to grep it once** — repocache caches it persistently and shares it across sessions.
 - **Accidentally edit a file it shouldn't have** — the cache is OS-enforced read-only.
-- **Forget which repo a file came from** — the `<host>/<owner>/<repo>/` layout is self-describing.
 - **Draw conclusions from a stale checkout it cloned weeks ago** — repocache refreshes repos in the background at session start, so the agent reads current code.
 - **Burn 10 minutes re-cloning a 2 GB monorepo** — `git clone --reference` borrows the object store, so a fresh workspace lands in seconds even for huge repos.
 - **Need to be told over and over where things live** — `repocache init` injects a short `@REPOCACHE.md` into every supported agent's always-loaded instructions, so the agent learns the workflow once.
