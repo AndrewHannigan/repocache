@@ -524,16 +524,19 @@ If `git clone <url>` works at the user's shell, `repocache` works. If it doesn't
 - `repocache --version` prints the semver.
 - The on-disk layout (paths, lockfile names, sidecar state schema) is part of the contract. Breaking changes to layout require a major version bump and a documented migration path.
 
-## 15. Implementation order
+## 15. Implementation status
 
-Each step ends with a buildable, working binary.
+All nine planned steps are implemented and verified end-to-end:
 
-1. Config loader + `pkg/paths` + subcommand tree
-2. `repocache init` (dirs + config only; no agent integration)
-3. `repocache repo {add,rm,list}`
-4. `repocache sync`
-5. `repocache workspace {new,list,path,rm}`
-6. `pkg/agents/claude.go` + wire into `init`/`uninstall`
-7. `pkg/agents/{codex,gemini,opencode}.go` + auto-detect
-8. `repocache __bg-sync` + SessionStart hook (Claude only)
-9. `repocache help` + polish + README updates
+1. ✅ Config loader + `pkg/paths` + Cobra subcommand tree
+2. ✅ `repocache init` (dirs + config only; no agent integration)
+3. ✅ `repocache repo {add,rm,list}`
+4. ✅ `repocache sync` (parallel, locked, chmod-enforced)
+5. ✅ `repocache workspace {new,list,path,rm}` (with `git clone --reference`)
+6. ✅ `pkg/agents/claude.go` + wired into `init`/`uninstall`
+7. ✅ `pkg/agents/{codex,gemini,opencode}.go` + auto-detect
+8. ✅ `repocache __bg-sync` + Claude SessionStart hook
+9. ✅ `repocache help <topic>` + polish + README
+
+Subsequent work is not "implementation" but "operations": real release/
+packaging, public install path, CI, polishing UX based on usage.

@@ -4,7 +4,7 @@
 
 Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](https://developers.openai.com/codex/), [Gemini CLI](https://github.com/google-gemini/gemini-cli), and [OpenCode](https://opencode.ai).
 
-![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow)
+![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow)
 
 ---
 
@@ -90,7 +90,7 @@ If you've ever watched an agent:
 
 | Agent | Doc file | Allowed-dir setting | SessionStart bg-sync |
 |-------|----------|---------------------|----------------------|
-| Claude Code | `~/.claude/CLAUDE.md` ← `@REPOCACHE.md` | `~/.claude/settings.json` → `permissions.additionalDirectories` | Yes (coming next) |
+| Claude Code | `~/.claude/CLAUDE.md` ← `@REPOCACHE.md` | `~/.claude/settings.json` → `permissions.additionalDirectories` | Yes |
 | Codex CLI | `~/.codex/AGENTS.md` ← `@REPOCACHE.md` | `~/.codex/config.toml` → `sandbox_workspace_write.writable_roots` | No |
 | Gemini CLI | `~/.gemini/GEMINI.md` ← `@REPOCACHE.md` | `~/.gemini/settings.json` → `includeDirectories` | No |
 | OpenCode | `~/.config/opencode/AGENTS.md` ← `@REPOCACHE.md` | `~/.config/opencode/opencode.json` → `external_directory` | No |
@@ -195,18 +195,18 @@ If `git clone <url>` works in your shell, repocache works.
 
 ## Status
 
-What works today:
+Every command in [SPEC.md](./SPEC.md) is implemented and tested end-to-end:
 
-- ✅ `init` with agent integration for all four supported agents
-- ✅ `repo add` / `rm` / `list` (TOML config + cache stat)
+- ✅ `init` (bootstrap + agent integration for all four supported agents)
+- ✅ `uninstall` (precise reversal via sidecar state file)
+- ✅ `repo add` / `rm` / `list`
 - ✅ `sync` (parallel fetches, locking, chmod enforcement, `--if-older-than`)
 - ✅ `workspace new` / `list` / `path` / `rm` (`git clone --reference`, dirty/unpushed checks)
-- ✅ `uninstall` (precise reversal via sidecar state file)
+- ✅ Claude Code `SessionStart` bg-sync hook + hidden `__bg-sync` command
+- ✅ `help <topic>` long-form prose docs
 
-What's coming next:
-
-- ⏳ Claude Code `SessionStart` bg-sync hook
-- ⏳ `repocache help <topic>` long-form docs
+This is a *real* tool you can use today. The "beta" tag is honest about
+the lack of a real release / CI / packaging, not the feature set.
 
 See [SPEC.md](./SPEC.md) for the authoritative behavioral contract.
 

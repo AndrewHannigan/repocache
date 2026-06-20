@@ -33,6 +33,7 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
+	cmd.SetHelpCommand(newHelpCmd())
 	cmd.AddCommand(
 		newInitCmd(),
 		newUninstallCmd(),
