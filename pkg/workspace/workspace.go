@@ -247,3 +247,27 @@ func Remove(name, branch string) error {
 	}
 	return os.RemoveAll(p)
 }
+
+// RepoDir returns the directory holding all workspaces for a repo.
+func RepoDir(name string) string {
+	return filepath.Join(paths.WorkspacesDir(), filepath.FromSlash(name))
+}
+
+// RemoveAllForRepo deletes every workspace belonging to the repo, along
+// with the now-empty per-repo workspace directory. Returns nil if no
+// workspaces exist. Workspaces are plain writable clones, so a single
+// os.RemoveAll suffices.
+func RemoveAllForRepo(name string) error {
+	dir := RepoDir(name)
+	if _, err := os.Stat(dir); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	paths.PruneEmptyDirs(filepath.Dir(dir), paths.WorkspacesDir())
+	return nil
+}

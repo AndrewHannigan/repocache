@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/AndrewHannigan/repocache/pkg/config"
 	"github.com/AndrewHannigan/repocache/pkg/errs"
 	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/repocache/pkg/workspace"
 )
 
 const configLockTimeout = 2 * time.Second
@@ -70,27 +72,75 @@ func runRepoAdd(url, overrideName string) error {
 }
 
 func newRepoRmCmd() *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	cmd := &cobra.Command{
 		Use:   "rm <name>",
-		Short: "Remove a repository from the library (does not delete cache on disk)",
+		Short: "Remove a repository: config entry, cache on disk, and its workspaces",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRepoRm(args[0])
+			return runRepoRm(args[0], force)
 		},
 	}
+	cmd.Flags().BoolVar(&force, "force", false,
+		"delete even if a workspace has uncommitted or unpushed changes")
+	return cmd
 }
 
-func runRepoRm(name string) error {
-	var resolved string
-	err := config.WithLock(configLockTimeout, func(c *config.Config) error {
-		r, err := c.Resolve(name)
-		if err != nil {
-			return err
+func runRepoRm(name string, force bool) error {
+	// Resolve the name without mutating config yet, so we can run safety
+	// checks on the workspaces before deleting anything.
+	c, err := config.Load()
+	if err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	r, err := c.Resolve(name)
+	if err != nil {
+		return err
+	}
+	resolved, err := r.ResolvedName()
+	if err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+
+	workspaces, err := workspace.List([]string{resolved})
+	if err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	if !force {
+		var blocked []string
+		for _, ws := range workspaces {
+			parts := []string{}
+			if ws.Dirty {
+				parts = append(parts, "uncommitted changes")
+			}
+			if ws.Unpushed > 0 {
+				parts = append(parts, fmt.Sprintf("%d unpushed commits", ws.Unpushed))
+			}
+			if len(parts) > 0 {
+				blocked = append(blocked, fmt.Sprintf("  %s: %s", ws.Branch, joinAnd(parts)))
+			}
 		}
-		resolved, err = r.ResolvedName()
-		if err != nil {
-			return errs.Wrap(errs.Config, err)
+		if len(blocked) > 0 {
+			return errs.New(errs.Dirty,
+				"refusing to remove %s; these workspaces have unsaved work:\n%s\ncommit and push, or pass --force to discard",
+				resolved, strings.Join(blocked, "\n"))
 		}
+	}
+
+	// Remove on-disk artifacts first, then the config entry, so a failure
+	// partway through leaves the entry as a record of what still needs
+	// cleanup rather than orphaning files with no tracked owner.
+	if err := workspace.RemoveAllForRepo(resolved); err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	if err := cache.Remove(resolved, configLockTimeout); err != nil {
+		if errors.Is(err, cache.ErrLocked) {
+			return errs.Wrap(errs.Locked, err)
+		}
+		return errs.Wrap(errs.Config, err)
+	}
+
+	err = config.WithLock(configLockTimeout, func(c *config.Config) error {
 		for i := range c.Repos {
 			if n, _ := c.Repos[i].ResolvedName(); n == resolved {
 				c.Repos = append(c.Repos[:i], c.Repos[i+1:]...)
@@ -105,12 +155,20 @@ func runRepoRm(name string) error {
 		}
 		return wrapIfNotCoded(err, errs.Config)
 	}
-	fmt.Printf("removed %s from config\n", resolved)
-	if cache.Exists(resolved) {
-		fmt.Printf("cache still on disk at %s (rm -rf to free)\n",
-			paths.Display(paths.CacheRepoPath(resolved)))
+
+	fmt.Printf("removed %s (config", resolved)
+	if len(workspaces) > 0 {
+		fmt.Printf(", %s", pluralize(len(workspaces), "workspace"))
 	}
+	fmt.Println(", cache on disk)")
 	return nil
+}
+
+func pluralize(n int, noun string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, noun)
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 func newRepoListCmd() *cobra.Command {

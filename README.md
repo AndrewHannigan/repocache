@@ -126,7 +126,6 @@ Repocache does not manage credentials. Every git operation defers to whatever `g
 
 ## Limitations & gotchas
 
-- **Removing a repo doesn't free disk by itself.** `repocache repo rm <name>` removes the config entry but leaves the (read-only) cache on disk. To free it: `chmod -R u+w ~/.local/share/repocache/repos/<name> && rm -rf ~/.local/share/repocache/repos/<name>`.
 - **Large repos.** Full clones only — no sparse-checkout or partial-clone yet. Chromium/llvm-sized repos will feel it.
 - **OpenCode project-shadow bug.** When a project-level `AGENTS.md` exists, OpenCode silently ignores the global one (including `@REPOCACHE.md`). `init` prints a warning.
 - **No bg-sync for OpenCode.** It lacks a `SessionStart` hook; the other three agents auto-refresh stale repos on session start.
