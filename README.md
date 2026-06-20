@@ -18,18 +18,19 @@ brew install AndrewHannigan/tap/repocache
 
 The macOS binary is signed with a Developer ID Application certificate and notarized by Apple — no Gatekeeper prompts, no `xattr` workarounds, just works.
 
-### Linux
-
-Pre-built tarballs for `linux_amd64` and `linux_arm64` are on the [releases page](https://github.com/AndrewHannigan/repocache/releases/latest):
+### Linux / other Unix
 
 ```bash
-# Pick your arch:
-ARCH=linux_amd64   # or linux_arm64
-VERSION=$(curl -s https://api.github.com/repos/AndrewHannigan/repocache/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/^v//')
-curl -L "https://github.com/AndrewHannigan/repocache/releases/download/v${VERSION}/repocache_${VERSION}_${ARCH}.tar.gz" \
-  | tar -xz -C /tmp
-sudo install /tmp/repocache /usr/local/bin/repocache
+curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/install.sh | sh
 ```
+
+Detects OS + arch, downloads the right tarball from the latest release, verifies the SHA256 against `checksums.txt`, and installs to `/usr/local/bin/` (or `$REPOCACHE_INSTALL_DIR` if set). To pin a version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/install.sh | REPOCACHE_VERSION=0.0.4 sh
+```
+
+This script also works on macOS, but the Homebrew path above is preferred there (the script will suggest it).
 
 ### From source (any platform with Go 1.22+)
 
