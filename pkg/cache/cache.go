@@ -4,15 +4,23 @@ package cache
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/gofrs/flock"
 
 	"github.com/AndrewHannigan/repocache/pkg/paths"
 )
+
+// ErrLocked is returned when a cache repo's lock cannot be acquired in time.
+var ErrLocked = errors.New("cache repo locked by another process")
 
 // Meta is the JSON sidecar written at <cache>/.git/repocache.meta after
 // each successful sync.
@@ -74,6 +82,118 @@ func Size(name string) (int64, error) {
 		return nil
 	})
 	return total, err
+}
+
+// Lock acquires a flock on the cache repo's lockfile. exclusive=true for
+// sync, false (shared) for workspace creation. Caller must Unlock on
+// release. Returns ErrLocked on timeout.
+type Lock struct{ inner *flock.Flock }
+
+func AcquireLock(name string, exclusive bool, timeout time.Duration) (*Lock, error) {
+	p := paths.CacheRepoLockFile(name)
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		return nil, err
+	}
+	l := flock.New(p)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	var (
+		ok  bool
+		err error
+	)
+	if exclusive {
+		ok, err = l.TryLockContext(ctx, 100*time.Millisecond)
+	} else {
+		ok, err = l.TryRLockContext(ctx, 100*time.Millisecond)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrLocked
+	}
+	return &Lock{inner: l}, nil
+}
+
+func (l *Lock) Unlock() error { return l.inner.Unlock() }
+
+// LockTree applies chmod -R a-w to the cache working tree, excluding .git/.
+// The owner can always re-chmod to restore write later.
+func LockTree(name string) error { return chmodTree(paths.CacheRepoPath(name), false) }
+
+// UnlockTree applies chmod -R u+w to the cache working tree, excluding
+// .git/, so a subsequent git checkout can write tracked files.
+func UnlockTree(name string) error { return chmodTree(paths.CacheRepoPath(name), true) }
+
+func chmodTree(root string, writable bool) error {
+	gitDir := filepath.Join(root, ".git")
+	gitDirPrefix := gitDir + string(filepath.Separator)
+	return filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if p == gitDir {
+			return filepath.SkipDir
+		}
+		if strings.HasPrefix(p, gitDirPrefix) {
+			return nil
+		}
+		mode := info.Mode().Perm()
+		if writable {
+			mode |= 0200
+		} else {
+			mode &^= 0222
+		}
+		// Skip if no change needed.
+		if mode == info.Mode().Perm() {
+			return nil
+		}
+		return os.Chmod(p, mode)
+	})
+}
+
+// Clone runs `git clone --no-checkout --config gc.auto=0 <url> <path>`.
+// If the destination exists, treats it as success (race with another sync).
+func Clone(url, name string) error {
+	dest := paths.CacheRepoPath(name)
+	if _, err := os.Stat(dest); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+		return err
+	}
+	cmd := exec.Command("git", "clone", "--no-checkout", "--config", "gc.auto=0", url, dest)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		// Race: another process created the dir between our stat and clone.
+		if strings.Contains(string(out), "already exists") {
+			return nil
+		}
+		return fmt.Errorf("git clone: %w (output: %s)", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// Fetch runs `git fetch --all --prune --tags` in the cache repo.
+func Fetch(name string) error {
+	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name), "fetch", "--all", "--prune", "--tags")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git fetch: %w (output: %s)", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// CheckoutDetachedHEAD runs `git checkout --detach origin/HEAD` so the
+// cache tree always reflects the default branch's tip without owning a
+// local branch.
+func CheckoutDetachedHEAD(name string) error {
+	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name), "checkout", "--detach", "origin/HEAD")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git checkout: %w (output: %s)", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // BranchCount returns the number of remote-tracking branches under
