@@ -6,12 +6,12 @@ Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](http
 
 ![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
 
-- 🔒 **OS-enforced read-only cache** — every repo is checked out `chmod a-w`, so your agent can `rg`/`grep` freely with zero risk of accidental writes.
-- ⚡ **Cheap workspaces** — `git clone --reference` shares the cache's object store, so spinning up an editable clone doesn't re-download history.
-- 🔄 **Repos never stale** — they refresh in the background at session start, so the agent reasons about current code, not a checkout from weeks ago.
-- 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, Gemini CLI, and OpenCode by injecting a short doc into their always-loaded instructions.
-- 📦 **Persistent shared library** — caches each repo once and reuses it across sessions instead of re-cloning into `/tmp`.
-- 🧰 **Natively searchable** — search with `rg` or `grep`, list branches with `git`, open PRs with `gh`. Repocache only does what only it can do.
+- 🔒 **OS-enforced read-only cache** — every repo is `chmod a-w`; safe to `rg`/`grep`, impossible to clobber.
+- ⚡ **Cheap workspaces** — `git clone --reference` shares the object store; no history re-download.
+- 🔄 **Repos never stale** — refreshed in the background at session start.
+- 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, Gemini CLI, and OpenCode.
+- 📦 **Persistent shared library** — cached once and reused across sessions, never re-cloned to `/tmp`.
+- 🧰 **Natively searchable** — `rg`, `grep`, `git`, and `gh` work directly; no wrappers.
 
 ---
 
