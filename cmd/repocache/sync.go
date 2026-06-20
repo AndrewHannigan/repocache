@@ -110,26 +110,28 @@ func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) 
 }
 
 func resolveSyncTargets(c *config.Config, names []string) ([]syncTarget, error) {
-	byName := make(map[string]string, len(c.Repos))
-	allOrdered := make([]syncTarget, 0, len(c.Repos))
-	for _, r := range c.Repos {
+	if len(names) == 0 {
+		out := make([]syncTarget, 0, len(c.Repos))
+		for _, r := range c.Repos {
+			n, err := r.ResolvedName()
+			if err != nil {
+				return nil, errs.Wrap(errs.Config, err)
+			}
+			out = append(out, syncTarget{n, r.URL})
+		}
+		return out, nil
+	}
+	out := make([]syncTarget, 0, len(names))
+	for _, name := range names {
+		r, err := c.Resolve(name)
+		if err != nil {
+			return nil, err
+		}
 		n, err := r.ResolvedName()
 		if err != nil {
 			return nil, errs.Wrap(errs.Config, err)
 		}
-		byName[n] = r.URL
-		allOrdered = append(allOrdered, syncTarget{n, r.URL})
-	}
-	if len(names) == 0 {
-		return allOrdered, nil
-	}
-	out := make([]syncTarget, 0, len(names))
-	for _, n := range names {
-		url, ok := byName[n]
-		if !ok {
-			return nil, errs.New(errs.NotFound, "repo %q is not in the config", n)
-		}
-		out = append(out, syncTarget{n, url})
+		out = append(out, syncTarget{n, r.URL})
 	}
 	return out, nil
 }

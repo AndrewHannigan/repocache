@@ -81,16 +81,19 @@ func newRepoRmCmd() *cobra.Command {
 }
 
 func runRepoRm(name string) error {
-	var removed bool
+	var resolved string
 	err := config.WithLock(configLockTimeout, func(c *config.Config) error {
-		for i, r := range c.Repos {
-			n, err := r.ResolvedName()
-			if err != nil {
-				continue
-			}
-			if n == name {
+		r, err := c.Resolve(name)
+		if err != nil {
+			return err
+		}
+		resolved, err = r.ResolvedName()
+		if err != nil {
+			return errs.Wrap(errs.Config, err)
+		}
+		for i := range c.Repos {
+			if n, _ := c.Repos[i].ResolvedName(); n == resolved {
 				c.Repos = append(c.Repos[:i], c.Repos[i+1:]...)
-				removed = true
 				return config.Save(c)
 			}
 		}
@@ -102,13 +105,10 @@ func runRepoRm(name string) error {
 		}
 		return wrapIfNotCoded(err, errs.Config)
 	}
-	if !removed {
-		return errs.New(errs.NotFound, "repo %q is not in the config", name)
-	}
-	fmt.Printf("removed %s from config\n", name)
-	if cache.Exists(name) {
+	fmt.Printf("removed %s from config\n", resolved)
+	if cache.Exists(resolved) {
 		fmt.Printf("cache still on disk at %s (rm -rf to free)\n",
-			paths.Display(paths.CacheRepoPath(name)))
+			paths.Display(paths.CacheRepoPath(resolved)))
 	}
 	return nil
 }

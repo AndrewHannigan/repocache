@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gofrs/flock"
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/AndrewHannigan/repocache/pkg/errs"
 	"github.com/AndrewHannigan/repocache/pkg/paths"
 )
 
@@ -134,6 +136,38 @@ func (c *Config) FindByName(name string) *Repo {
 		}
 	}
 	return nil
+}
+
+// Resolve finds the config entry matching name, per SPEC §5.0: an exact
+// match on the resolved name wins; otherwise an unambiguous suffix match
+// on path-segment ("/") boundaries is used. Returns an errs.Coded with
+// NotFound when nothing matches or when a suffix matches more than one
+// repo (the message lists the candidates so the user can disambiguate).
+func (c *Config) Resolve(name string) (*Repo, error) {
+	if r := c.FindByName(name); r != nil {
+		return r, nil
+	}
+	var matches []*Repo
+	var candidates []string
+	for i := range c.Repos {
+		n, err := c.Repos[i].ResolvedName()
+		if err != nil {
+			continue
+		}
+		if strings.HasSuffix(n, "/"+name) {
+			matches = append(matches, &c.Repos[i])
+			candidates = append(candidates, n)
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return nil, errs.New(errs.NotFound, "repo %q is not in the config", name)
+	default:
+		return nil, errs.New(errs.NotFound,
+			"repo %q is ambiguous; matches: %s", name, strings.Join(candidates, ", "))
+	}
 }
 
 // EmptyTemplate returns the contents of an empty config file with a

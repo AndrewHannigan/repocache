@@ -75,6 +75,20 @@ Rules:
 
 For each command: signature, behavior, output, exit codes used. All commands accept `--help`. `--version` prints semver and exits 0.
 
+### 5.0 Repo name resolution
+
+Commands that resolve a `<repo>`/`<name>` argument against the configured repos (`sync`, `repo rm`, `workspace new`) use a single shared rule, in order:
+
+1. **Exact match** on a repo's resolved name (`<host>/<owner>/<repo>`, or the explicit `name` override). If one matches, use it.
+2. **Unambiguous suffix match.** Otherwise, match the argument against the trailing path segments of each resolved name, on segment (`/`) boundaries. `blackboard` matches `github.com/AndrewHannigan/blackboard`; `AndrewHannigan/blackboard` matches it too; `board` does not (not a segment boundary). If exactly one repo matches, use it.
+
+Resolution outcomes:
+- Exactly one match (by either rule) → resolved.
+- Zero matches → exit 2, message `repo "<arg>" is not in the config`.
+- Two or more suffix matches → exit 2, message naming the ambiguity and listing the candidate full names so the user can disambiguate.
+
+The rule is identical across all commands; no command resolves names differently. Exact match always wins over suffix match, so a short name can never shadow a repo whose full resolved name equals that string.
+
 ### 5.1 `repocache init [--agents=auto|all|none|<list>] [--no-bg-sync] [--print-agent-doc]`
 
 Bootstraps repocache and optionally integrates with detected agents.
@@ -131,7 +145,7 @@ Removes a config entry. Does not delete the cache on disk.
 
 Behavior:
 1. Acquire exclusive lock on config.
-2. If name not present → exit 2.
+2. Resolve `<name>` per §5.0. If not found → exit 2; if ambiguous → exit 2 listing candidates.
 3. Remove entry; release lock.
 4. Print the cache path so the user can `rm -rf` it manually if desired.
 
@@ -171,7 +185,7 @@ Exit codes: 0; 7.
 Fetches updates for all (or named) cache repos and refreshes their working trees. Idempotent. Safe to interrupt.
 
 Behavior:
-1. Resolve target set: no args = all repos in config; args = explicit subset. Unknown name → exit 2.
+1. Resolve target set: no args = all repos in config; args = explicit subset, each resolved per §5.0 (unknown → exit 2; ambiguous → exit 2 listing candidates).
 2. For each target, in parallel up to `--jobs N` (default 4):
    1. If `<cache>` does not exist yet, clone first:
       `git clone --no-checkout --config gc.auto=0 <url> <cache>`
@@ -204,7 +218,7 @@ Exit codes: 0 (all ok or skipped); 2 (unknown name); 5 (lock contention timed ou
 Creates a workspace at `~/.local/share/repocache/workspaces/<name>/<branch>/` derived from the cache repo via `--reference`.
 
 Behavior:
-1. Resolve `<repo>` to a config entry; if not in config → exit 2.
+1. Resolve `<repo>` to a config entry per §5.0; if not in config → exit 2; if ambiguous → exit 2 listing candidates.
 2. If cache does not exist → exit 2 with hint to run `repocache sync <repo>` first.
 3. Compute workspace path. If exists → exit 3.
 4. Acquire shared flock on cache repo.

@@ -56,9 +56,13 @@ func runWorkspaceNew(name, branch, base string) error {
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
-	repo := c.FindByName(name)
-	if repo == nil {
-		return errs.New(errs.NotFound, "repo %q is not in the config", name)
+	repo, err := c.Resolve(name)
+	if err != nil {
+		return err
+	}
+	name, err = repo.ResolvedName()
+	if err != nil {
+		return errs.Wrap(errs.Config, err)
 	}
 	if !cache.Exists(name) {
 		return errs.New(errs.NotFound, "cache repo not present; run `repocache sync %s` first", name)
