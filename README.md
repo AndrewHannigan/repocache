@@ -11,17 +11,12 @@ Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](http
 ## Install
 
 ```bash
-# macOS (Homebrew) — signed & notarized, no Gatekeeper prompts
+# macOS (Homebrew)
 brew install AndrewHannigan/tap/repocache
 
-# Linux / other Unix — detects OS+arch, verifies SHA256, installs to /usr/local/bin
+# Linux / other Unix
 curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/install.sh | sh
-
-# From source (Go 1.22+) — lands at $(go env GOPATH)/bin/repocache
-go install github.com/AndrewHannigan/repocache/cmd/repocache@latest
 ```
-
-The install script also runs on macOS, but Homebrew is preferred there. Pin a version with `REPOCACHE_VERSION=0.0.4` (script) or `@v0.0.4` (`go install`).
 
 ---
 
