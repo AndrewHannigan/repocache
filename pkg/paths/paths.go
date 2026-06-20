@@ -102,6 +102,21 @@ func DefaultName(rawURL string) (string, error) {
 	return host + "/" + path, nil
 }
 
+// Display returns a path with $HOME collapsed to "~" for human-readable output.
+func Display(p string) string {
+	h, err := os.UserHomeDir()
+	if err != nil || h == "" {
+		return p
+	}
+	if p == h {
+		return "~"
+	}
+	if strings.HasPrefix(p, h+string(os.PathSeparator)) {
+		return "~" + p[len(h):]
+	}
+	return p
+}
+
 func home() string {
 	h, err := os.UserHomeDir()
 	if err != nil {
