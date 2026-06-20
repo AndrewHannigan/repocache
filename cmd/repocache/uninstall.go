@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -95,12 +96,31 @@ func runPurge() error {
 	}
 
 	for _, dir := range []string{paths.DataDir(), paths.ConfigDir()} {
-		if err := os.RemoveAll(dir); err != nil {
+		if err := removeAllForce(dir); err != nil {
 			return errs.Wrap(errs.Config, fmt.Errorf("remove %s: %w", dir, err))
 		}
 		fmt.Printf("removed %s\n", paths.Display(dir))
 	}
 	return nil
+}
+
+// removeAllForce deletes dir like os.RemoveAll, but first restores the
+// owner write bit on every directory in the tree. sync leaves cache repos
+// chmod a-w (see cache.LockTree), and os.RemoveAll cannot unlink entries
+// inside a directory that lacks write permission, so a plain RemoveAll
+// fails partway through with EACCES. Only directories need fixing:
+// removing an entry depends on the parent dir's mode, not the entry's own.
+func removeAllForce(dir string) error {
+	filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // missing/unreadable: let RemoveAll report it
+		}
+		if info.IsDir() && info.Mode().Perm()&0200 == 0 {
+			os.Chmod(p, info.Mode().Perm()|0200)
+		}
+		return nil
+	})
+	return os.RemoveAll(dir)
 }
 
 // dirtyWorkspaces returns every workspace with uncommitted changes or
