@@ -98,7 +98,7 @@ name = "myorg/bar"   # optional override; default derived from URL
 
 ```
 repocache init [--agents=auto|all|none|<list>] [--no-bg-sync] [--print-agent-doc]
-repocache uninstall [--agents=...]
+repocache uninstall [--agents=...] [--purge]
 repocache repo {add,rm,list [--json]}
 repocache sync [<name>...] [--if-older-than <dur>] [--jobs N] [--json]
 repocache workspace {new,list [--json],path,rm [--force]}

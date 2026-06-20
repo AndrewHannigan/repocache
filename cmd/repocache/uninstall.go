@@ -1,17 +1,22 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/AndrewHannigan/repocache/pkg/agents"
 	"github.com/AndrewHannigan/repocache/pkg/errs"
+	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/repocache/pkg/workspace"
 )
 
 func newUninstallCmd() *cobra.Command {
 	var agentsFlag string
+	var purge bool
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Reverse agent integration (leaves repocache data and config in place)",
@@ -20,22 +25,30 @@ agent's config (REPOCACHE.md, the @import line, allowed-directory
 entries, SessionStart hook). Uses a sidecar state file to know which
 entries are repocache's; other entries are preserved.
 
-Does NOT delete ~/.config/repocache/ or ~/.local/share/repocache/.`,
+By default this does NOT delete ~/.config/repocache/ or
+~/.local/share/repocache/. Pass --purge to also remove those, deleting
+all cached repos, workspaces, and config. --purge warns and asks for
+confirmation if any workspace has uncommitted or unpushed work.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runUninstall(agentsFlag)
+			return runUninstall(agentsFlag, purge)
 		},
 	}
 	cmd.Flags().StringVar(&agentsFlag, "agents", "auto", "which agents to uninstall: auto|all|<comma-separated list>")
+	cmd.Flags().BoolVar(&purge, "purge", false, "also delete ~/.config/repocache and ~/.local/share/repocache (all cached repos, workspaces, and config)")
 	return cmd
 }
 
-func runUninstall(flag string) error {
+func runUninstall(flag string, purge bool) error {
 	list, err := agents.SelectByFlag(flag)
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
 	if len(list) == 0 {
 		fmt.Fprintln(os.Stderr, "no agents selected")
+		// Still honor --purge even when there's no integration to reverse.
+		if purge {
+			return runPurge()
+		}
 		return nil
 	}
 	state, err := agents.LoadState()
@@ -56,5 +69,76 @@ func runUninstall(flag string) error {
 	if err := agents.SaveState(state); err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
+	if purge {
+		return runPurge()
+	}
 	return nil
+}
+
+// runPurge deletes repocache's config and data directories. It first
+// scans workspaces for uncommitted or unpushed work and, if any is
+// found, prints them and asks for confirmation before deleting.
+func runPurge() error {
+	dirty, err := dirtyWorkspaces()
+	if err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	if len(dirty) > 0 {
+		fmt.Fprintf(os.Stderr, "\nWARNING: %d workspace(s) have uncommitted or unpushed work:\n", len(dirty))
+		for _, w := range dirty {
+			fmt.Fprintf(os.Stderr, "  %s  (%s)\n", paths.Display(w.Path), describeDirty(w))
+		}
+		if !confirmPurge() {
+			fmt.Fprintln(os.Stderr, "aborted; nothing deleted")
+			return nil
+		}
+	}
+
+	for _, dir := range []string{paths.DataDir(), paths.ConfigDir()} {
+		if err := os.RemoveAll(dir); err != nil {
+			return errs.Wrap(errs.Config, fmt.Errorf("remove %s: %w", dir, err))
+		}
+		fmt.Printf("removed %s\n", paths.Display(dir))
+	}
+	return nil
+}
+
+// dirtyWorkspaces returns every workspace with uncommitted changes or
+// unpushed commits.
+func dirtyWorkspaces() ([]workspace.Info, error) {
+	all, err := workspace.ListAll()
+	if err != nil {
+		return nil, err
+	}
+	var dirty []workspace.Info
+	for _, w := range all {
+		if w.Dirty || w.Unpushed > 0 {
+			dirty = append(dirty, w)
+		}
+	}
+	return dirty, nil
+}
+
+func describeDirty(w workspace.Info) string {
+	var parts []string
+	if w.Dirty {
+		parts = append(parts, "uncommitted changes")
+	}
+	if w.Unpushed > 0 {
+		parts = append(parts, fmt.Sprintf("%d unpushed commit(s)", w.Unpushed))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func confirmPurge() bool {
+	if !stdinIsTTY() {
+		// Non-interactive: refuse rather than destroy dirty work silently.
+		fmt.Fprintln(os.Stderr, "refusing to purge dirty workspaces without an interactive confirmation")
+		return false
+	}
+	fmt.Fprint(os.Stderr, "\nDelete all repocache data and config anyway? [y/N] ")
+	r := bufio.NewReader(os.Stdin)
+	line, _ := r.ReadString('\n')
+	line = strings.TrimSpace(strings.ToLower(line))
+	return line == "y" || line == "yes"
 }
