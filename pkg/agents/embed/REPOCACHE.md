@@ -1,0 +1,15 @@
+# repocache
+
+You have a local library of git repos managed by `repocache`.
+
+- **Read repos** at `~/.local/share/repocache/repos/<host>/<owner>/<repo>/` (read-only).
+  Use `rg`/`grep` directly. Do not modify files here.
+- **List the library**: `repocache repo list`
+- **Edit a repo**: `cd "$(repocache workspace new <repo> <branch>)"` — creates a writable workspace.
+  Commit, push, open PR with `gh` as normal.
+- **Clean up**: `repocache workspace rm <repo> <branch>` when done.
+- **Need a repo not in the library?** Ask the user to run `repocache repo add <url>`.
+- **More details**: `repocache help <topic>` or `repocache <cmd> --help`.
+
+If `workspace new` says "not in cache", run `repocache sync <repo>` first.
+Branch listing and full-text search use native `git`/`rg` — not wrapped.

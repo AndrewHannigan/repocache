@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/AndrewHannigan/repocache/pkg/agents"
 	"github.com/AndrewHannigan/repocache/pkg/config"
 	"github.com/AndrewHannigan/repocache/pkg/errs"
 	"github.com/AndrewHannigan/repocache/pkg/paths"
@@ -13,7 +16,7 @@ import (
 
 func newInitCmd() *cobra.Command {
 	var (
-		agents        string
+		agentsFlag    string
 		noBgSync      bool
 		printAgentDoc bool
 	)
@@ -30,23 +33,16 @@ Idempotent. Re-run after upgrading to refresh the embedded
 REPOCACHE.md content for each integrated agent.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if printAgentDoc {
-				// Agent doc not yet implemented; placeholder.
-				fmt.Println("# (REPOCACHE.md content will be bundled in step 6)")
-				return nil
+				_, err := os.Stdout.Write(agents.DocContent)
+				return err
 			}
 			if err := runInit(); err != nil {
 				return err
 			}
-			// Agent integration (--agents, --no-bg-sync) is implemented in steps 6–8.
-			if agents != "none" {
-				fmt.Fprintln(os.Stderr, "\nnote: agent integration (--agents) is not implemented yet")
-				fmt.Fprintln(os.Stderr, "      will be wired up in a follow-up step.")
-			}
-			_ = noBgSync
-			return nil
+			return runAgentInstall(agentsFlag, noBgSync)
 		},
 	}
-	cmd.Flags().StringVar(&agents, "agents", "auto", "agent integration: auto|all|none|<comma-separated list>")
+	cmd.Flags().StringVar(&agentsFlag, "agents", "auto", "agent integration: auto|all|none|<comma-separated list>")
 	cmd.Flags().BoolVar(&noBgSync, "no-bg-sync", false, "skip the Claude Code SessionStart bg-sync hook")
 	cmd.Flags().BoolVar(&printAgentDoc, "print-agent-doc", false, "print the embedded REPOCACHE.md to stdout and exit")
 	return cmd
@@ -85,6 +81,106 @@ func runInit() error {
 		fmt.Printf("%s  %s\n", status, paths.Display(s.path))
 	}
 	return nil
+}
+
+func runAgentInstall(flag string, noBgSync bool) error {
+	if flag == "none" {
+		return nil
+	}
+	// In non-TTY auto mode, skip silently to avoid surprise edits.
+	if flag == "auto" && !stdinIsTTY() {
+		fmt.Fprintln(os.Stderr, "\nskipping agent integration (non-TTY; pass --agents=all or a list to enable)")
+		return nil
+	}
+	list, err := agents.SelectByFlag(flag)
+	if err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	if len(list) == 0 {
+		if flag == "auto" {
+			fmt.Fprintln(os.Stderr, "\nno agents detected; skipping integration")
+		}
+		return nil
+	}
+	if flag == "auto" && !promptInstall(list) {
+		fmt.Fprintln(os.Stderr, "skipped")
+		return nil
+	}
+
+	state, err := agents.LoadState()
+	if err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	for _, a := range list {
+		fmt.Printf("\n%s:\n", a.Name())
+		installed, err := a.Install()
+		if err != nil {
+			fmt.Printf("  error: %v\n", err)
+			continue
+		}
+		state.Agents[a.Key()] = mergeInstalled(state.Agents[a.Key()], installed)
+		printInstalled(installed)
+	}
+	if err := agents.SaveState(state); err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	if noBgSync {
+		fmt.Fprintln(os.Stderr, "\nnote: --no-bg-sync acknowledged (Claude SessionStart hook lands in a follow-up step)")
+	}
+	return nil
+}
+
+func mergeInstalled(prev, now agents.Installed) agents.Installed {
+	merge := func(a, b []string) []string {
+		seen := map[string]bool{}
+		out := []string{}
+		for _, s := range append(a, b...) {
+			if !seen[s] {
+				seen[s] = true
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return agents.Installed{
+		AddedPaths:   merge(prev.AddedPaths, now.AddedPaths),
+		AddedImports: merge(prev.AddedImports, now.AddedImports),
+		AddedHooks:   merge(prev.AddedHooks, now.AddedHooks),
+	}
+}
+
+func printInstalled(i agents.Installed) {
+	if len(i.AddedPaths) == 0 && len(i.AddedImports) == 0 && len(i.AddedHooks) == 0 {
+		fmt.Printf("  (already up to date)\n")
+		return
+	}
+	for _, p := range i.AddedPaths {
+		fmt.Printf("  added directory: %s\n", paths.Display(p))
+	}
+	for _, d := range i.AddedImports {
+		fmt.Printf("  added import:    @%s\n", d)
+	}
+	for _, h := range i.AddedHooks {
+		fmt.Printf("  added hook:      %s\n", h)
+	}
+}
+
+func promptInstall(list []agents.Agent) bool {
+	names := []string{}
+	for _, a := range list {
+		names = append(names, a.Name())
+	}
+	fmt.Fprintf(os.Stderr, "\nDetected agents: %s\n", strings.Join(names, ", "))
+	fmt.Fprint(os.Stderr, "Install repocache integration for these? [Y/n] ")
+	r := bufio.NewReader(os.Stdin)
+	line, _ := r.ReadString('\n')
+	line = strings.TrimSpace(strings.ToLower(line))
+	return line == "" || line == "y" || line == "yes"
+}
+
+func stdinIsTTY() bool {
+	s, err := os.Stdin.Stat()
+	return err == nil && (s.Mode()&os.ModeCharDevice) != 0
 }
 
 func ensureDir(p string) (created bool, err error) {
