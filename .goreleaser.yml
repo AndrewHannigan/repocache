@@ -52,6 +52,14 @@ changelog:
 homebrew_casks:
   - name: repocache
     binaries: [repocache]
+    # The binary is unsigned (no Apple Developer cert). Strip the quarantine
+    # attribute on install so macOS Gatekeeper doesn't refuse to launch it.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/repocache"]
+          end
     repository:
       owner: AndrewHannigan
       name: homebrew-tap
