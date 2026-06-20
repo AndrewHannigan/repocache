@@ -23,24 +23,12 @@ curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/insta
 ## Try it (90 seconds)
 
 ```bash
-# 1. Bootstrap: create dirs + integrate with every detected agent
-repocache init
-
-# 2. Add a repo to your library
+repocache init                                                       # integrate with your agents
 repocache repo add https://github.com/anthropics/anthropic-sdk-python
+repocache sync                                                       # pull it down (read-only)
 
-# 3. Pull it down — full clone, working tree marked read-only
-repocache sync
-
-# 4. Your agent now sees it. Try in your terminal agent:
-#    "search the anthropic-sdk-python repo for prompt caching examples"
-
-# 5. When the agent wants to edit, it'll run:
+# your agent can now search it; when it wants to edit:
 cd "$(repocache workspace new anthropics/anthropic-sdk-python fix-typo)"
-#    ... edit, commit, push, open PR with gh ...
-
-# 6. Clean up when done
-repocache workspace rm anthropics/anthropic-sdk-python fix-typo
 ```
 
 That's the whole loop. Repocache adds exactly two things to your agent's world:
