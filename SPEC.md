@@ -351,9 +351,9 @@ Each supported agent's install touches up to three files. All edits are idempote
 | Agent | Detection | Files written | Background sync? |
 |-------|-----------|---------------|------------------|
 | Claude Code | `~/.claude/` exists | `~/.claude/REPOCACHE.md`, `~/.claude/CLAUDE.md`, `~/.claude/settings.json` | Yes |
-| Codex CLI | `~/.codex/` exists | `~/.codex/REPOCACHE.md`, `~/.codex/AGENTS.md`, `~/.codex/config.toml` | No |
-| Gemini CLI | `~/.gemini/` exists | `~/.gemini/REPOCACHE.md`, `~/.gemini/GEMINI.md`, `~/.gemini/settings.json` | No |
-| OpenCode | `~/.config/opencode/` exists | `~/.config/opencode/REPOCACHE.md`, `~/.config/opencode/AGENTS.md`, `~/.config/opencode/opencode.json` | No |
+| Codex CLI | `~/.codex/` exists | `~/.codex/REPOCACHE.md`, `~/.codex/AGENTS.md`, `~/.codex/config.toml` | Yes (requires user to run `/hooks` once to trust) |
+| Gemini CLI | `~/.gemini/` exists | `~/.gemini/REPOCACHE.md`, `~/.gemini/GEMINI.md`, `~/.gemini/settings.json` | Yes |
+| OpenCode | `~/.config/opencode/` exists | `~/.config/opencode/REPOCACHE.md`, `~/.config/opencode/AGENTS.md`, `~/.config/opencode/opencode.json` | No (upstream lacks SessionStart) |
 
 ### 8.2 REPOCACHE.md content
 
@@ -427,20 +427,51 @@ The sidecar state file (`agents.state.json`) records, per agent:
 
 Uninstall reads this file to know exactly what to remove. If the user has hand-edited the agent's config and our entries are gone, uninstall is a no-op for those.
 
-### 8.6 SessionStart hook (Claude Code only)
+### 8.6 SessionStart hook (Claude, Codex, Gemini)
 
-Added to `~/.claude/settings.json` under `hooks.SessionStart`:
+All three agents with a SessionStart-equivalent get the same wrapper
+command (`repocache __bg-sync`) installed. The hook entry shape is
+agent-specific.
 
+**Claude Code** — `~/.claude/settings.json`:
 ```jsonc
 {
   "hooks": {
     "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "repocache __bg-sync" } ] }
+    ]
+  }
+}
+```
+
+**Codex CLI** — `~/.codex/config.toml`:
+```toml
+[[hooks.SessionStart]]
+matcher = "startup|resume"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "repocache __bg-sync"
+statusMessage = "repocache bg-sync"
+```
+
+Codex requires the user to trust new hooks via the `/hooks` command
+before they run. `repocache init` prints a one-line note after
+installing the Codex hook.
+
+**Gemini CLI** — `~/.gemini/settings.json`:
+```json
+{
+  "hooks": {
+    "SessionStart": [
       {
+        "matcher": "*",
         "hooks": [
           {
+            "name": "repocache-bg-sync",
             "type": "command",
-            "command": "repocache __bg-sync"
-            // repocache:managed:bg-sync
+            "command": "repocache __bg-sync",
+            "timeout": 5000
           }
         ]
       }
@@ -449,7 +480,12 @@ Added to `~/.claude/settings.json` under `hooks.SessionStart`:
 }
 ```
 
-Sidecar state records the addition. Uninstall removes by sidecar.
+**OpenCode** — no SessionStart hook upstream
+([sst/opencode#5409](https://github.com/sst/opencode/issues/5409)).
+`init` skips this step for OpenCode and surfaces nothing.
+
+Sidecar state records each successful hook addition; uninstall reverses
+exactly those entries.
 
 ### 8.7 Failure modes
 

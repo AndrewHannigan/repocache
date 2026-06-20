@@ -48,7 +48,15 @@ func (c *Claude) Install(opts InstallOptions) (Installed, error) {
 	}
 	var hooks []string
 	if !opts.NoBgSync {
-		addedHook, err := ensureSessionStartHook(c.settingsFile(), BgSyncCommand)
+		entry := map[string]any{
+			"hooks": []any{
+				map[string]any{
+					"type":    "command",
+					"command": BgSyncCommand,
+				},
+			},
+		}
+		addedHook, err := ensureSessionStartHook(loadJSONC, saveJSON, c.settingsFile(), entry, BgSyncCommand)
 		if err != nil {
 			return Installed{}, err
 		}
@@ -74,7 +82,7 @@ func (c *Claude) Uninstall(prev Installed) error {
 		}
 	}
 	for _, hookCmd := range prev.AddedHooks {
-		if err := removeSessionStartHook(c.settingsFile(), hookCmd); err != nil {
+		if err := removeSessionStartHook(loadJSONC, saveJSON, c.settingsFile(), hookCmd); err != nil {
 			return err
 		}
 	}

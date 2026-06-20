@@ -99,9 +99,12 @@ If you've ever watched an agent:
 | Agent | Doc file | Allowed-dir setting | SessionStart bg-sync |
 |-------|----------|---------------------|----------------------|
 | Claude Code | `~/.claude/CLAUDE.md` ← `@REPOCACHE.md` | `~/.claude/settings.json` → `permissions.additionalDirectories` | Yes |
-| Codex CLI | `~/.codex/AGENTS.md` ← `@REPOCACHE.md` | `~/.codex/config.toml` → `sandbox_workspace_write.writable_roots` | No |
-| Gemini CLI | `~/.gemini/GEMINI.md` ← `@REPOCACHE.md` | `~/.gemini/settings.json` → `includeDirectories` | No |
-| OpenCode | `~/.config/opencode/AGENTS.md` ← `@REPOCACHE.md` | `~/.config/opencode/opencode.json` → `external_directory` | No |
+| Codex CLI | `~/.codex/AGENTS.md` ← `@REPOCACHE.md` | `~/.codex/config.toml` → `sandbox_workspace_write.writable_roots` | Yes (requires trust)¹ |
+| Gemini CLI | `~/.gemini/GEMINI.md` ← `@REPOCACHE.md` | `~/.gemini/settings.json` → `includeDirectories` | Yes |
+| OpenCode | `~/.config/opencode/AGENTS.md` ← `@REPOCACHE.md` | `~/.config/opencode/opencode.json` → `external_directory` | No² |
+
+¹ Codex requires you to trust new hooks before they run. After `repocache init`, open Codex CLI once and run `/hooks` to trust the entry.
+² OpenCode does not yet support a `SessionStart` hook ([upstream feature request](https://github.com/sst/opencode/issues/5409)).
 
 All edits are idempotent and tagged with a `repocache:managed` marker so `repocache uninstall` removes only what repocache added, preserving any other entries you've set.
 
@@ -197,6 +200,7 @@ If `git clone <url>` works in your shell, repocache works.
 - **Removing a repo doesn't free disk by itself.** `repocache repo rm <name>` removes the config entry but leaves the cache on disk. To free the disk: `chmod -R u+w ~/.local/share/repocache/repos/<name> && rm -rf ~/.local/share/repocache/repos/<name>`. The chmod is necessary because the cache tree is read-only.
 - **Large repos.** Repocache does full clones. No sparse-checkout or partial-clone yet. Chromium/llvm-sized repos will feel it.
 - **OpenCode project-shadow bug.** When a project-level `AGENTS.md` exists, OpenCode silently ignores the global one — including `@REPOCACHE.md`. Upstream issue; `init` prints a warning.
+- **No bg-sync for OpenCode.** OpenCode doesn't have a `SessionStart` hook yet. Other three agents auto-refresh stale repos on session start.
 - **No MCP server in v1.** The CLI is the only surface. MCP wrappers can be added later.
 
 ---
