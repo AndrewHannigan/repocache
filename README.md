@@ -20,7 +20,7 @@ curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/insta
 
 ---
 
-## Try it (90 seconds)
+## Quickstart
 
 ```bash
 # integrate with your agents
