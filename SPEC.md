@@ -114,15 +114,16 @@ JSON: not supported (init is interactive/setup-oriented).
 
 Exit codes: 0; 7 (config write error or `--agents=` value invalid).
 
-### 5.2 `repocache uninstall [--agents=auto|all|<list>]`
+### 5.2 `repocache uninstall [--agents=auto|all|<list>] [--purge]`
 
-Reverses agent integration. Does not delete `~/.config/repocache/` or `~/.local/share/repocache/`.
+Reverses agent integration. By default does not delete `~/.config/repocache/` or `~/.local/share/repocache/`.
 
 Behavior:
 1. Determine agent set as in `init`.
 2. For each selected agent, remove only the entries tagged with the `repocache:managed` marker (see §8.5). Untagged user entries are preserved.
 3. For Claude, also remove the SessionStart hook entry tagged as `repocache:bg-sync`.
 4. Delete each agent's `REPOCACHE.md` file.
+5. With `--purge`: after step 4, delete both `~/.local/share/repocache/` (DataDir) and `~/.config/repocache/` (ConfigDir), removing all cached repos, workspaces, and config. Before deleting, scan all workspaces; if any have uncommitted changes or unpushed commits, list them and prompt for confirmation (`[y/N]`). If stdin is not a TTY, refuse and abort rather than destroy dirty work. A clean set of workspaces is purged without prompting.
 
 Exit codes: 0; 7 (file write error).
 

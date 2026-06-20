@@ -64,7 +64,7 @@ The whole loop:
 
 Commands:
   init          bootstrap + integrate with detected agents
-  uninstall     reverse agent integration
+  uninstall     reverse agent integration (--purge also deletes data + config)
   repo          {add,rm,list} of tracked repos
   sync          fetch tracked repos and re-apply read-only chmod
   workspace     {new,list,path,rm} of writable workspaces
@@ -139,7 +139,13 @@ Uses a sidecar state file
 entries are repocache's, so user-added entries in the same files are
 preserved.
 
-Does NOT delete ~/.config/repocache/ or ~/.local/share/repocache/.
+By default this does NOT delete ~/.config/repocache/ or
+~/.local/share/repocache/.
+
+Pass --purge to also delete both directories, removing all cached
+repos, workspaces, and config. If any workspace has uncommitted or
+unpushed work, --purge lists those workspaces and asks for
+confirmation before deleting (and refuses when stdin is not a TTY).
 `,
 
 	"repo": `repo — manage the library

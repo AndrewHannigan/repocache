@@ -21,7 +21,7 @@ const cacheLockTimeout = 2 * time.Second
 
 // Info is a single workspace's state for listing.
 type Info struct {
-	Name     string    `json:"name"`     // repo name e.g. "github.com/foo/bar"
+	Name     string    `json:"name"` // repo name e.g. "github.com/foo/bar"
 	Branch   string    `json:"branch"`
 	Path     string    `json:"path"`
 	Dirty    bool      `json:"dirty"`
@@ -270,4 +270,38 @@ func RemoveAllForRepo(name string) error {
 	}
 	paths.PruneEmptyDirs(filepath.Dir(dir), paths.WorkspacesDir())
 	return nil
+}
+
+// ListAll scans the workspaces directory directly and returns every
+// workspace found, without consulting config. Use this when config may
+// be missing or about to be deleted (e.g. purge). The Name field holds
+// the repo-relative path on disk (repo name plus branch); callers that
+// only need paths and dirty/unpushed status should prefer this over List.
+func ListAll() ([]Info, error) {
+	root := paths.WorkspacesDir()
+	if _, err := os.Stat(root); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []Info
+	walkErr := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
+			return nil
+		}
+		if s, err := os.Stat(filepath.Join(p, ".git")); err == nil && s.IsDir() {
+			rel, err := filepath.Rel(root, p)
+			if err != nil || rel == "." {
+				return nil
+			}
+			out = append(out, infoFor(filepath.ToSlash(rel), "", p))
+			return filepath.SkipDir
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return nil, walkErr
+	}
+	return out, nil
 }
