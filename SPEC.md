@@ -382,7 +382,6 @@ Each supported agent's install touches up to three files. All edits are idempote
 | Claude Code | `~/.claude/` exists | `~/.claude/REPOCACHE.md`, `~/.claude/CLAUDE.md`, `~/.claude/settings.json` | Yes |
 | Codex CLI | `~/.codex/` exists | `~/.codex/REPOCACHE.md`, `~/.codex/AGENTS.md`, `~/.codex/config.toml` | Yes (requires user to run `/hooks` once to trust) |
 | Gemini CLI | `~/.gemini/` exists | `~/.gemini/REPOCACHE.md`, `~/.gemini/GEMINI.md`, `~/.gemini/settings.json` | Yes |
-| OpenCode | `~/.config/opencode/` exists | `~/.config/opencode/REPOCACHE.md`, `~/.config/opencode/AGENTS.md`, `~/.config/opencode/opencode.json` | No (upstream lacks SessionStart) |
 
 ### 8.2 REPOCACHE.md content
 
@@ -420,7 +419,6 @@ Two paths are added to each agent's filesystem-access list:
 | Claude Code | `~/.claude/settings.json` | `permissions.additionalDirectories` (array) |
 | Codex CLI | `~/.codex/config.toml` | `sandbox_workspace_write.writable_roots` (array) |
 | Gemini CLI | `~/.gemini/settings.json` | `includeDirectories` (verify exact key at impl time) |
-| OpenCode | `~/.config/opencode/opencode.json` | `external_directory` (array) |
 
 The OS-level `chmod a-w` on `repos/` enforces read-only regardless of what each agent considers writable — so adding both paths uniformly is safe.
 
@@ -428,7 +426,7 @@ The OS-level `chmod a-w` on `repos/` enforces read-only regardless of what each 
 
 Every entry repocache adds must be identifiable for clean uninstall:
 
-- **JSON/JSONC** (Claude, Gemini, OpenCode): wrap repocache entries in a sentinel comment block:
+- **JSON/JSONC** (Claude, Gemini): wrap repocache entries in a sentinel comment block:
   ```jsonc
   // repocache:managed:begin
   "permissions": {
@@ -509,10 +507,6 @@ installing the Codex hook.
 }
 ```
 
-**OpenCode** — no SessionStart hook upstream
-([sst/opencode#5409](https://github.com/sst/opencode/issues/5409)).
-`init` skips this step for OpenCode and surfaces nothing.
-
 Sidecar state records each successful hook addition; uninstall reverses
 exactly those entries.
 
@@ -536,15 +530,13 @@ the embedded copy, it is overwritten with the embedded copy.
   are not resurrected).
 - Because the worker fires from any agent's SessionStart hook and
   iterates *all* agents in state, a single session in Claude, Codex, or
-  Gemini refreshes the docs of every integrated agent — **including
-  OpenCode**, which has no hook of its own. The only uncovered case is an
-  OpenCode-only install, which still relies on `repocache init`.
+  Gemini refreshes the docs of every integrated agent, not just the one
+  whose hook fired.
 
 ### 8.8 Failure modes
 
 - Agent config file is malformed (invalid JSON/TOML): `init` refuses to modify, prints a clear error pointing at the file and line, exits 7. User must fix manually before re-running.
 - Agent dir does not exist (under `--agents=auto`): silently skip.
-- OpenCode special case: when a project-level `AGENTS.md` exists, the global `AGENTS.md` is silently ignored (known upstream bug). `init` for OpenCode prints a warning to that effect.
 
 ## 9. Exit codes
 
@@ -591,7 +583,7 @@ If `git clone <url>` works at the user's shell, `repocache` works. If it doesn't
 - Read-only cache mirror (sync)
 - Workspaces via `git clone --reference`
 - Read-only enforcement via `chmod a-w`
-- Agent integration for Claude Code, Codex CLI, Gemini CLI, OpenCode
+- Agent integration for Claude Code, Codex CLI, Gemini CLI
 - Background sync via Claude Code's SessionStart hook
 - `--json` output throughout
 - Stable exit codes
@@ -623,7 +615,7 @@ All nine planned steps are implemented and verified end-to-end:
 4. ✅ `repocache sync` (parallel, locked, chmod-enforced)
 5. ✅ `repocache workspace {new,list,path,rm}` (with `git clone --reference`)
 6. ✅ `pkg/agents/claude.go` + wired into `init`/`uninstall`
-7. ✅ `pkg/agents/{codex,gemini,opencode}.go` + auto-detect
+7. ✅ `pkg/agents/{codex,gemini}.go` + auto-detect
 8. ✅ `repocache __bg-sync` + Claude SessionStart hook
 9. ✅ `repocache help <topic>` + polish + README
 
