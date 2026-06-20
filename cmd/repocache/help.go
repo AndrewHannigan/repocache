@@ -218,7 +218,6 @@ Supported (auto-detected by config-dir presence):
   claude    ~/.claude/        — Claude Code
   codex     ~/.codex/         — OpenAI's Codex CLI
   gemini    ~/.gemini/        — Google's Gemini CLI
-  opencode  ~/.config/opencode/ — sst/opencode
 
 For each, 'repocache init' writes (idempotently, tagged with the marker
 'repocache:managed' so 'uninstall' can reverse precisely):
@@ -228,12 +227,8 @@ For each, 'repocache init' writes (idempotently, tagged with the marker
      (CLAUDE.md / AGENTS.md / GEMINI.md)
   3. The cache + workspaces dirs in the allowed-filesystem-paths
      setting (additionalDirectories / writable_roots /
-     includeDirectories / external_directory)
+     includeDirectories)
   4. (Claude only) A SessionStart hook running 'repocache __bg-sync'
-
-OpenCode caveat: when a project-level AGENTS.md exists, OpenCode
-silently ignores the global one — including the @REPOCACHE.md line we
-added. Upstream bug; nothing repocache can do from its side.
 `,
 
 	"auth": `auth — repocache delegates to git

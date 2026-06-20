@@ -50,8 +50,8 @@ func newRootCmd() *cobra.Command {
 const rootLong = `repocache maintains a read-only local mirror of GitHub repos and
 creates writable workspaces from it via 'git clone --reference'.
 
-Designed for terminal coding agents (Claude Code, Codex CLI, Gemini CLI,
-OpenCode) to search across many repos and edit a few.`
+Designed for terminal coding agents (Claude Code, Codex CLI, Gemini CLI)
+to search across many repos and edit a few.`
 
 // notImplemented is a placeholder for command stubs not yet wired up.
 func notImplemented(name string) error {

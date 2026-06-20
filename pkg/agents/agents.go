@@ -48,7 +48,6 @@ func All() []Agent {
 		NewClaude(),
 		NewCodex(),
 		NewGemini(),
-		NewOpenCode(),
 	}
 }
 
