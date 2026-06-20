@@ -23,9 +23,12 @@ curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/insta
 ## Try it (90 seconds)
 
 ```bash
-repocache init                                                       # integrate with your agents
+# integrate with your agents
+repocache init
+
+# add a repo, then pull it down (read-only)
 repocache repo add https://github.com/anthropics/anthropic-sdk-python
-repocache sync                                                       # pull it down (read-only)
+repocache sync
 
 # your agent can now search it; when it wants to edit:
 cd "$(repocache workspace new anthropics/anthropic-sdk-python fix-typo)"
