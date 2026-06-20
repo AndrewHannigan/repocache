@@ -1,0 +1,4 @@
+/repocache
+/dist/
+*.test
+*.out
