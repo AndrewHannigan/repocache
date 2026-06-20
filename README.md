@@ -4,7 +4,7 @@
 
 Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](https://developers.openai.com/codex/), [Gemini CLI](https://github.com/google-gemini/gemini-cli), and [OpenCode](https://opencode.ai).
 
-![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow)
+![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
@@ -228,3 +228,7 @@ See [SPEC.md](./SPEC.md) for the authoritative behavioral contract.
 
 - [SPEC.md](./SPEC.md) — full behavioral spec (commands, locking, deadlock-freedom guarantees, agent integration details)
 - `repocache --help` and `repocache <cmd> --help` — flag reference
+
+## License
+
+[MIT](./LICENSE) — © 2026 Andrew Hannigan.

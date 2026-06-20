@@ -32,6 +32,7 @@ archives:
     files:
       - README.md
       - SPEC.md
+      - LICENSE
 
 checksum:
   name_template: 'checksums.txt'
