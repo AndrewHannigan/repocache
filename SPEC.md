@@ -173,16 +173,17 @@ Fetches updates for all (or named) cache repos and refreshes their working trees
 Behavior:
 1. Resolve target set: no args = all repos in config; args = explicit subset. Unknown name → exit 2.
 2. For each target, in parallel up to `--jobs N` (default 4):
-   1. Acquire exclusive flock on `<cache>/.git/repocache.lock`. If `<cache>` does not exist yet, clone first with:
+   1. If `<cache>` does not exist yet, clone first:
       `git clone --no-checkout --config gc.auto=0 <url> <cache>`
-      Then acquire the lock.
-   2. Read `.git/repocache.meta`. If `--if-older-than D` and `now - last_sync_at < D`, skip (record as skipped).
-   3. Restore writability on the working tree (`chmod -R u+w <cache-tree>`) so the next steps can touch tracked files.
-   4. `git fetch --all --prune --tags`.
-   5. `git checkout --detach origin/HEAD` (so the cache never owns a local branch).
-   6. `chmod -R a-w <cache>` (excluding `.git/`). This is the final read-only state.
-   7. Write `.git/repocache.meta` with new `last_sync_at`.
-   8. Release lock.
+      If the clone fails with "directory exists" / "directory not empty" (another sync raced us to it), treat as success and proceed.
+   2. Acquire exclusive flock on `<cache>/.git/repocache.lock` with a long timeout (default 5 minutes; see §7). If timeout exceeded → exit 5 for this repo.
+   3. Read `.git/repocache.meta`. If `--if-older-than D` and `now - last_sync_at < D`, skip (record as skipped); release lock.
+   4. Restore writability on the entire working tree, both files and directories: `chmod -R u+w <cache-tree>` (excluding `.git/`). This is required because the previous sync left files chmod a-w; git checkout cannot overwrite them otherwise.
+   5. `git fetch --all --prune --tags`.
+   6. `git checkout --detach origin/HEAD` (so the cache never owns a local branch).
+   7. `chmod -R a-w <cache>` (excluding `.git/`). This is the final read-only state. `.git/` is always excluded so the lockfile and metadata remain writable.
+   8. Write `.git/repocache.meta` with new `last_sync_at`.
+   9. Release lock (also auto-released if the process dies; flock guarantee).
 3. Print one line per repo with status: ✓ (synced), skipped (fresh), ✗ (error).
 
 Output (human):
@@ -301,16 +302,45 @@ Workspaces are never chmod-restricted. They are normal git working trees.
 
 ## 7. Locking
 
-| Scope | Lockfile | Mode | Held during |
-|-------|----------|------|-------------|
-| Per-cache-repo | `<cache>/.git/repocache.lock` | exclusive | `sync` (whole repo's update) |
-| Per-cache-repo | (same file) | shared | `workspace new` (during clone) |
-| Config file | `~/.config/repocache/.lock` | exclusive | `repo add`/`rm` while editing config |
-| Global bg-sync | `~/.local/share/repocache/.bg-sync.lock` | exclusive, non-blocking | `__bg-sync` startup |
+| Scope | Lockfile | Mode | Acquire timeout | Held during |
+|-------|----------|------|-----------------|-------------|
+| Global bg-sync | `~/.local/share/repocache/.bg-sync.lock` | exclusive, **non-blocking** | 0s (fail-fast) | `__bg-sync` startup |
+| Config file | `~/.config/repocache/.lock` | exclusive | 2s (blocking) | brief: read-modify-write of config |
+| Per-cache-repo | `<cache>/.git/repocache.lock` | exclusive | **5 minutes** (blocking) | `sync` of that repo (fetch + checkout + chmod + meta write) |
+| Per-cache-repo | (same file) | shared | 2s (blocking) | `workspace new` (during clone) |
 
-- Lock timeout (for blocking acquires): 2 seconds. On timeout → exit 5.
-- The exclusive cache-repo lock includes the `chmod` steps so workspace creation can't observe a transitional state.
-- `workspace rm`, `workspace list`, `repo list` take no locks.
+- The exclusive cache-repo lock includes the `chmod` steps so `workspace new` can't observe a transitional state.
+- `workspace rm`, `workspace list`, `workspace path`, `repo list` take no locks.
+- On timeout → exit 5 with a message naming the lock and (if recorded) the holder's PID.
+
+### 7.1 Deadlock-freedom
+
+Several properties combine to guarantee `repocache` never deadlocks, never wedges itself on a stale lock, and never gets blocked by its own read-only enforcement:
+
+1. **Fixed lock-acquisition order.** A process must acquire locks top-down in the table order, and must never acquire a higher-listed lock while holding a lower-listed one:
+   1. bg-sync gate
+   2. config lock
+   3. per-cache-repo lock
+
+   No command holds a per-repo lock and then attempts to acquire the config lock. With a single fixed order across all code paths, no cycle is possible — and thus no deadlock.
+
+2. **Auto-release on process exit.** `flock(2)` releases all held locks when the process dies (clean exit, signal, kill -9). A stale lockfile on disk is not a held lock — the next `flock` call succeeds immediately. No manual cleanup needed.
+
+3. **`.git/` is excluded from read-only enforcement.** Every `chmod -R a-w` call walks only the working tree and skips `<cache>/.git/`. The lockfile (`<cache>/.git/repocache.lock`) and metadata sidecar (`<cache>/.git/repocache.meta`) always remain writable. There is no scenario where read-only enforcement prevents the next sync from acquiring the lock or recording its progress.
+
+4. **Sync re-enables write before mutating the tree.** Step 4 of sync (§5.6) explicitly runs `chmod -R u+w` on the working tree before fetch/checkout. This is what prevents the read-only state set by the previous sync from blocking the next one.
+
+5. **Owner can always re-chmod.** `chmod -R a-w` removes the write bit even for the owner, but the owner retains the meta-permission to change permissions. `chmod -R u+w` always works for the cache owner. The read-only invariant is not a one-way trap.
+
+6. **Cache-creation race is handled.** If two sync processes both observe a missing cache and race to clone, the second sees a "directory exists" / "directory not empty" error from git and proceeds to acquire the per-repo lock (which serializes the rest). No coordination beyond standard filesystem semantics needed.
+
+7. **Long timeout for sync, short for everyone else.** Sync's per-repo exclusive lock has a 5-minute timeout so that user-initiated sync does not spuriously fail due to brief contention with `__bg-sync` or another sync. Fast operations (`workspace new`, config writes) use a 2s timeout because they shouldn't ever block on a long-running sync — better to exit 5 quickly and let the user retry than to hang.
+
+8. **`__bg-sync` never blocks the session.** The bg-sync gate is non-blocking; if another bg-sync is already running, the new one exits 0 immediately. Inside `__bg-sync`, the invoked `sync` may wait on per-repo locks up to its 5-minute timeout, but this happens after detaching from the session and therefore never delays Claude Code startup.
+
+9. **Partial state self-heals.** If a process is killed mid-sync, the cache may be left in a partially-writable state. The lock is auto-released; the next sync re-enters cleanly: step 4 forces writability, steps 5–7 redo fetch/checkout/chmod idempotently. No deadlock, just temporary inconsistency that recovers on the next sync.
+
+These guarantees are part of the contract. Any implementation that violates one of them is incorrect.
 
 ## 8. Agent integration
 
