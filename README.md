@@ -6,7 +6,7 @@ Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](http
 
 ![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
 
-- 🔒 **OS-enforced read-only cache** — every repo is `chmod a-w`; safe to `rg`/`grep`, impossible to clobber.
+- 🔒 **OS-enforced read-only repos** — every repo is a pristine reference that is impossible to clobber.
 - ⚡ **Cheap workspaces** — `git clone --reference` shares the object store; no history re-download.
 - 🔄 **Repos never stale** — refreshed in the background at session start.
 - 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, and Gemini CLI.
