@@ -39,7 +39,7 @@ func newRepoAddCmd() *cobra.Command {
 		Use:   "add <url>",
 		Short: "Add a repository, or a whole user/org, to the library",
 		Long: `add appends a repo to the library. If <url> points at a bare user or
-org (a single path segment, e.g. https://github.com/AndrewHannigan), it is
+org (a single path segment, e.g. https://github.com/octocat), it is
 tracked as an owner instead: each sync discovers that owner's repos via gh
 and adds any new ones automatically.
 

@@ -9,7 +9,7 @@ import (
 
 func TestResolveOwner(t *testing.T) {
 	c := &Config{Owners: []Owner{
-		{URL: "https://github.com/AndrewHannigan"},
+		{URL: "https://github.com/octocat"},
 		{URL: "https://gitlab.com/acme"},
 	}}
 	tests := []struct {
@@ -18,7 +18,7 @@ func TestResolveOwner(t *testing.T) {
 		wantURL  string
 		wantCode int
 	}{
-		{name: "exact full name", arg: "github.com/AndrewHannigan", wantURL: "https://github.com/AndrewHannigan"},
+		{name: "exact full name", arg: "github.com/octocat", wantURL: "https://github.com/octocat"},
 		{name: "unambiguous suffix", arg: "acme", wantURL: "https://gitlab.com/acme"},
 		{name: "no match", arg: "nope", wantCode: errs.NotFound},
 	}
@@ -89,8 +89,8 @@ func TestSourceAndOwnerRoundTrip(t *testing.T) {
 
 func TestResolve(t *testing.T) {
 	c := &Config{Repos: []Repo{
-		{URL: "https://github.com/AndrewHannigan/blackboard"},
-		{URL: "https://github.com/AndrewHannigan/whiteboard"},
+		{URL: "https://github.com/octocat/blackboard"},
+		{URL: "https://github.com/octocat/whiteboard"},
 		{URL: "https://gitlab.com/other/blackboard"},
 		{URL: "git@github.com:foo/bar.git", Name: "myorg/bar"},
 	}}
@@ -101,13 +101,13 @@ func TestResolve(t *testing.T) {
 		wantURL  string // non-empty => expect this repo's URL
 		wantCode int    // non-zero => expect an errs.Coded with this code
 	}{
-		{name: "exact full name", arg: "github.com/AndrewHannigan/whiteboard",
-			wantURL: "https://github.com/AndrewHannigan/whiteboard"},
+		{name: "exact full name", arg: "github.com/octocat/whiteboard",
+			wantURL: "https://github.com/octocat/whiteboard"},
 		{name: "exact name override", arg: "myorg/bar", wantURL: "git@github.com:foo/bar.git"},
 		{name: "unambiguous suffix", arg: "whiteboard",
-			wantURL: "https://github.com/AndrewHannigan/whiteboard"},
-		{name: "two-segment suffix", arg: "AndrewHannigan/blackboard",
-			wantURL: "https://github.com/AndrewHannigan/blackboard"},
+			wantURL: "https://github.com/octocat/whiteboard"},
+		{name: "two-segment suffix", arg: "octocat/blackboard",
+			wantURL: "https://github.com/octocat/blackboard"},
 		{name: "ambiguous suffix", arg: "blackboard", wantCode: errs.NotFound},
 		{name: "not a segment boundary", arg: "board", wantCode: errs.NotFound},
 		{name: "no match", arg: "nope", wantCode: errs.NotFound},

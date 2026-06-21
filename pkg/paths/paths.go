@@ -101,7 +101,7 @@ func DefaultName(rawURL string) (string, error) {
 
 // IsOwnerURL reports whether a git URL points at a bare owner (user or org)
 // rather than a specific repo — i.e. its path is a single segment
-// ("github.com/AndrewHannigan") with no "<owner>/<repo>" tail. Returns an
+// ("github.com/octocat") with no "<owner>/<repo>" tail. Returns an
 // error only if the URL itself cannot be parsed.
 func IsOwnerURL(rawURL string) (bool, error) {
 	_, path, err := ParseURL(rawURL)
