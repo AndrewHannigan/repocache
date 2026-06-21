@@ -455,12 +455,14 @@ emitted.
 ### 8.3 Guide injection via the `session-context` hook
 
 Instead of importing an on-disk doc into the agent's always-loaded
-instructions, the guide reaches the model through a SessionStart hook
-(§8.6) that runs `repocache __session-context --agent <key>`. The
-`--agent` flag selects the output **shape** the named agent's integration
-expects; the guide **content** is identical across agents. Each agent owns
-its shape rather than reusing one agent's convention everywhere, so a
-future divergence is a localized change.
+instructions, the guide reaches the model through a session-start hook that
+runs `repocache __session-context --agent <key>` — a SessionStart hook for
+Claude and Codex (§8.6), a PreInvocation hook for Antigravity (§8.8), and
+the plugin's load-time call for opencode (§8.9). The `--agent` flag selects
+the output **shape** the named agent's integration expects; the guide
+**content** is identical across agents. Each agent owns its shape rather
+than reusing one agent's convention everywhere, so a future divergence is a
+localized change.
 
 claude gets a JSON envelope, wrapped in
 `<repocache-session-context>…</repocache-session-context>` tags, which it
