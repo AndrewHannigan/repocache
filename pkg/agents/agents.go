@@ -17,7 +17,7 @@ import (
 // agent's context via its SessionStart hook. Because it ships with the
 // binary, it is always current — there is no installed copy to drift.
 //
-//go:embed embed/REPOCACHE.md
+//go:embed embed/guide.md
 var DocContent []byte
 
 // Marker is the string used in inline comments and sidecar state to
