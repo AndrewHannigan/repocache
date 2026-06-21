@@ -13,6 +13,8 @@ import (
 	"github.com/AndrewHannigan/repocache/pkg/cache"
 	"github.com/AndrewHannigan/repocache/pkg/config"
 	"github.com/AndrewHannigan/repocache/pkg/errs"
+	"github.com/AndrewHannigan/repocache/pkg/forge"
+	"github.com/AndrewHannigan/repocache/pkg/paths"
 )
 
 const syncLockTimeout = 5 * time.Minute
@@ -62,11 +64,23 @@ func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) 
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
-	if len(c.Repos) == 0 {
+	if len(c.Repos) == 0 && len(c.Owners) == 0 {
 		if !jsonOut {
 			fmt.Fprintln(os.Stderr, "no repos in config; add with `repocache repo add <url>`")
 		}
 		return nil
+	}
+
+	// Discover repos for any owners in scope and add new ones to config, so
+	// repos that appeared upstream since the last sync are picked up and
+	// fetched in this same pass. Failures here are warned about and skipped —
+	// already-known repos still sync (graceful degradation when gh is absent).
+	if owners := ownersInScope(c, names); len(owners) > 0 {
+		reconcileOwners(owners, forge.ListOwnerRepos, jsonOut)
+		c, err = config.Load() // reload to include newly added repos
+		if err != nil {
+			return errs.Wrap(errs.Config, err)
+		}
 	}
 
 	targets, err := resolveSyncTargets(c, names)
@@ -122,18 +136,162 @@ func resolveSyncTargets(c *config.Config, names []string) ([]syncTarget, error) 
 		return out, nil
 	}
 	out := make([]syncTarget, 0, len(names))
-	for _, name := range names {
-		r, err := c.Resolve(name)
-		if err != nil {
-			return nil, err
+	seen := make(map[string]bool)
+	add := func(name, url string) {
+		if !seen[name] {
+			out = append(out, syncTarget{name, url})
+			seen[name] = true
 		}
-		n, err := r.ResolvedName()
+	}
+	for _, name := range names {
+		// A name may be a repo or an owner. Try repo first; if that fails,
+		// expand an owner into its managed repos. Surface the repo resolution
+		// error (which carries not-found/ambiguous detail) only when neither
+		// matches.
+		r, repoErr := c.Resolve(name)
+		if repoErr == nil {
+			n, err := r.ResolvedName()
+			if err != nil {
+				return nil, errs.Wrap(errs.Config, err)
+			}
+			add(n, r.URL)
+			continue
+		}
+		o, ownerErr := c.ResolveOwner(name)
+		if ownerErr != nil {
+			return nil, repoErr // repo not-found/ambiguous message is the common case
+		}
+		on, err := o.ResolvedName()
 		if err != nil {
 			return nil, errs.Wrap(errs.Config, err)
 		}
-		out = append(out, syncTarget{n, r.URL})
+		for _, rn := range c.ReposForOwner(on) {
+			if rr := c.FindByName(rn); rr != nil {
+				add(rn, rr.URL)
+			}
+		}
 	}
 	return out, nil
+}
+
+// ownerLister lists an owner's repos. forge.ListOwnerRepos in production; a
+// fake in tests.
+type ownerLister func(ownerURL string, f forge.Filter) ([]forge.Repo, error)
+
+// ownersInScope returns the owners a sync invocation should reconcile: all
+// owners when no names are given, otherwise just those names that resolve to
+// an owner (repo names are handled separately by resolveSyncTargets).
+func ownersInScope(c *config.Config, names []string) []config.Owner {
+	if len(names) == 0 {
+		return c.Owners
+	}
+	var owners []config.Owner
+	seen := make(map[string]bool)
+	for _, name := range names {
+		o, err := c.ResolveOwner(name)
+		if err != nil {
+			continue
+		}
+		on, _ := o.ResolvedName()
+		if !seen[on] {
+			owners = append(owners, *o)
+			seen[on] = true
+		}
+	}
+	return owners
+}
+
+func ownerFilter(o config.Owner) forge.Filter {
+	return forge.Filter{
+		IncludeForks:    o.IncludeForks,
+		IncludeArchived: o.IncludeArchived,
+		Visibility:      o.Visibility,
+	}
+}
+
+// reconcileOwners discovers each owner's repos via list and adds any new ones
+// to config as Source-tagged entries. It is additive only — it never removes
+// repos that disappeared upstream, which would risk deleting a workspace with
+// unpushed work. Discovery failures are warned about and skipped so that
+// already-known repos still sync (graceful degradation when gh is unavailable).
+func reconcileOwners(owners []config.Owner, list ownerLister, jsonOut bool) {
+	for _, o := range owners {
+		ownerName, err := o.ResolvedName()
+		if err != nil {
+			warnSync("skipping owner with unparseable URL %q: %v", o.URL, err)
+			continue
+		}
+		added, err := reconcileOwner(o, list)
+		if err != nil {
+			warnSync("could not expand owner %s: %v", ownerName, err)
+			continue
+		}
+		if len(added) > 0 && !jsonOut {
+			fmt.Printf("  owner %s: discovered %s\n", ownerName, pluralize(len(added), "new repo"))
+		}
+	}
+}
+
+// reconcileOwner lists one owner's repos (outside the config lock) and appends
+// the new ones under the config lock. Returns the resolved names added.
+func reconcileOwner(o config.Owner, list ownerLister) (added []string, err error) {
+	ownerName, err := o.ResolvedName()
+	if err != nil {
+		return nil, err
+	}
+	repos, err := list(o.URL, ownerFilter(o))
+	if err != nil {
+		return nil, err
+	}
+	err = config.WithLock(configLockTimeout, func(c *config.Config) error {
+		toAdd := newOwnerRepos(c, ownerName, repos)
+		if len(toAdd) == 0 {
+			return nil
+		}
+		c.Repos = append(c.Repos, toAdd...)
+		for _, r := range toAdd {
+			n, _ := r.ResolvedName()
+			added = append(added, n)
+		}
+		return config.Save(c)
+	})
+	if err != nil {
+		if errors.Is(err, config.ErrLocked) {
+			return nil, errs.Wrap(errs.Locked, err)
+		}
+		return nil, err
+	}
+	return added, nil
+}
+
+// newOwnerRepos returns the Repo entries to append for a discovered set,
+// skipping any whose resolved name already exists in c (as a user repo, a
+// managed repo, or an owner) and de-duplicating within the discovered batch.
+// Pure, so the additive/dedupe logic is unit-testable without gh or disk.
+func newOwnerRepos(c *config.Config, ownerName string, discovered []forge.Repo) []config.Repo {
+	var toAdd []config.Repo
+	queued := make(map[string]bool)
+	for _, d := range discovered {
+		if d.CloneURL == "" {
+			continue
+		}
+		name, err := paths.DefaultName(d.CloneURL)
+		if err != nil {
+			continue
+		}
+		if c.FindByName(name) != nil || c.FindOwnerByName(name) != nil || queued[name] {
+			continue
+		}
+		queued[name] = true
+		toAdd = append(toAdd, config.Repo{URL: d.CloneURL, Source: ownerName})
+	}
+	return toAdd
+}
+
+// warnSync writes a discovery warning to stderr. It always uses stderr so it
+// never corrupts NDJSON results on stdout in --json mode.
+func warnSync(format string, a ...any) {
+	fmt.Fprintf(os.Stderr, "warning: "+format+"\n", a...)
 }
 
 func syncOne(name, url string, ifOlderThan time.Duration) syncResult {

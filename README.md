@@ -37,6 +37,10 @@ repocache init
 repocache repo add https://github.com/anthropics/anthropic-sdk-python
 repocache sync
 
+# ...or track a whole user/org: sync discovers its repos and keeps pulling new ones
+repocache repo add https://github.com/anthropics   # needs gh
+repocache sync
+
 # your agent can now search it; when it wants to edit, this prints a writable path:
 repocache workspace new anthropics/anthropic-sdk-python fix-typo
 ```
@@ -88,6 +92,14 @@ url = "https://github.com/anthropics/anthropic-sdk-python"
 [[repo]]
 url = "git@github.com:foo/bar.git"
 name = "myorg/bar"   # optional override; default derived from URL
+
+# Track a whole user/org. sync discovers its repos via gh and adds new ones
+# automatically (as [[repo]] entries tagged with source = this owner).
+[[owner]]
+url = "https://github.com/anthropics"
+# include_forks = false      # default
+# include_archived = false   # default
+# visibility = "all"         # all|public|private
 ```
 
 ---
@@ -97,7 +109,7 @@ name = "myorg/bar"   # optional override; default derived from URL
 ```
 repocache init [--agents=auto|all|none|<list>] [--no-bg-sync]
 repocache uninstall [--agents=...] [--purge]
-repocache repo {add,rm,list [--json]}
+repocache repo {add [--owner|--repo],rm,list [--json]}
 repocache sync [<name>...] [--if-older-than <dur>] [--jobs N] [--json]
 repocache workspace {new,list [--json],path,rm [--force]}
 repocache session-context
@@ -124,6 +136,7 @@ Repocache does not manage credentials. Every git operation defers to whatever `g
 ## Limitations & gotchas
 
 - **Large repos.** Full clones only — no sparse-checkout or partial-clone yet. Chromium/llvm-sized repos will feel it.
+- **Owner tracking needs `gh`.** Discovering a user/org's repos shells out to the [`gh` CLI](https://cli.github.com/) (GitHub / GHE only). It's the one dependency beyond `git`, and only for discovery — if `gh` is missing or unauthenticated, repocache warns and skips discovery while already-known repos keep syncing. Owner reconciliation is additive: repos deleted upstream stay until you `repocache repo rm` them.
 
 ---
 

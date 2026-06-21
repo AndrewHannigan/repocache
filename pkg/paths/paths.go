@@ -102,6 +102,32 @@ func DefaultName(rawURL string) (string, error) {
 	return host + "/" + path, nil
 }
 
+// IsOwnerURL reports whether a git URL points at a bare owner (user or org)
+// rather than a specific repo — i.e. its path is a single segment
+// ("github.com/AndrewHannigan") with no "<owner>/<repo>" tail. Returns an
+// error only if the URL itself cannot be parsed.
+func IsOwnerURL(rawURL string) (bool, error) {
+	_, path, err := ParseURL(rawURL)
+	if err != nil {
+		return false, err
+	}
+	return !strings.Contains(path, "/"), nil
+}
+
+// DefaultOwnerName returns "host/owner" as the default name for an owner URL.
+// It errors if the URL's path has more than one segment (i.e. it looks like a
+// repo URL, not an owner URL).
+func DefaultOwnerName(rawURL string) (string, error) {
+	host, path, err := ParseURL(rawURL)
+	if err != nil {
+		return "", err
+	}
+	if strings.Contains(path, "/") {
+		return "", fmt.Errorf("URL %q looks like a repo, not an owner (path %q has multiple segments)", rawURL, path)
+	}
+	return host + "/" + path, nil
+}
+
 // PruneEmptyDirs removes dir and each now-empty ancestor, walking up
 // until (but not including) stop. It stops at the first directory that
 // is non-empty or cannot be removed. Used to clean up the intermediate
