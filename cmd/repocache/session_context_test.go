@@ -18,7 +18,7 @@ func TestPrintSessionContextClaudeEnvelope(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	var buf bytes.Buffer
-	if err := printSessionContext(&buf, nil, "claude"); err != nil {
+	if err := printSessionContext(&buf, "claude"); err != nil {
 		t.Fatalf("printSessionContext: %v", err)
 	}
 
@@ -50,110 +50,6 @@ func TestPrintSessionContextClaudeEnvelope(t *testing.T) {
 	}
 }
 
-// Antigravity gets a PreInvocation injectSteps envelope (pure JSON, no tags),
-// carrying the guide as a userMessage — but only once per conversation, gated
-// by a conversationId-scoped sentinel. Subsequent turns or model calls within
-// the same conversation emit "{}".
-func TestPrintSessionContextAntigravity(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	hookStateDirOverride = t.TempDir()
-	t.Cleanup(func() { hookStateDirOverride = "" })
-
-	type injectOut struct {
-		InjectSteps []map[string]string `json:"injectSteps"`
-	}
-
-	convID := "test-conv-uuid"
-
-	// First model call of the first turn: inject the guide.
-	t.Run("first call", func(t *testing.T) {
-		var buf bytes.Buffer
-		stdin := strings.NewReader(`{"invocationNum":1,"conversationId":"` + convID + `"}`)
-		if err := printSessionContext(&buf, stdin, "antigravity"); err != nil {
-			t.Fatalf("printSessionContext: %v", err)
-		}
-		out := strings.TrimSpace(buf.String())
-		if strings.HasPrefix(out, "<repocache-session-context>") {
-			t.Fatalf("antigravity output must be pure JSON, not tag-wrapped:\n%s", out)
-		}
-		var got injectOut
-		if err := json.Unmarshal([]byte(out), &got); err != nil {
-			t.Fatalf("output is not valid JSON: %v\n%s", err, out)
-		}
-		if len(got.InjectSteps) != 1 {
-			t.Fatalf("want 1 injected step, got %d:\n%s", len(got.InjectSteps), out)
-		}
-		msg := got.InjectSteps[0]["userMessage"]
-		if !strings.Contains(msg, string(agents.DocContent)) {
-			t.Errorf("injected userMessage should contain the embedded guide:\n%s", msg)
-		}
-		if !strings.Contains(msg, "<repocache-session-context>") {
-			t.Errorf("injected userMessage should delimit the guide with tags:\n%s", msg)
-		}
-	})
-
-	// Second model call of the same turn (invocationNum>1): skip.
-	t.Run("same turn, later call", func(t *testing.T) {
-		var buf bytes.Buffer
-		stdin := strings.NewReader(`{"invocationNum":2,"conversationId":"` + convID + `"}`)
-		if err := printSessionContext(&buf, stdin, "antigravity"); err != nil {
-			t.Fatalf("printSessionContext: %v", err)
-		}
-		if got := strings.TrimSpace(buf.String()); got != "{}" {
-			t.Errorf("later model call should emit {}, got:\n%s", got)
-		}
-	})
-
-	// First model call of a new turn (same conversation): sentinel exists, skip.
-	t.Run("same conversation, new turn", func(t *testing.T) {
-		var buf bytes.Buffer
-		stdin := strings.NewReader(`{"invocationNum":1,"conversationId":"` + convID + `"}`)
-		if err := printSessionContext(&buf, stdin, "antigravity"); err != nil {
-			t.Fatalf("printSessionContext: %v", err)
-		}
-		if got := strings.TrimSpace(buf.String()); got != "{}" {
-			t.Errorf("re-injection on new turn should emit {}, got:\n%s", got)
-		}
-	})
-
-	// A different conversation: inject again.
-	t.Run("different conversation", func(t *testing.T) {
-		var buf bytes.Buffer
-		stdin := strings.NewReader(`{"invocationNum":1,"conversationId":"other-conv-uuid"}`)
-		if err := printSessionContext(&buf, stdin, "antigravity"); err != nil {
-			t.Fatalf("printSessionContext: %v", err)
-		}
-		var got injectOut
-		if err := json.Unmarshal([]byte(strings.TrimSpace(buf.String())), &got); err != nil {
-			t.Fatalf("output is not valid JSON: %v\n%s", err, buf.String())
-		}
-		if len(got.InjectSteps) != 1 {
-			t.Fatalf("want 1 injected step for new conversation, got %d:\n%s", len(got.InjectSteps), buf.String())
-		}
-	})
-}
-
-// No stdin payload (manual run): default to injecting.
-func TestPrintSessionContextAntigravityNoPayload(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	hookStateDirOverride = t.TempDir()
-	t.Cleanup(func() { hookStateDirOverride = "" })
-
-	var buf bytes.Buffer
-	if err := printSessionContext(&buf, nil, "antigravity"); err != nil {
-		t.Fatalf("printSessionContext: %v", err)
-	}
-	var got struct {
-		InjectSteps []map[string]string `json:"injectSteps"`
-	}
-	if err := json.Unmarshal([]byte(strings.TrimSpace(buf.String())), &got); err != nil {
-		t.Fatalf("no-payload run should still inject, got:\n%s", buf.String())
-	}
-	if len(got.InjectSteps) != 1 {
-		t.Errorf("no-payload run should inject the guide, got %d steps", len(got.InjectSteps))
-	}
-}
-
 // The plain-text agents (codex, opencode) get the raw Markdown body — no
 // envelope, no delimiter tags. Codex injects plain stdout as developer
 // context; opencode's plugin pushes the text into the system prompt directly.
@@ -163,7 +59,7 @@ func TestPrintSessionContextPlainTextAgents(t *testing.T) {
 			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 			var buf bytes.Buffer
-			if err := printSessionContext(&buf, nil, agent); err != nil {
+			if err := printSessionContext(&buf, agent); err != nil {
 				t.Fatalf("printSessionContext: %v", err)
 			}
 			out := buf.String()
@@ -184,7 +80,7 @@ func TestPrintSessionContextPlainTextAgents(t *testing.T) {
 func TestPrintSessionContextUnknownAgent(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	var buf bytes.Buffer
-	if err := printSessionContext(&buf, nil, "nope"); err == nil {
+	if err := printSessionContext(&buf, "nope"); err == nil {
 		t.Errorf("expected error for unknown agent, got output:\n%s", buf.String())
 	}
 }

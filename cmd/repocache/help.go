@@ -280,8 +280,6 @@ Supported (auto-detected by config-dir presence):
 
   claude       ~/.claude/             — Claude Code
   codex        ~/.codex/              — OpenAI's Codex CLI
-  antigravity  ~/.gemini/             — Google's Antigravity CLI
-                                        (detected via ~/.gemini/antigravity-cli/)
   opencode     ~/.config/opencode/    — opencode
 
 For claude and codex, 'repocache init' writes (idempotently, recorded in a
@@ -296,13 +294,6 @@ sidecar state file so 'uninstall' can reverse precisely):
      drifts after an upgrade.
   3. A SessionStart hook running 'repocache __bg-sync', which refreshes
      the cache in the background (skip with --no-bg-sync).
-
-Antigravity is a Gemini-CLI fork with a different integration surface: it
-has no SessionStart event and no path allowlist. 'init' instead writes the
-two commands as PreInvocation hooks in ~/.gemini/config/hooks.json (each
-with --agent antigravity); the session-context hook injects the guide on
-the first model call of each conversation. The agent reaches repos via its
-file-access policy or 'agy --add-dir', so no directories are registered.
 
 opencode has no SessionStart hook or path allowlist, so 'init' instead
 drops a plugin at ~/.config/opencode/plugin/repocache.js. It runs

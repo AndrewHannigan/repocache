@@ -7,12 +7,12 @@ git repo management for terminal coding agents
 - 🔒 **OS-enforced read-only repos** — every repo is a pristine reference that is impossible to clobber.
 - ⚡ **Cheap workspaces** — `git clone --reference` shares the object store; no history re-download.
 - 🔄 **Repos never stale** — refreshed in the background at session start.
-- 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, Antigravity CLI, and opencode.
+- 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, and opencode.
 - 📦 **Persistent shared library** — cached once and reused across sessions, never re-cloned to `/tmp`.
 - 🧰 **Natively searchable** — `rg`, `grep`, `git`, and `gh` work directly; no wrappers.
 - 🌐 **Simpler multi-repo PRs** — spin up writable workspaces on demand from the read-only repos.
 
-Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](https://developers.openai.com/codex/), [Google Antigravity CLI](https://antigravity.google/), and [opencode](https://opencode.ai).
+Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](https://developers.openai.com/codex/), and [opencode](https://opencode.ai).
 
 ---
 
@@ -68,14 +68,11 @@ Everything else — searching, branch listing, PR creation — uses tools the ag
 |-------|-----------|---------------------|--------------------|
 | Claude Code | `~/.claude/` | `settings.json` → `permissions.additionalDirectories` | session-context + bg-sync |
 | Codex CLI | `~/.codex/` | `config.toml` → `sandbox_workspace_write.writable_roots` | session-context + bg-sync (requires trust)¹ |
-| Antigravity CLI | `~/.gemini/` (detected via `antigravity-cli/`) | n/a³ | session-context + bg-sync (PreInvocation)³ |
 | opencode | `~/.config/opencode/` | n/a² | plugin (see below)² |
 
 ¹ Codex requires you to trust new hooks: after `repocache init`, open Codex CLI once and run `/hooks`.
 
 ² opencode has no SessionStart shell hook and no path allowlist. Instead, `init` drops a plugin at `~/.config/opencode/plugin/repocache.js`, auto-loaded at startup; it runs `repocache __bg-sync` and injects the guide into the model's system prompt via opencode's `experimental.chat.system.transform` hook. `uninstall` deletes the file.
-
-³ Antigravity is a Gemini-CLI fork with its own integration surface: hooks live in `~/.gemini/config/hooks.json` (not `settings.json`), there is no `SessionStart` event (repocache uses a `PreInvocation` hook that injects the guide once per conversation), and there is no `includeDirectories` allowlist (the agent learns the repo paths from the guide and reaches them via its file-access policy or `agy --add-dir`). `init` also clears stale entries the removed Gemini CLI integration left in `~/.gemini/settings.json`.
 
 All edits are idempotent and recorded in a sidecar state file, so `repocache uninstall` removes only what repocache added.
 
