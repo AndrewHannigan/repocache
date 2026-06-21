@@ -13,7 +13,7 @@ import (
 )
 
 // DocContent is the repocache guide bundled into the binary. It is the
-// body emitted by `repocache session-context` and injected into each
+// body emitted by `repocache __session-context` and injected into each
 // agent's context via its SessionStart hook. Because it ships with the
 // binary, it is always current — there is no installed copy to drift.
 //
