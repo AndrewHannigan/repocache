@@ -28,18 +28,21 @@ The content is identical across agents; only the surrounding shape differs,
 so each agent gets what makes sense for it rather than one agent's
 convention reused everywhere.
 
-claude and antigravity get a JSON envelope they read from their
-SessionStart hook and inject into the model's context, delimited so it
-can be extracted from surrounding hook output:
+claude gets a JSON envelope it reads from its SessionStart hook and
+injects into the model's context, delimited so it can be extracted from
+surrounding hook output:
 
     <repocache-session-context>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</repocache-session-context>
 
-The hookSpecificOutput key originated in Claude Code; Antigravity adopted
-the identical SessionStart output schema and requires it (it rejects
-plain stdout). codex and opencode instead get the raw Markdown body, with
-no envelope or delimiters: Codex accepts plain stdout as developer
-context, and opencode's plugin pushes the text into the model's system
-prompt itself.
+antigravity gets a PreInvocation injectSteps envelope instead (it has no
+SessionStart event): the guide is injected as a userMessage on the first
+model call of the conversation. The hook payload arrives on stdin; on
+later invocations (invocationNum>0) this prints "{}" so the guide is
+injected once per session, not before every model call.
+
+codex and opencode instead get the raw Markdown body, with no envelope or
+delimiters: Codex accepts plain stdout as developer context, and
+opencode's plugin pushes the text into the model's system prompt itself.
 
 The guide is generated from the running binary, so it is always current —
 there is no on-disk doc to drift after an upgrade. It also appends a live
@@ -53,7 +56,7 @@ repos are available without having to run it.`,
 			if text {
 				agentKey = "opencode"
 			}
-			return printSessionContext(os.Stdout, agentKey)
+			return printSessionContext(os.Stdout, hookStdin(), agentKey)
 		},
 	}
 	// Default to claude so a bare `repocache __session-context` (the hook
@@ -66,8 +69,17 @@ repos are available without having to run it.`,
 }
 
 // printSessionContext renders the guide body in the shape agentKey expects
-// (see pkg/agents) and writes it, newline-terminated, to w.
-func printSessionContext(w io.Writer, agentKey string) error {
+// (see pkg/agents) and writes it, newline-terminated, to w. stdin carries the
+// agent's hook payload (nil if none); it is read only for antigravity, whose
+// PreInvocation hook must inject the guide once per conversation (see below).
+func printSessionContext(w io.Writer, stdin io.Reader, agentKey string) error {
+	// Antigravity's PreInvocation hook fires before every model call. Inject
+	// the guide only on the first (invocationNum==0); otherwise emit an empty
+	// result so it isn't re-injected each turn.
+	if agentKey == "antigravity" && !antigravityFirstInvocation(stdin) {
+		_, err := fmt.Fprintln(w, "{}")
+		return err
+	}
 	out, err := agents.SessionContextOutputFor(agentKey, sessionContextBody())
 	if err != nil {
 		return err

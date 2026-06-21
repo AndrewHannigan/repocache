@@ -5,10 +5,20 @@ import (
 	"path/filepath"
 )
 
-// Antigravity implements Agent for Google's Antigravity CLI. Antigravity is a
-// Gemini-CLI fork and shares the Gemini config dir (~/.gemini): user settings —
-// includeDirectories and SessionStart hooks — live in ~/.gemini/settings.json,
-// the same file the standalone Gemini CLI reads.
+// Antigravity implements Agent for Google's Antigravity CLI (`agy`).
+//
+// Antigravity is a Gemini-CLI fork that shares the ~/.gemini config dir, but
+// its integration surface is its own, not Gemini's:
+//   - Detection: it creates ~/.gemini/antigravity-cli/ as its app-data dir.
+//     ~/.gemini alone is ambiguous (the standalone Gemini CLI uses it too).
+//   - Hooks: a dedicated ~/.gemini/config/hooks.json (name → event → handlers),
+//     NOT settings.json. There is no SessionStart event; the session-start
+//     equivalent is a PreInvocation hook gated on invocationNum==0.
+//   - Directory access: there is no includeDirectories key. Repos under
+//     ~/.repocache are reached via the guide + the CLI's file-access policy
+//     (or `agy --add-dir`), so repocache installs no settings.json edits.
+//
+// See https://antigravity.google/docs/hooks and /docs/cli-reference.
 type Antigravity struct {
 	dir string // the Gemini config dir, ~/.gemini
 }
@@ -30,57 +40,45 @@ func (a *Antigravity) Detected() bool {
 	return err == nil && s.IsDir()
 }
 
-func (a *Antigravity) settingsFile() string { return filepath.Join(a.dir, "settings.json") }
+// hooksFile is Antigravity's global hooks file, ~/.gemini/config/hooks.json.
+func (a *Antigravity) hooksFile() string { return filepath.Join(a.dir, "config", "hooks.json") }
 
-func googleHookEntry(command string) map[string]any {
-	return map[string]any{
-		"matcher": "*",
-		"hooks": []any{
-			map[string]any{
-				"name":    hookName(command),
-				"type":    "command",
-				"command": command,
-				"timeout": 5000,
-			},
-		},
-	}
-}
+// legacyGeminiSettings is ~/.gemini/settings.json, where the now-removed Gemini
+// CLI agent wrote repocache's hooks + includeDirectories. The Antigravity CLI
+// does not read it, so Install strips those stale entries.
+func (a *Antigravity) legacyGeminiSettings() string { return filepath.Join(a.dir, "settings.json") }
 
 func (a *Antigravity) Install(opts InstallOptions) (Installed, error) {
-	if err := os.MkdirAll(a.dir, 0755); err != nil {
-		return Installed{}, err
-	}
-	// Strip superseded session-context hook commands (the pre-rename public
-	// subcommand and the pre-per-agent bare form) so they don't run or error
-	// on every session start. Best-effort.
-	removeLegacySessionContextHooks(loadJSONC, saveJSON, a.settingsFile())
+	a.removeLegacyGeminiEntries()
 
-	paths, err := ensureArrayEntries(loadJSONC, saveJSON, a.settingsFile(),
-		[]string{"includeDirectories"}, PathsToRegister())
-	if err != nil {
-		return Installed{}, err
-	}
-	hooks, err := installHooks(opts, sessionContextCommand(a.Key()), func(command string) (bool, error) {
-		return ensureSessionStartHook(loadJSONC, saveJSON, a.settingsFile(),
-			googleHookEntry(command), command)
+	hooks, err := installHooks(opts, sessionContextCommand(a.Key()), bgSyncCommand(a.Key()), func(command string) (bool, error) {
+		return ensurePreInvocationHook(loadJSONC, saveJSON, a.hooksFile(), hookName(command), command)
 	})
 	if err != nil {
 		return Installed{}, err
 	}
-	return Installed{AddedPaths: paths, AddedHooks: hooks}, nil
+	return Installed{AddedHooks: hooks}, nil
 }
 
 func (a *Antigravity) Uninstall(prev Installed) error {
-	if len(prev.AddedPaths) > 0 {
-		if err := removeArrayEntries(loadJSONC, saveJSON, a.settingsFile(),
-			[]string{"includeDirectories"}, prev.AddedPaths); err != nil {
-			return err
-		}
-	}
 	for _, hookCmd := range prev.AddedHooks {
-		if err := removeSessionStartHook(loadJSONC, saveJSON, a.settingsFile(), hookCmd); err != nil {
+		if err := removeNamedHook(loadJSONC, saveJSON, a.hooksFile(), hookName(hookCmd)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// removeLegacyGeminiEntries clears repocache's entries from ~/.gemini/settings.json
+// left by the superseded Gemini CLI agent: the includeDirectories paths and the
+// SessionStart session-context + bg-sync hooks. The Antigravity CLI never reads
+// this file, so the entries are dead; left behind they could still run (or
+// error) under a stray standalone Gemini CLI. Best-effort, like the other
+// install migrations — errors are ignored so they can't block a fresh install.
+func (a *Antigravity) removeLegacyGeminiEntries() {
+	f := a.legacyGeminiSettings()
+	_ = removeArrayEntries(loadJSONC, saveJSON, f, []string{"includeDirectories"}, PathsToRegister())
+	removeLegacySessionContextHooks(loadJSONC, saveJSON, f)
+	_ = removeSessionStartHook(loadJSONC, saveJSON, f, sessionContextCommand(a.Key()))
+	_ = removeSessionStartHook(loadJSONC, saveJSON, f, BgSyncCommand)
 }
