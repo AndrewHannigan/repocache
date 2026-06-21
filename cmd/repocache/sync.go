@@ -252,16 +252,12 @@ func reconcileOwners(owners []config.Owner, list ownerLister, jsonOut bool) {
 // reconcileOwner lists one owner's repos (outside the config lock) and appends
 // the new ones under the config lock. Returns the resolved names added.
 func reconcileOwner(o config.Owner, list ownerLister) (added []string, err error) {
-	ownerName, err := o.ResolvedName()
-	if err != nil {
-		return nil, err
-	}
 	repos, err := list(o.URL, ownerFilter(o))
 	if err != nil {
 		return nil, err
 	}
 	err = config.WithLock(configLockTimeout, func(c *config.Config) error {
-		toAdd := newOwnerRepos(c, ownerName, repos)
+		toAdd := newOwnerRepos(c, o, repos)
 		if len(toAdd) == 0 {
 			return nil
 		}
@@ -283,9 +279,18 @@ func reconcileOwner(o config.Owner, list ownerLister) (added []string, err error
 
 // newOwnerRepos returns the Repo entries to append for a discovered set,
 // skipping any whose resolved name already exists in c (as a user repo, a
-// managed repo, or an owner) and de-duplicating within the discovered batch.
-// Pure, so the additive/dedupe logic is unit-testable without gh or disk.
-func newOwnerRepos(c *config.Config, ownerName string, discovered []forge.Repo) []config.Repo {
+// managed repo, or an owner), is in the owner's exclude list, or is a
+// duplicate within the discovered batch. Pure, so the additive/dedupe logic
+// is unit-testable without gh or disk.
+func newOwnerRepos(c *config.Config, o config.Owner, discovered []forge.Repo) []config.Repo {
+	ownerName, err := o.ResolvedName()
+	if err != nil {
+		return nil
+	}
+	exclude := make(map[string]bool)
+	for _, e := range o.Exclude {
+		exclude[e] = true
+	}
 	var toAdd []config.Repo
 	queued := make(map[string]bool)
 	for _, d := range discovered {
@@ -296,7 +301,7 @@ func newOwnerRepos(c *config.Config, ownerName string, discovered []forge.Repo) 
 		if err != nil {
 			continue
 		}
-		if c.FindByName(name) != nil || c.FindOwnerByName(name) != nil || queued[name] {
+		if c.FindByName(name) != nil || c.FindOwnerByName(name) != nil || queued[name] || exclude[name] {
 			continue
 		}
 		queued[name] = true
