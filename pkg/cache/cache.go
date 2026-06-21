@@ -21,6 +21,23 @@ import (
 // ErrLocked is returned when a cache repo's lock cannot be acquired in time.
 var ErrLocked = errors.New("cache repo locked by another process")
 
+// ErrGitMissing is returned by RequireGit when the git binary is not on PATH.
+// git is repocache's one hard dependency — every cache and workspace operation
+// shells out to it (clone, fetch, checkout) — so it is the one thing we cannot
+// degrade around the way we do for gh (see pkg/forge).
+var ErrGitMissing = errors.New("git not found on PATH — repocache requires git (install from https://git-scm.com/downloads)")
+
+// RequireGit reports whether the git binary is available on PATH, returning
+// ErrGitMissing if not. Commands that shell out to git call this first so the
+// user gets one clear, actionable message instead of a cryptic per-invocation
+// "exec: \"git\": executable file not found in $PATH".
+func RequireGit() error {
+	if _, err := exec.LookPath("git"); err != nil {
+		return ErrGitMissing
+	}
+	return nil
+}
+
 // Meta is the JSON sidecar written at <cache>/.git/repocache.meta after
 // each successful sync.
 type Meta struct {
