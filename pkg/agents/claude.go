@@ -7,9 +7,10 @@ import (
 
 const BgSyncCommand = "repocache __bg-sync"
 
-// SessionContextCommand is the command installed into each agent's
-// SessionStart hook to inject the repocache guide as context. Mirrors
-// the internal `repocache __session-context` subcommand.
+// SessionContextCommand is the base session-context subcommand. The command
+// actually installed into each agent's SessionStart hook appends --agent
+// <key> to it (see sessionContextCommand), so __session-context can render
+// the output shape that agent expects.
 const SessionContextCommand = "repocache __session-context"
 
 // legacySessionContextCommand is the pre-rename hook command: the
@@ -57,17 +58,17 @@ func (c *Claude) Install(opts InstallOptions) (Installed, error) {
 	// session-context hook. Best-effort.
 	_ = removeImportLine(c.memoryFile(), "REPOCACHE.md")
 	_ = os.Remove(c.legacyDocFile())
-	// The session-context hook command was renamed `session-context` →
-	// `__session-context`; strip the stale entry so the old (now-unknown)
-	// subcommand doesn't error on every session start. Best-effort.
-	_ = removeSessionStartHook(loadJSONC, saveJSON, c.settingsFile(), legacySessionContextCommand)
+	// Strip superseded session-context hook commands (the pre-rename public
+	// subcommand and the pre-per-agent bare form) so they don't run or error
+	// on every session start. Best-effort.
+	removeLegacySessionContextHooks(loadJSONC, saveJSON, c.settingsFile())
 
 	paths, err := ensureArrayEntries(loadJSONC, saveJSON, c.settingsFile(),
 		[]string{"permissions", "additionalDirectories"}, PathsToRegister())
 	if err != nil {
 		return Installed{}, err
 	}
-	hooks, err := installHooks(opts, func(command string) (bool, error) {
+	hooks, err := installHooks(opts, sessionContextCommand(c.Key()), func(command string) (bool, error) {
 		return ensureSessionStartHook(loadJSONC, saveJSON, c.settingsFile(),
 			claudeHookEntry(command), command)
 	})

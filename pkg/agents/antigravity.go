@@ -43,17 +43,17 @@ func (a *Antigravity) Install(opts InstallOptions) (Installed, error) {
 	if err := os.MkdirAll(a.dir, 0755); err != nil {
 		return Installed{}, err
 	}
-	// The session-context hook command was renamed `session-context` →
-	// `__session-context`; strip the stale entry so the old (now-unknown)
-	// subcommand doesn't error on every session start. Best-effort.
-	_ = removeSessionStartHook(loadJSONC, saveJSON, a.settingsFile(), legacySessionContextCommand)
+	// Strip superseded session-context hook commands (the pre-rename public
+	// subcommand and the pre-per-agent bare form) so they don't run or error
+	// on every session start. Best-effort.
+	removeLegacySessionContextHooks(loadJSONC, saveJSON, a.settingsFile())
 
 	paths, err := ensureArrayEntries(loadJSONC, saveJSON, a.settingsFile(),
 		[]string{"includeDirectories"}, PathsToRegister())
 	if err != nil {
 		return Installed{}, err
 	}
-	hooks, err := installHooks(opts, func(command string) (bool, error) {
+	hooks, err := installHooks(opts, sessionContextCommand(a.Key()), func(command string) (bool, error) {
 		return ensureSessionStartHook(loadJSONC, saveJSON, a.settingsFile(),
 			googleHookEntry(command), command)
 	})

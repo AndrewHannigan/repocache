@@ -445,19 +445,37 @@ emitted.
 
 Instead of importing an on-disk doc into the agent's always-loaded
 instructions, the guide reaches the model through a SessionStart hook
-(§8.6) that runs `repocache __session-context`. That command prints a JSON
-envelope which the agent injects as session context:
+(§8.6) that runs `repocache __session-context --agent <key>`. The
+`--agent` flag selects the output **shape** the named agent's integration
+expects; the guide **content** is identical across agents. Each agent owns
+its shape rather than reusing one agent's convention everywhere, so a
+future divergence is a localized change.
+
+The hook-based agents (claude, codex, antigravity) get a JSON envelope,
+wrapped in `<repocache-session-context>…</repocache-session-context>`
+tags, which the agent injects as session context:
 
 ```json
 {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"<guide>"}}
 ```
 
-Format requirements differ per agent: Claude Code and Codex CLI accept
-plain stdout as context, but Antigravity rejects plain stdout and accepts
-**only** this JSON envelope. All hook-based agents accept the envelope
-(Codex's and Antigravity's SessionStart output schemas require
-`hookEventName` = `"SessionStart"`), so `session-context` emits it
-unconditionally.
+The `hookSpecificOutput` key originated in Claude Code; Codex and
+Antigravity adopted the identical SessionStart output schema, so today all
+three render byte-identical output via one shared helper. Format
+requirements still differ: Claude Code and Codex CLI also accept plain
+stdout as context, but Antigravity rejects plain stdout and accepts
+**only** this JSON envelope — so the envelope is what all three emit.
+
+opencode (§8.9) is the outlier: its shape is the raw Markdown body with no
+envelope or delimiters, because its plugin pushes the text into the
+model's system prompt itself rather than handing it to hook plumbing
+(`--agent opencode`).
+
+Back-compat: a bare `repocache __session-context` (no `--agent`, the hook
+command earlier versions installed) defaults to the claude shape — the
+envelope every hook agent accepts — so already-installed hooks keep
+working until the next `init`. `--text` is a deprecated alias for `--agent
+opencode`, kept for opencode plugins installed before `--agent` existed.
 
 Migration: older repocache versions appended `@REPOCACHE.md   #
 repocache:managed` to agent memory files and wrote a `REPOCACHE.md` doc
@@ -501,7 +519,7 @@ The sidecar state file (`agents.state.json`) records, per agent:
 {
   "claude": {
     "added_paths": ["/Users/.../repos/", "/Users/.../workspaces/"],
-    "added_hooks": ["repocache __session-context", "repocache __bg-sync"]
+    "added_hooks": ["repocache __session-context --agent claude", "repocache __bg-sync"]
   }
 }
 ```
@@ -512,8 +530,10 @@ Uninstall reads this file to know exactly what to remove. If the user has hand-e
 
 Each agent gets **two** SessionStart hook commands installed:
 
-- `repocache __session-context` — injects the guide as context (§8.3).
-  Always installed; it is how the agent learns repocache exists.
+- `repocache __session-context --agent <key>` — injects the guide as
+  context (§8.3). Always installed; it is how the agent learns repocache
+  exists. `<key>` is the agent's own key (`claude`, `codex`, `antigravity`),
+  so the subcommand emits that agent's output shape.
 - `repocache __bg-sync` — refreshes the cache in the background (§5.12).
   Installed unless `--no-bg-sync`.
 
@@ -526,7 +546,7 @@ the Codex `statusMessage`, and the Google CLI `name`).
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "repocache __session-context" } ] }
+      { "hooks": [ { "type": "command", "command": "repocache __session-context --agent claude" } ] }
     ]
   }
 }
@@ -539,7 +559,7 @@ matcher = "startup|resume"
 
 [[hooks.SessionStart.hooks]]
 type = "command"
-command = "repocache __session-context"
+command = "repocache __session-context --agent codex"
 statusMessage = "repocache session-context"
 ```
 
@@ -558,7 +578,7 @@ installing the Codex hooks.
           {
             "name": "repocache-session-context",
             "type": "command",
-            "command": "repocache __session-context",
+            "command": "repocache __session-context --agent antigravity",
             "timeout": 5000
           }
         ]
@@ -612,15 +632,16 @@ opencode auto-loads any file in that directory at startup — no
   `repocache __bg-sync`. `InstallOptions.NoBgSync` does not apply —
   there is no separate hook to omit.
 - **guide injection**: at load it snapshots `repocache __session-context
-  --text` (the raw guide body — see below) and, on opencode's
+  --agent opencode` (the raw guide body — see below) and, on opencode's
   `experimental.chat.system.transform` hook, pushes it into the model's
   system-prompt array. The snapshot is taken once at session start, like
   the repo-list snapshot the other agents emit at hook time.
 
-`__session-context --text` is a variant of §8.3 that prints just the
-Markdown body with no JSON envelope or delimiters, because the plugin
-injects the text itself rather than handing it to opencode's hook
-plumbing.
+`--agent opencode` is opencode's session-context shape under §8.3: it
+prints just the Markdown body with no JSON envelope or delimiters, because
+the plugin injects the text itself rather than handing it to opencode's
+hook plumbing. (`--text` is a deprecated alias for the same output, kept
+so plugins installed before `--agent` existed keep working.)
 
 State and uninstall: install records the plugin path in the sidecar
 state's `added_files` (§8.5, a field alongside `added_paths`/
