@@ -50,7 +50,7 @@ repocache workspace new anthropics/anthropic-sdk-python fix-typo
 
 That's the whole loop. Repocache adds exactly two things to your agent's world:
 
-- A **physically read-only** directory at `~/.local/share/repocache/repos/<host>/<owner>/<repo>/` (chmod a-w), so the agent can `rg`/`grep` freely with zero risk of accidental writes.
+- A **physically read-only** directory at `~/.repocache/repos/<host>/<owner>/<repo>/` (chmod a-w), so the agent can `rg`/`grep` freely with zero risk of accidental writes.
 - A `workspace new` command that returns the path to an editable clone derived from the cache via `git clone --reference`.
 
 Everything else — searching, branch listing, PR creation — uses tools the agent already knows (`rg`, `git`, `gh`). Repocache doesn't wrap them.
@@ -81,7 +81,7 @@ All edits are idempotent and recorded in a sidecar state file, so `repocache uni
 ~/.config/repocache/
 └── config.toml                              # your tracked repos
 
-~/.local/share/repocache/
+~/.repocache/
 ├── repos/<host>/<owner>/<repo>/             # cache (chmod a-w)
 └── workspaces/<host>/<owner>/<repo>/<br>/   # editable (git clone --reference)
 ```

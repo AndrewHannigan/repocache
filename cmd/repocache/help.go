@@ -84,13 +84,13 @@ Library
 Cache repo
   A full clone of one library repo, kept on disk with its working tree
   marked read-only (chmod -R a-w). One per library entry. Lives under
-  ~/.local/share/repocache/repos/<host>/<owner>/<repo>/.
+  ~/.repocache/repos/<host>/<owner>/<repo>/.
 
 Workspace
   An editable clone of a cache repo, derived via 'git clone --reference'.
   Identified by (repo, branch). Multiple workspaces may exist per cache
   repo, even on the same branch. Lives under
-  ~/.local/share/repocache/workspaces/<host>/<owner>/<repo>/<branch>/.
+  ~/.repocache/workspaces/<host>/<owner>/<repo>/<branch>/.
 
 Agent integration
   Per-agent edits that 'repocache init' makes so each terminal agent:
@@ -137,12 +137,12 @@ It also cleans up the legacy @REPOCACHE.md import line and on-disk doc
 that older repocache versions installed.
 
 Uses a sidecar state file
-(~/.local/share/repocache/agents.state.json) to know exactly which
+(~/.repocache/agents.state.json) to know exactly which
 entries are repocache's, so user-added entries in the same files are
 preserved.
 
 By default this does NOT delete ~/.config/repocache/ or
-~/.local/share/repocache/.
+~/.repocache/.
 
 Pass --purge to also delete both directories, removing all cached
 repos, workspaces, and config. If any workspace has uncommitted or
@@ -245,7 +245,7 @@ A workspace is a git clone created with --reference against the cache,
 sharing object storage but with independent refs. Edits happen here.
 
   repocache workspace new <repo> <branch> [--base <branch>]
-    Clone --reference into ~/.local/share/repocache/workspaces/.../<branch>/.
+    Clone --reference into ~/.repocache/workspaces/.../<branch>/.
     If <branch> exists on origin, check it out. Otherwise create it off
     <base> (or origin/HEAD). Prints the absolute workspace path on stdout;
     make changes there, then commit and push.
@@ -304,7 +304,7 @@ doesn't, sync exits 6 with the underlying git error.
 
 Three lock scopes:
 
-  global bg-sync  ~/.local/share/repocache/.bg-sync.lock
+  global bg-sync  ~/.repocache/.bg-sync.lock
                   exclusive, non-blocking. Held only by __bg-sync workers.
 
   config          ~/.config/repocache/.lock
@@ -324,7 +324,7 @@ The read-only enforcement (chmod -R a-w on the cache tree) excludes
 first action after acquiring its lock is 'chmod -R u+w' to re-enable
 write before checkout.
 
-The chmod is a UX gotcha for cleanup: 'rm -rf ~/.local/share/repocache/
+The chmod is a UX gotcha for cleanup: 'rm -rf ~/.repocache/
 repos/<name>' will fail. Run 'chmod -R u+w' first.
 
 See SPEC §7.1 for the full deadlock-freedom argument.

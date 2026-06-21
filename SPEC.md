@@ -24,7 +24,7 @@ The agent reads code by searching the cache directly with standard tools (`rg`, 
 ~/.config/repocache/
 └── config.toml                                 # tracked repos + settings
 
-~/.local/share/repocache/
+~/.repocache/
 ├── repos/                                      # cache
 │   └── <host>/<owner>/<repo>/
 │       ├── .git/                               # writable; gc.auto = 0
@@ -43,7 +43,7 @@ Rules:
 - `<owner>/<repo>` preserves case from the URL.
 - Branches containing `/` produce nested directories under `workspaces/`. No escaping.
 - Config dir uses `XDG_CONFIG_HOME` when set; otherwise `~/.config`.
-- Data dir uses `XDG_DATA_HOME` when set; otherwise `~/.local/share`.
+- Data dir is `~/.repocache`.
 
 ## 4. Config file
 
@@ -116,7 +116,7 @@ The same rule applies to **owner** names (`<host>/<owner>`). `repo rm` and `sync
 Bootstraps repocache and optionally integrates with detected agents.
 
 Behavior:
-1. Create `~/.config/repocache/` and `~/.local/share/repocache/{repos,workspaces,logs}/` if missing.
+1. Create `~/.config/repocache/` and `~/.repocache/{repos,workspaces,logs}/` if missing.
 2. Create `~/.config/repocache/config.toml` if missing, with an empty `[[repo]]` list and a comment header.
 3. Determine agent set:
    - `--agents=none`: skip agent integration.
@@ -136,13 +136,13 @@ Exit codes: 0; 7 (config write error or `--agents=` value invalid).
 
 ### 5.2 `repocache uninstall [--agents=auto|all|<list>] [--purge]`
 
-Reverses agent integration. By default does not delete `~/.config/repocache/` or `~/.local/share/repocache/`.
+Reverses agent integration. By default does not delete `~/.config/repocache/` or `~/.repocache/`.
 
 Behavior:
 1. Determine agent set as in `init`.
 2. For each selected agent, remove only the entries recorded in the sidecar state (see §8.5): the allowed-dir entries and the `session-context` + `__bg-sync` SessionStart hooks. Untracked user entries are preserved.
 3. Clean up any legacy install: the `@REPOCACHE.md` import line and the on-disk `REPOCACHE.md` doc that older versions wrote.
-4. With `--purge`: after step 3, delete both `~/.local/share/repocache/` (DataDir) and `~/.config/repocache/` (ConfigDir), removing all cached repos, workspaces, and config. Before deleting, scan all workspaces; if any have uncommitted changes or unpushed commits, list them and prompt for confirmation (`[y/N]`). If stdin is not a TTY, refuse and abort rather than destroy dirty work. A clean set of workspaces is purged without prompting.
+4. With `--purge`: after step 3, delete both `~/.repocache/` (DataDir) and `~/.config/repocache/` (ConfigDir), removing all cached repos, workspaces, and config. Before deleting, scan all workspaces; if any have uncommitted changes or unpushed commits, list them and prompt for confirmation (`[y/N]`). If stdin is not a TTY, refuse and abort rather than destroy dirty work. A clean set of workspaces is purged without prompting.
 
 Exit codes: 0; 7 (file write error).
 
@@ -182,7 +182,7 @@ Lists tracked owners, then repos with last sync time and the owner (if any) that
 
 Behavior:
 1. Read config.
-2. For each entry, stat `~/.local/share/repocache/repos/<name>/`:
+2. For each entry, stat `~/.repocache/repos/<name>/`:
    - Path (or `null` if never synced)
    - `last_sync_at` from `.git/repocache.meta` (or `null`)
 3. Output table (human) or a JSON object (JSON).
@@ -248,7 +248,7 @@ Exit codes: 0 (all ok or skipped); 2 (unknown name); 5 (lock contention timed ou
 
 ### 5.7 `repocache workspace new <repo> <branch> [--base <branch>]`
 
-Creates a workspace at `~/.local/share/repocache/workspaces/<name>/<branch>/` derived from the cache repo via `--reference`.
+Creates a workspace at `~/.repocache/workspaces/<name>/<branch>/` derived from the cache repo via `--reference`.
 
 Behavior:
 1. Resolve `<repo>` to a config entry per §5.0; if not in config → exit 2; if ambiguous → exit 2 listing candidates.
@@ -272,7 +272,7 @@ Exit codes: 0; 2 (repo not in cache); 3 (workspace exists); 5 (locked); 6 (clone
 
 ### 5.8 `repocache workspace list [--json]`
 
-Lists all workspaces under `~/.local/share/repocache/workspaces/`.
+Lists all workspaces under `~/.repocache/workspaces/`.
 
 For each workspace, reports:
 - `repo` (derived from path)
@@ -325,13 +325,13 @@ Exit codes: 0; 2 (unknown topic).
 Invoked by each agent's SessionStart hook. Not for end users.
 
 Behavior:
-1. Acquire non-blocking exclusive flock on `~/.local/share/repocache/.bg-sync.lock`. If already held by another process, exit 0 immediately (no error, no message).
+1. Acquire non-blocking exclusive flock on `~/.repocache/.bg-sync.lock`. If already held by another process, exit 0 immediately (no error, no message).
 2. If no repo has ever been synced (no `.git/repocache.meta` exists for any tracked repo):
    - Print to stdout: `repocache: cache is empty. Run \`repocache sync\` to fetch your tracked repos.`
    - Release lock; exit 0. (Claude Code and Codex surface plain stdout as session context.)
 3. Otherwise:
    - Double-fork to detach from the session.
-   - Redirect stdout/stderr to `~/.local/share/repocache/logs/bg-sync.log` (append, with rotation at e.g. 5 MB).
+   - Redirect stdout/stderr to `~/.repocache/logs/bg-sync.log` (append, with rotation at e.g. 5 MB).
    - Exec `repocache sync --if-older-than <bg_sync_interval>`. If `bg_sync_interval` is unset (the default), no `--if-older-than` gate is applied and the cache refreshes on every session start.
    - Release lock on exit.
 
@@ -351,7 +351,7 @@ Workspaces are never chmod-restricted. They are normal git working trees.
 
 | Scope | Lockfile | Mode | Acquire timeout | Held during |
 |-------|----------|------|-----------------|-------------|
-| Global bg-sync | `~/.local/share/repocache/.bg-sync.lock` | exclusive, **non-blocking** | 0s (fail-fast) | `__bg-sync` startup |
+| Global bg-sync | `~/.repocache/.bg-sync.lock` | exclusive, **non-blocking** | 0s (fail-fast) | `__bg-sync` startup |
 | Config file | `~/.config/repocache/.lock` | exclusive | 2s (blocking) | brief: read-modify-write of config |
 | Per-cache-repo | `<cache>/.git/repocache.lock` | exclusive | **5 minutes** (blocking) | `sync` of that repo (fetch + checkout + chmod + meta write) |
 | Per-cache-repo | (same file) | shared | 2s (blocking) | `workspace new` (during clone) |
@@ -413,7 +413,7 @@ session-context` and injected into context by each agent's SessionStart
 hook (§8.3). Because it ships with the binary there is no installed copy
 to drift after an upgrade. Target: ≤ 20 lines. The guide tells the agent:
 
-- The cache lives at `~/.local/share/repocache/repos/<host>/<owner>/<repo>/` and is read-only — search with `rg`/`grep`, do not modify.
+- The cache lives at `~/.repocache/repos/<host>/<owner>/<repo>/` and is read-only — search with `rg`/`grep`, do not modify.
 - Tracked repos: `repocache repo list`.
 - To edit: `repocache workspace new <repo> <branch>` prints the workspace path; make changes there, then commit, push, open PR with `gh`.
 - To clean up: `repocache workspace rm <repo> <branch>`.
@@ -453,8 +453,8 @@ repocache:managed` to `CLAUDE.md`/`AGENTS.md`/`GEMINI.md` and wrote a
 
 Two paths are added to each agent's filesystem-access list:
 
-- `~/.local/share/repocache/repos/`
-- `~/.local/share/repocache/workspaces/`
+- `~/.repocache/repos/`
+- `~/.repocache/workspaces/`
 
 | Agent | File | Key |
 |-------|------|-----|
@@ -479,7 +479,7 @@ Every entry repocache adds must be identifiable for clean uninstall:
   }
   // repocache:managed:end
   ```
-  If the user already has the same key with their own entries, **merge**: keep user entries, add ours, mark only ours with a per-element marker comment where possible. Where per-element marker comments aren't preservable through round-trip, track our additions in a sidecar `~/.local/share/repocache/agents.state.json` so uninstall knows which entries to remove.
+  If the user already has the same key with their own entries, **merge**: keep user entries, add ours, mark only ours with a per-element marker comment where possible. Where per-element marker comments aren't preservable through round-trip, track our additions in a sidecar `~/.repocache/agents.state.json` so uninstall knows which entries to remove.
 - **TOML** (Codex): same approach — sidecar state file is authoritative for which entries are repocache's.
 
 The sidecar state file (`agents.state.json`) records, per agent:

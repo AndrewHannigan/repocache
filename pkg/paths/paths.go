@@ -20,12 +20,9 @@ func ConfigDir() string {
 	return filepath.Join(home(), ".config", appName)
 }
 
-// DataDir returns ~/.local/share/repocache (honoring XDG_DATA_HOME).
+// DataDir returns ~/.repocache.
 func DataDir() string {
-	if x := os.Getenv("XDG_DATA_HOME"); x != "" {
-		return filepath.Join(x, appName)
-	}
-	return filepath.Join(home(), ".local", "share", appName)
+	return filepath.Join(home(), "."+appName)
 }
 
 func ConfigFile() string     { return filepath.Join(ConfigDir(), "config.toml") }
