@@ -37,8 +37,8 @@ repocache init
 repocache repo add https://github.com/anthropics/anthropic-sdk-python
 repocache sync
 
-# your agent can now search it; when it wants to edit:
-cd "$(repocache workspace new anthropics/anthropic-sdk-python fix-typo)"
+# your agent can now search it; when it wants to edit, this prints a writable path:
+repocache workspace new anthropics/anthropic-sdk-python fix-typo
 ```
 
 That's the whole loop. Repocache adds exactly two things to your agent's world:

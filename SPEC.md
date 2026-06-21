@@ -267,7 +267,7 @@ Behavior:
 1. Compute the path. If does not exist on disk → exit 2.
 2. Print path.
 
-Designed for `cd "$(repocache workspace path foo bar)"`.
+Output is the bare path so the caller can address the workspace directly.
 
 Exit codes: 0; 2.
 
@@ -387,7 +387,7 @@ to drift after an upgrade. Target: ≤ 20 lines. The guide tells the agent:
 
 - The cache lives at `~/.local/share/repocache/repos/<host>/<owner>/<repo>/` and is read-only — search with `rg`/`grep`, do not modify.
 - Tracked repos: `repocache repo list`.
-- To edit: `cd "$(repocache workspace new <repo> <branch>)"`, commit, push, open PR with `gh`.
+- To edit: `repocache workspace new <repo> <branch>` prints the workspace path; make changes there, then commit, push, open PR with `gh`.
 - To clean up: `repocache workspace rm <repo> <branch>`.
 - To add a new repo to the library: ask the user to run `repocache repo add <url>`.
 - For more detail: `repocache help <topic>` or `repocache <cmd> --help`.

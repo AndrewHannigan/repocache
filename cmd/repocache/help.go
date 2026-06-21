@@ -58,8 +58,8 @@ The whole loop:
     repocache init                          # one-time: dirs + agent integration
     repocache repo add <git-url>            # add a repo to the library
     repocache sync                          # fetch + chmod a-w on the working tree
-    cd "$(repocache workspace new <repo> <branch>)"   # writable clone
-    # ... edit, commit, push ...
+    repocache workspace new <repo> <branch>            # prints path to a writable clone
+    # ... edit there, commit, push ...
     repocache workspace rm <repo> <branch>  # tear down
 
 Commands:
@@ -200,15 +200,15 @@ sharing object storage but with independent refs. Edits happen here.
   repocache workspace new <repo> <branch> [--base <branch>]
     Clone --reference into ~/.local/share/repocache/workspaces/.../<branch>/.
     If <branch> exists on origin, check it out. Otherwise create it off
-    <base> (or origin/HEAD). Prints the absolute workspace path on stdout.
-    Common pattern: cd "$(repocache workspace new <repo> <branch>)"
+    <base> (or origin/HEAD). Prints the absolute workspace path on stdout;
+    make changes there, then commit and push.
 
   repocache workspace list [--json]
     Every workspace with repo, branch, dirty state, unpushed-commit count,
     age of the newest file.
 
   repocache workspace path <repo> <branch>
-    Print absolute workspace path (for cd $(...)). Exit 2 if missing.
+    Print absolute workspace path. Exit 2 if missing.
 
   repocache workspace rm <repo> <branch> [--force]
     Delete workspace dir. Refuses with exit 4 if dirty or unpushed

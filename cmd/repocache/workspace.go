@@ -139,7 +139,7 @@ func runWorkspaceList(jsonOut bool) error {
 func newWorkspacePathCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "path <repo> <branch>",
-		Short: "Print the absolute workspace path (for cd $(...))",
+		Short: "Print the absolute workspace path",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, branch := args[0], args[1]
