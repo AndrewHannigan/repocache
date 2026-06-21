@@ -100,7 +100,7 @@ For each command: signature, behavior, output, exit codes used. All commands acc
 Commands that resolve a `<repo>`/`<name>` argument against the configured repos (`sync`, `repo rm`, `workspace new`) use a single shared rule, in order:
 
 1. **Exact match** on a repo's resolved name (`<host>/<owner>/<repo>`, or the explicit `name` override). If one matches, use it.
-2. **Unambiguous suffix match.** Otherwise, match the argument against the trailing path segments of each resolved name, on segment (`/`) boundaries. `blackboard` matches `github.com/octocat/blackboard`; `octocat/blackboard` matches it too; `board` does not (not a segment boundary). If exactly one repo matches, use it.
+2. **Unambiguous suffix match.** Otherwise, match the argument against the trailing path segments of each resolved name, on segment (`/`) boundaries. `hello-world` matches `github.com/octocat/hello-world`; `octocat/hello-world` matches it too; `world` does not (not a segment boundary). If exactly one repo matches, use it.
 
 Resolution outcomes:
 - Exactly one match (by either rule) → resolved.

@@ -89,9 +89,9 @@ func TestSourceAndOwnerRoundTrip(t *testing.T) {
 
 func TestResolve(t *testing.T) {
 	c := &Config{Repos: []Repo{
-		{URL: "https://github.com/octocat/blackboard"},
+		{URL: "https://github.com/octocat/hello-world"},
 		{URL: "https://github.com/octocat/whiteboard"},
-		{URL: "https://gitlab.com/other/blackboard"},
+		{URL: "https://gitlab.com/other/hello-world"},
 		{URL: "git@github.com:foo/bar.git", Name: "myorg/bar"},
 	}}
 
@@ -106,9 +106,9 @@ func TestResolve(t *testing.T) {
 		{name: "exact name override", arg: "myorg/bar", wantURL: "git@github.com:foo/bar.git"},
 		{name: "unambiguous suffix", arg: "whiteboard",
 			wantURL: "https://github.com/octocat/whiteboard"},
-		{name: "two-segment suffix", arg: "octocat/blackboard",
-			wantURL: "https://github.com/octocat/blackboard"},
-		{name: "ambiguous suffix", arg: "blackboard", wantCode: errs.NotFound},
+		{name: "two-segment suffix", arg: "octocat/hello-world",
+			wantURL: "https://github.com/octocat/hello-world"},
+		{name: "ambiguous suffix", arg: "hello-world", wantCode: errs.NotFound},
 		{name: "not a segment boundary", arg: "board", wantCode: errs.NotFound},
 		{name: "no match", arg: "nope", wantCode: errs.NotFound},
 	}
