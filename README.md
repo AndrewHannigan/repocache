@@ -37,9 +37,12 @@ repocache init
 # add a repo — it's fetched right away (read-only)
 repocache repo add https://github.com/anthropics/anthropic-sdk-python
 
+# GitHub shorthand works too — "owner/repo" is expanded against github.com
+repocache repo add anthropics/anthropic-sdk-python
+
 # ...or track a whole user/org: add discovers its repos and fetches them;
 # later syncs keep pulling any new ones
-repocache repo add https://github.com/anthropics   # needs gh
+repocache repo add anthropics   # bare "owner" shorthand; needs gh
 
 # re-fetch tracked repos any time
 repocache sync

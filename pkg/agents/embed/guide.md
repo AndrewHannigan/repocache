@@ -15,8 +15,9 @@ You have a local library of git repos managed by `repocache`.
   two are independent clones, so the choice decides where your commits actually land. This
   applies even when the existing checkout is the directory you were launched in.
 - **Clean up**: `repocache workspace rm <repo> <branch>` when done.
-- **Need a repo not in the library?** Ask the user to run `repocache repo add <url>`.
-- **Track a whole user/org?** `repocache repo add <owner-url>` (e.g. a bare
+- **Need a repo not in the library?** Ask the user to run `repocache repo add <repo>`
+  (a full URL or GitHub `owner/repo` shorthand).
+- **Track a whole user/org?** `repocache repo add <owner>` (a bare `owner` or
   `https://github.com/<owner>`) tracks every repo under that owner; `sync` discovers
   and fetches new ones automatically. Needs `gh` installed and authenticated.
 - **More details**: `repocache help <topic>` or `repocache <cmd> --help`.

@@ -151,7 +151,8 @@ Exit codes: 0; 7 (file write error).
 Appends a `[[repo]]` or `[[owner]]` entry to `config.toml`.
 
 Behavior:
-1. Classify `<url>` as a repo or an owner. Default: by path-segment count — one segment (`host/owner`) ⇒ owner, two or more (`host/owner/repo`) ⇒ repo. `--owner` / `--repo` force it; passing both → exit 7.
+0. Normalize `<url>`. A full URL (`scheme://…`) or scp-style remote (`git@host:owner/repo`) is taken as-is. Otherwise `<url>` is treated as shorthand: a leading segment that looks like a host (contains `.` or `:`) gets only an `https://` scheme (`github.com/owner` ⇒ `https://github.com/owner`); anything else is GitHub shorthand and is expanded against `github.com` (`owner/repo` ⇒ `https://github.com/owner/repo`, bare `owner` ⇒ `https://github.com/owner`). The normalized URL is what classification, naming, and the stored config entry all use.
+1. Classify the normalized URL as a repo or an owner. Default: by path-segment count — one segment (`host/owner`) ⇒ owner, two or more (`host/owner/repo`) ⇒ repo. `--owner` / `--repo` force it; passing both → exit 7.
 2. Parse URL; derive default name (`host/owner/repo` for a repo, `host/owner` for an owner). If `--name` given, use it.
 3. Reject if the name already exists as a repo or an owner → exit 3.
 4. Acquire exclusive lock on config; append the `[[repo]]` or `[[owner]]`; release.

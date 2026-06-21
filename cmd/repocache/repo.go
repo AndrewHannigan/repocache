@@ -36,29 +36,39 @@ func newRepoAddCmd() *cobra.Command {
 	var name string
 	var asOwner, asRepo bool
 	cmd := &cobra.Command{
-		Use:   "add <url>",
+		Use:   "add <repo>",
 		Short: "Add a repository, or a whole user/org, to the library",
-		Long: `add appends a repo to the library. If <url> points at a bare user or
-org (a single path segment, e.g. https://github.com/octocat), it is
-tracked as an owner instead: each sync discovers that owner's repos via gh
-and adds any new ones automatically.
+		Long: `add appends a repo to the library. <repo> may be a full git URL
+(https://, ssh://, or scp-style git@host:owner/repo) or GitHub shorthand:
+a bare "owner/repo" or "owner" is expanded against github.com, so
+"repocache repo add octocat/Hello-World" and "repocache repo add octocat"
+both just work.
 
-Detection is automatic from the URL shape; force it with --owner / --repo.`,
+If <repo> points at a bare user or org (a single path segment, e.g.
+octocat or https://github.com/octocat), it is tracked as an owner instead:
+each sync discovers that owner's repos via gh and adds any new ones
+automatically.
+
+Detection is automatic from the shape; force it with --owner / --repo.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRepoAdd(args[0], name, asOwner, asRepo)
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "override the default name (derived from URL)")
-	cmd.Flags().BoolVar(&asOwner, "owner", false, "track <url> as a user/org (discover its repos via gh)")
-	cmd.Flags().BoolVar(&asRepo, "repo", false, "track <url> as a single repo (default for <owner>/<repo> URLs)")
+	cmd.Flags().BoolVar(&asOwner, "owner", false, "track <repo> as a user/org (discover its repos via gh)")
+	cmd.Flags().BoolVar(&asRepo, "repo", false, "track <repo> as a single repo (default for owner/repo references)")
 	return cmd
 }
 
-func runRepoAdd(url, overrideName string, asOwner, asRepo bool) error {
+func runRepoAdd(input, overrideName string, asOwner, asRepo bool) error {
 	if asOwner && asRepo {
 		return errs.New(errs.Config, "--owner and --repo are mutually exclusive")
 	}
+	// Expand shorthand (e.g. "octocat" or "owner/repo") into a full
+	// URL up front so classification, naming, and the stored config entry all
+	// use the same canonical form.
+	url := paths.NormalizeURL(input)
 	isOwner := asOwner
 	if !asOwner && !asRepo {
 		detected, err := paths.IsOwnerURL(url)

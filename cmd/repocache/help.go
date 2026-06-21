@@ -152,12 +152,15 @@ confirmation before deleting (and refuses when stdin is not a TTY).
 
 	"repo": `repo — manage the library
 
-  repocache repo add <url> [--name <n>] [--owner|--repo]
-    Add a repo to the library. Name defaults to <host>/<owner>/<repo>
-    derived from URL. --name overrides. Fetches the new repo right away
-    (runs a scoped 'sync'). Exit 3 if the name already exists.
+  repocache repo add <repo> [--name <n>] [--owner|--repo]
+    Add a repo to the library. <repo> may be a full git URL or GitHub
+    shorthand: a bare 'owner/repo' or 'owner' is expanded against
+    github.com, so 'repocache repo add octocat/Hello-World' works.
+    Name defaults to <host>/<owner>/<repo> derived from the URL. --name
+    overrides. Fetches the new repo right away (runs a scoped 'sync').
+    Exit 3 if the name already exists.
 
-    If <url> is a bare user/org (one path segment, e.g.
+    If <repo> is a bare user/org (one path segment, e.g. octocat or
     https://github.com/octocat) it is tracked as an owner instead;
     sync then discovers and adds that owner's repos. Detection is automatic;
     --owner / --repo force it. See 'repocache help owner'.

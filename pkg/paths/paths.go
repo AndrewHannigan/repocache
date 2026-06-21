@@ -55,6 +55,48 @@ func WorkspacePath(name, branch string) string {
 	return filepath.Join(WorkspacesDir(), filepath.FromSlash(name), filepath.FromSlash(branch))
 }
 
+// NormalizeURL expands a user-supplied repo reference into a full git URL.
+// Full URLs (anything with a "://" scheme) and scp-style remotes
+// (git@host:path) are returned unchanged. A bare reference with no scheme is
+// treated as shorthand and expanded so the common cases just work:
+//
+//	octocat                         -> https://github.com/octocat
+//	anthropics/anthropic-sdk-python -> https://github.com/anthropics/anthropic-sdk-python
+//	github.com/anthropics           -> https://github.com/anthropics
+//	gitlab.com/foo/bar              -> https://gitlab.com/foo/bar
+//
+// A leading segment that looks like a host (contains "." or ":") is taken as
+// the host and only given an https:// scheme; otherwise the reference is
+// GitHub shorthand (owner or owner/repo) and is resolved against github.com.
+func NormalizeURL(input string) string {
+	s := strings.TrimSpace(input)
+	if s == "" {
+		return s
+	}
+	// Already a full URL (https://, ssh://, git://) or scp-style git@host:path.
+	if strings.Contains(s, "://") || isSCPLike(s) {
+		return s
+	}
+	s = strings.Trim(s, "/")
+	// A leading segment that looks like a host (a dot, or a host:port colon)
+	// means the user gave host/owner[/repo] without a scheme; just add https://.
+	if first, _, _ := strings.Cut(s, "/"); strings.ContainsAny(first, ".:") {
+		return "https://" + s
+	}
+	// Otherwise it's GitHub shorthand: owner or owner/repo.
+	return "https://github.com/" + s
+}
+
+// isSCPLike reports whether s is a scp-style remote (user@host:path with no
+// scheme), the one no-scheme form NormalizeURL must leave untouched. Mirrors
+// the detection in ParseURL.
+func isSCPLike(s string) bool {
+	if at := strings.Index(s, "@"); at > 0 {
+		return strings.Contains(s[at+1:], ":")
+	}
+	return false
+}
+
 // ParseURL extracts (host, path) from a git URL. Handles both standard
 // URLs (https://, ssh://, git://) and scp-style (git@github.com:foo/bar.git).
 // Path has any trailing ".git" stripped.
