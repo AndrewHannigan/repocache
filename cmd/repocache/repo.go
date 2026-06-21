@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -344,7 +346,7 @@ func newRepoListCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List tracked repos with last sync, size, branch count",
+		Short: "List tracked repos with last sync and source",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRepoList(jsonOut)
 		},
@@ -353,40 +355,54 @@ func newRepoListCmd() *cobra.Command {
 	return cmd
 }
 
+type repoRow struct {
+	Name       string `json:"name"`
+	URL        string `json:"url"`
+	Source     string `json:"source,omitempty"`
+	Path       string `json:"path,omitempty"`
+	LastSyncAt any    `json:"last_sync_at"`
+}
+
+type ownerRow struct {
+	Name      string `json:"name"`
+	URL       string `json:"url"`
+	RepoCount int    `json:"repo_count"`
+}
+
 func runRepoList(jsonOut bool) error {
 	c, err := config.Load()
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
-	type repoRow struct {
-		Name        string `json:"name"`
-		URL         string `json:"url"`
-		Source      string `json:"source,omitempty"`
-		Path        string `json:"path,omitempty"`
-		LastSyncAt  any    `json:"last_sync_at"`
-		SizeBytes   int64  `json:"size_bytes"`
-		BranchCount int    `json:"branch_count"`
+	rows, owners, err := collectRepoList(c)
+	if err != nil {
+		return err
 	}
-	type ownerRow struct {
-		Name      string `json:"name"`
-		URL       string `json:"url"`
-		RepoCount int    `json:"repo_count"`
+	if jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(struct {
+			Repos  []repoRow  `json:"repos"`
+			Owners []ownerRow `json:"owners"`
+		}{rows, owners})
 	}
+	return writeRepoTable(os.Stdout, rows, owners)
+}
+
+// collectRepoList gathers the rows behind `repo list`, probing the cache for
+// each tracked repo's last-sync time. The probes are deliberately cheap (a
+// stat and a small metadata read, no size walk or git subprocess) so this is
+// safe to run on the session-context hot path via repoListText.
+func collectRepoList(c *config.Config) ([]repoRow, []ownerRow, error) {
 	rows := make([]repoRow, 0, len(c.Repos))
 	for _, r := range c.Repos {
 		name, err := r.ResolvedName()
 		if err != nil {
-			return errs.Wrap(errs.Config, err)
+			return nil, nil, errs.Wrap(errs.Config, err)
 		}
 		row := repoRow{Name: name, URL: r.URL, Source: r.Source, LastSyncAt: nil}
 		if cache.Exists(name) {
 			row.Path = paths.CacheRepoPath(name)
-			if size, err := cache.Size(name); err == nil {
-				row.SizeBytes = size
-			}
-			if bc, err := cache.BranchCount(name); err == nil {
-				row.BranchCount = bc
-			}
 			if meta, err := cache.LoadMeta(name); err == nil && meta != nil {
 				row.LastSyncAt = meta.LastSyncAt.UTC().Format(time.RFC3339)
 			}
@@ -397,24 +413,20 @@ func runRepoList(jsonOut bool) error {
 	for _, o := range c.Owners {
 		name, err := o.ResolvedName()
 		if err != nil {
-			return errs.Wrap(errs.Config, err)
+			return nil, nil, errs.Wrap(errs.Config, err)
 		}
 		owners = append(owners, ownerRow{Name: name, URL: o.URL, RepoCount: len(c.ReposForOwner(name))})
 	}
+	return rows, owners, nil
+}
 
-	if jsonOut {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(struct {
-			Repos  []repoRow  `json:"repos"`
-			Owners []ownerRow `json:"owners"`
-		}{rows, owners})
-	}
+// writeRepoTable renders the human-readable `repo list` table to out.
+func writeRepoTable(out io.Writer, rows []repoRow, owners []ownerRow) error {
 	if len(rows) == 0 && len(owners) == 0 {
-		fmt.Println("(no repos tracked; add with `repocache repo add <url>`)")
+		fmt.Fprintln(out, "(no repos tracked; add with `repocache repo add <url>`)")
 		return nil
 	}
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	if len(owners) > 0 {
 		fmt.Fprintln(w, "OWNER\tREPOS")
 		for _, o := range owners {
@@ -422,7 +434,7 @@ func runRepoList(jsonOut bool) error {
 		}
 		fmt.Fprintln(w, "")
 	}
-	fmt.Fprintln(w, "NAME\tLAST SYNC\tSIZE\tBRANCHES\tSOURCE")
+	fmt.Fprintln(w, "NAME\tLAST SYNC\tSOURCE")
 	for _, r := range rows {
 		last := "never"
 		if ts, ok := r.LastSyncAt.(string); ok {
@@ -430,21 +442,35 @@ func runRepoList(jsonOut bool) error {
 				last = relTime(t)
 			}
 		}
-		size := "—"
-		if r.SizeBytes > 0 {
-			size = humanSize(r.SizeBytes)
-		}
-		branches := "—"
-		if r.BranchCount > 0 {
-			branches = fmt.Sprintf("%d", r.BranchCount)
-		}
 		source := "—"
 		if r.Source != "" {
 			source = r.Source
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.Name, last, size, branches, source)
+		fmt.Fprintf(w, "%s\t%s\t%s\n", r.Name, last, source)
 	}
 	return w.Flush()
+}
+
+// repoListText renders the `repo list` table to a string for embedding in
+// session context. Best-effort: returns "" if the library can't be read, so
+// a config hiccup never breaks session startup.
+func repoListText() string {
+	c, err := config.Load()
+	if err != nil {
+		return ""
+	}
+	rows, owners, err := collectRepoList(c)
+	if err != nil {
+		return ""
+	}
+	if len(rows) == 0 && len(owners) == 0 {
+		return "" // nothing tracked yet; the guide already covers adding repos
+	}
+	var buf bytes.Buffer
+	if err := writeRepoTable(&buf, rows, owners); err != nil {
+		return ""
+	}
+	return buf.String()
 }
 
 // wrapIfNotCoded ensures we propagate exit codes; if err is already a

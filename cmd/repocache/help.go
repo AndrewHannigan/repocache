@@ -172,8 +172,8 @@ confirmation before deleting (and refuses when stdin is not a TTY).
     auto-added (with the same safety checks).
 
   repocache repo list [--json]
-    Show tracked owners, then repos with last sync, on-disk size, branch
-    count, and the owner that auto-added each (if any).
+    Show tracked owners, then repos with last sync and the owner that
+    auto-added each (if any).
 `,
 
 	"owner": `owner — track a whole user or org
