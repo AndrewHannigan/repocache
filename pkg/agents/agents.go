@@ -55,7 +55,7 @@ func All() []Agent {
 	return []Agent{
 		NewClaude(),
 		NewCodex(),
-		NewGemini(),
+		NewAntigravity(),
 		NewOpencode(),
 	}
 }
@@ -141,7 +141,7 @@ func installHooks(opts InstallOptions, ensure func(command string) (bool, error)
 }
 
 // hookLabel is the short human label for a hook command, used for the
-// Codex statusMessage and (dashed) the Gemini hook name.
+// Codex statusMessage and (dashed) the Google CLI hook name.
 func hookLabel(command string) string {
 	switch command {
 	case BgSyncCommand:

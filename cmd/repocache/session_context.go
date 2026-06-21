@@ -29,8 +29,8 @@ tags so it can be extracted unambiguously from surrounding hook output:
 
     <repocache-session-context>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</repocache-session-context>
 
-Claude Code, Codex CLI, and Gemini CLI all accept this shape (Gemini
-requires it — it rejects plain stdout). The text is generated from the
+Claude Code, Codex CLI, and Antigravity CLI all accept this shape
+(Antigravity requires it — it rejects plain stdout). The text is generated from the
 running binary, so it is always current: there is no on-disk doc to
 drift after an upgrade. It also appends a live snapshot of the library
 (the "repo list" table) so the agent knows which repos are available
@@ -53,7 +53,7 @@ envelope.`,
 	return cmd
 }
 
-// sessionContextEnvelope is the JSON shape all three agents accept for
+// sessionContextEnvelope is the JSON shape all hook-based agents accept for
 // SessionStart context injection. additionalContext is a single string,
 // so the guide is JSON-escaped into it by the encoder.
 type sessionContextEnvelope struct {

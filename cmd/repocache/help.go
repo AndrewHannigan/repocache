@@ -276,12 +276,12 @@ first 'git push -u origin <branch>'.
 
 Supported (auto-detected by config-dir presence):
 
-  claude    ~/.claude/          — Claude Code
-  codex     ~/.codex/           — OpenAI's Codex CLI
-  gemini    ~/.gemini/          — Google's Gemini CLI
-  opencode  ~/.config/opencode/ — opencode
+  claude       ~/.claude/          — Claude Code
+  codex        ~/.codex/           — OpenAI's Codex CLI
+  antigravity  ~/.antigravity/     — Google's Antigravity CLI
+  opencode     ~/.config/opencode/ — opencode
 
-For claude, codex, and gemini, 'repocache init' writes (idempotently,
+For claude, codex, and antigravity, 'repocache init' writes (idempotently,
 recorded in a sidecar state file so 'uninstall' can reverse precisely):
 
   1. The cache + workspaces dirs in the allowed-filesystem-paths
