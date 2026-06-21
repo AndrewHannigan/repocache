@@ -6,7 +6,7 @@ You have a local library of git repos managed by `repocache`.
   Search and read them with your usual tools. Do not modify files here.
 - **List the library**: `repocache repo list`
 - **Edit a repo**: `repocache workspace new <repo> <branch>` creates a writable workspace
-  and prints its path. Make changes there, then commit, push, open PR with `gh` as normal.
+  and prints its path. Make changes there, then commit, push, open PR as normal.
   But first — check for a local checkout collision (next bullet).
 - **⚠️ Before editing, check for a local checkout collision.** If the repo you're about to
   edit is *also* checked out somewhere else on disk — a separate clone (e.g. under `~/src`),
