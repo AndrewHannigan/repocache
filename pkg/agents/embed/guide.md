@@ -2,7 +2,7 @@
 
 You have a local library of git repos managed by `repocache`.
 
-- **Read repos** at `~/.local/share/repocache/repos/<host>/<owner>/<repo>/` (read-only).
+- **Read repos** at `~/.repocache/repos/<host>/<owner>/<repo>/` (read-only).
   Search and read them with your usual tools. Do not modify files here.
 - **List the library**: `repocache repo list`
 - **Edit a repo**: `repocache workspace new <repo> <branch>` creates a writable workspace

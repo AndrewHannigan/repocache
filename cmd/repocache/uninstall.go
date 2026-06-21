@@ -28,7 +28,7 @@ entries are preserved. Also cleans up the legacy @REPOCACHE.md import
 and doc file that older repocache versions installed.
 
 By default this does NOT delete ~/.config/repocache/ or
-~/.local/share/repocache/. Pass --purge to also remove those, deleting
+~/.repocache/. Pass --purge to also remove those, deleting
 all cached repos, workspaces, and config. --purge warns and asks for
 confirmation if any workspace has uncommitted or unpushed work.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -36,7 +36,7 @@ confirmation if any workspace has uncommitted or unpushed work.`,
 		},
 	}
 	cmd.Flags().StringVar(&agentsFlag, "agents", "auto", "which agents to uninstall: auto|all|<comma-separated list>")
-	cmd.Flags().BoolVar(&purge, "purge", false, "also delete ~/.config/repocache and ~/.local/share/repocache (all cached repos, workspaces, and config)")
+	cmd.Flags().BoolVar(&purge, "purge", false, "also delete ~/.config/repocache and ~/.repocache (all cached repos, workspaces, and config)")
 	return cmd
 }
 

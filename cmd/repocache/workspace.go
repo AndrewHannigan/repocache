@@ -37,7 +37,7 @@ func newWorkspaceNewCmd() *cobra.Command {
 		Use:   "new <repo> <branch>",
 		Short: "Create a workspace via `git clone --reference`",
 		Long: `new creates a writable clone of the cache repo at
-~/.local/share/repocache/workspaces/<repo>/<branch>/ using
+~/.repocache/workspaces/<repo>/<branch>/ using
 'git clone --reference' so it shares object storage with the cache.
 
 If <branch> exists on origin, checks it out. Otherwise creates it off
