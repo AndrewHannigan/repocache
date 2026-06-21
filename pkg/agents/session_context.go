@@ -89,6 +89,26 @@ func (o *Opencode) SessionContextOutput(body string) (string, error) {
 	return body, nil
 }
 
+// cursorSessionStartOutput is the JSON object Cursor reads from a sessionStart
+// hook's stdout. Its additional_context field is injected into the
+// conversation's initial context — Cursor's analog of Claude's
+// additionalContext. The shape is a flat object with a snake_case key, distinct
+// from Claude's hookSpecificOutput envelope, so Cursor gets its own renderer.
+type cursorSessionStartOutput struct {
+	AdditionalContext string `json:"additional_context"`
+}
+
+// Cursor's CLI parses its sessionStart hook's stdout as JSON and injects the
+// additional_context field into the conversation. No delimiter tags are needed:
+// the whole stdout is the JSON object, not embedded in other hook chatter.
+func (c *Cursor) SessionContextOutput(body string) (string, error) {
+	data, err := json.Marshal(cursorSessionStartOutput{AdditionalContext: body})
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // sessionContextCommand is the session-context hook command installed for a
 // given agent: the base __session-context subcommand plus --agent <key>, so
 // the subcommand renders the output shape that agent expects.

@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -209,5 +210,145 @@ func TestClaudeUninstallReverses(t *testing.T) {
 		if strings.Contains(string(data), gone) {
 			t.Errorf("uninstall left hook %q behind\n%s", gone, data)
 		}
+	}
+}
+
+// cursorSessionStartCommands reads ~/.cursor/hooks.json and returns the flat
+// command strings under hooks.sessionStart, asserting the file carries the
+// required top-level "version": 1.
+func cursorSessionStartCommands(t *testing.T, home string) []string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(home, ".cursor", "hooks.json"))
+	if err != nil {
+		t.Fatalf("read hooks.json: %v", err)
+	}
+	var root struct {
+		Version int `json:"version"`
+		Hooks   struct {
+			SessionStart []struct {
+				Command string `json:"command"`
+			} `json:"sessionStart"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("hooks.json is not valid JSON: %v\n%s", err, data)
+	}
+	if root.Version != 1 {
+		t.Errorf("hooks.json version = %d, want 1\n%s", root.Version, data)
+	}
+	var cmds []string
+	for _, e := range root.Hooks.SessionStart {
+		cmds = append(cmds, e.Command)
+	}
+	return cmds
+}
+
+// Cursor integrates via flat command entries under hooks.sessionStart in
+// ~/.cursor/hooks.json (camelCase event, no nested {type,command} wrapper),
+// registering no paths.
+func TestCursorInstallWritesSessionStartHooks(t *testing.T) {
+	home := withHome(t)
+
+	got, err := NewCursor().Install(InstallOptions{})
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if len(got.AddedPaths) != 0 {
+		t.Errorf("cursor should register no paths; got %v", got.AddedPaths)
+	}
+	if !sliceHas(got.AddedHooks, sessionContextCommand("cursor")) || !sliceHas(got.AddedHooks, BgSyncCommand) {
+		t.Errorf("AddedHooks = %v, want both session-context and bg-sync", got.AddedHooks)
+	}
+
+	cmds := cursorSessionStartCommands(t, home)
+	for _, want := range []string{sessionContextCommand("cursor"), BgSyncCommand} {
+		if !sliceHas(cmds, want) {
+			t.Errorf("hooks.sessionStart missing %q; got %v", want, cmds)
+		}
+	}
+
+	// Idempotent: a second install reports nothing newly added and does not
+	// duplicate the entries.
+	again, err := NewCursor().Install(InstallOptions{})
+	if err != nil {
+		t.Fatalf("second Install: %v", err)
+	}
+	if len(again.AddedHooks) != 0 {
+		t.Errorf("second Install should be a no-op; got AddedHooks=%v", again.AddedHooks)
+	}
+	if cmds := cursorSessionStartCommands(t, home); len(cmds) != 2 {
+		t.Errorf("expected exactly 2 sessionStart entries after re-install, got %v", cmds)
+	}
+}
+
+// --no-bg-sync skips only the bg-sync hook; session-context still installs.
+func TestCursorInstallNoBgSync(t *testing.T) {
+	home := withHome(t)
+
+	got, err := NewCursor().Install(InstallOptions{NoBgSync: true})
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if sliceHas(got.AddedHooks, BgSyncCommand) {
+		t.Errorf("NoBgSync should skip bg-sync; got %v", got.AddedHooks)
+	}
+	if !sliceHas(got.AddedHooks, sessionContextCommand("cursor")) {
+		t.Errorf("session-context must install even with NoBgSync; got %v", got.AddedHooks)
+	}
+	if cmds := cursorSessionStartCommands(t, home); sliceHas(cmds, BgSyncCommand) {
+		t.Errorf("hooks.json should not contain bg-sync; got %v", cmds)
+	}
+}
+
+// Install removes the hand-rolled plugin prototype so the guide isn't injected
+// twice once `--agent cursor` becomes valid.
+func TestCursorInstallRemovesLegacyPlugin(t *testing.T) {
+	home := withHome(t)
+	pluginDir := filepath.Join(home, ".cursor", "plugins", "local", "repocache")
+	if err := os.MkdirAll(filepath.Join(pluginDir, "scripts"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginDir, "scripts", "session-start.sh"), []byte("#!/bin/bash\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := NewCursor().Install(InstallOptions{}); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if _, err := os.Stat(pluginDir); !os.IsNotExist(err) {
+		t.Errorf("legacy cursor plugin dir should be removed, stat err = %v", err)
+	}
+}
+
+// Uninstall removes exactly the sessionStart hooks it recorded, preserving
+// unrelated user hooks.
+func TestCursorUninstallReverses(t *testing.T) {
+	home := withHome(t)
+
+	// Pre-existing user hook that uninstall must preserve.
+	hooksFile := filepath.Join(home, ".cursor", "hooks.json")
+	if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(hooksFile, []byte(`{"version":1,"hooks":{"sessionStart":[`+
+		`{"command":"my own hook"}]}}`), 0644)
+
+	c := NewCursor()
+	installed, err := c.Install(InstallOptions{})
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if err := c.Uninstall(installed); err != nil {
+		t.Fatalf("Uninstall: %v", err)
+	}
+
+	cmds := cursorSessionStartCommands(t, home)
+	for _, gone := range []string{sessionContextCommand("cursor"), BgSyncCommand} {
+		if sliceHas(cmds, gone) {
+			t.Errorf("uninstall left hook %q behind; got %v", gone, cmds)
+		}
+	}
+	if !sliceHas(cmds, "my own hook") {
+		t.Errorf("uninstall should preserve unrelated user hooks; got %v", cmds)
 	}
 }

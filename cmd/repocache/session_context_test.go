@@ -81,6 +81,34 @@ func TestPrintSessionContextPlainTextAgents(t *testing.T) {
 	}
 }
 
+// Cursor gets a flat JSON object whose additional_context field carries the
+// guide — no hookSpecificOutput envelope, no delimiter tags.
+func TestPrintSessionContextCursorJSON(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	var buf bytes.Buffer
+	if err := printSessionContext(&buf, "cursor"); err != nil {
+		t.Fatalf("printSessionContext: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "<repocache-session-context>") || strings.Contains(out, "hookSpecificOutput") {
+		t.Errorf("cursor output must be a flat JSON object, not the hook envelope:\n%s", out)
+	}
+
+	var obj struct {
+		AdditionalContext string `json:"additional_context"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &obj); err != nil {
+		t.Fatalf("cursor output is not valid JSON: %v\n%s", err, out)
+	}
+	if !strings.HasPrefix(obj.AdditionalContext, string(agents.DocContent)) {
+		t.Errorf("additional_context should start with the embedded guide")
+	}
+	if !strings.HasSuffix(out, "\n") {
+		t.Errorf("output should be newline-terminated")
+	}
+}
+
 // An unknown --agent value is a clear error, not a silent default.
 func TestPrintSessionContextUnknownAgent(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
