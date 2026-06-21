@@ -100,8 +100,10 @@ func runRepoAddOne(url, overrideName string) error {
 		}
 		return wrapIfNotCoded(err, errs.Config)
 	}
-	fmt.Printf("added %s (run `repocache sync` to fetch)\n", effectiveName)
-	return nil
+	fmt.Printf("added %s\n", effectiveName)
+	// Fetch the new repo right away so the cache is populated without a
+	// separate `repocache sync`. Scoped to just this repo.
+	return runSync([]string{effectiveName}, syncDefaultJobs, 0, false)
 }
 
 func runOwnerAdd(url, overrideName string) error {
@@ -131,13 +133,15 @@ func runOwnerAdd(url, overrideName string) error {
 		return wrapIfNotCoded(err, errs.Config)
 	}
 
-	fmt.Printf("added owner %s (run `repocache sync` to discover and fetch its repos)\n", effectiveName)
+	fmt.Printf("added owner %s\n", effectiveName)
 	// Surface gh problems now rather than only at sync time. Advisory only —
 	// the entry is already saved and will expand once gh becomes available.
 	if gherr := forge.Available(); gherr != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n  owner expansion will be skipped until gh is available and authenticated.\n", gherr)
 	}
-	return nil
+	// Discover and fetch the owner's repos right away. Scoped to this owner,
+	// runSync reconciles it (adding newly discovered repos) and syncs them.
+	return runSync([]string{effectiveName}, syncDefaultJobs, 0, false)
 }
 
 func newRepoRmCmd() *cobra.Command {

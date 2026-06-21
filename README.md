@@ -33,12 +33,14 @@ curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/insta
 # integrate with your agents
 repocache init
 
-# add a repo, then pull it down (read-only)
+# add a repo — it's fetched right away (read-only)
 repocache repo add https://github.com/anthropics/anthropic-sdk-python
-repocache sync
 
-# ...or track a whole user/org: sync discovers its repos and keeps pulling new ones
+# ...or track a whole user/org: add discovers its repos and fetches them;
+# later syncs keep pulling any new ones
 repocache repo add https://github.com/anthropics   # needs gh
+
+# re-fetch tracked repos any time
 repocache sync
 
 # your agent can now search it; when it wants to edit, this prints a writable path:
