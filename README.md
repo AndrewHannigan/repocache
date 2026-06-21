@@ -71,7 +71,7 @@ Everything else — searching, branch listing, PR creation — uses tools the ag
 | Antigravity CLI | `~/.gemini/` (detected via `antigravity-cli/`) | n/a³ | session-context + bg-sync (PreInvocation)³ |
 | opencode | `~/.config/opencode/` | n/a² | plugin (see below)² |
 
-¹ Codex requires you to trust new hooks: after `repocache init`, open Codex CLI once and run `/hooks`.
+¹ Codex requires you to trust new hooks: after `repocache init`, open Codex CLI once and run `/hooks`. Note: Codex's TUI prints the injected guide as a visible "SessionStart hook (completed)" event each session — unlike Claude, it can't yet inject it silently ([codex#15497](https://github.com/openai/codex/issues/15497)).
 
 ² opencode has no SessionStart shell hook and no path allowlist. Instead, `init` drops a plugin at `~/.config/opencode/plugin/repocache.js`, auto-loaded at startup; it runs `repocache __bg-sync` and injects the guide into the model's system prompt via opencode's `experimental.chat.system.transform` hook. `uninstall` deletes the file.
 

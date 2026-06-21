@@ -83,8 +83,22 @@ func (c *Claude) SessionContextOutput(body string) (string, error) {
 
 // Codex CLI accepts plain stdout from a hook as developer context, so it gets
 // the raw Markdown body — no JSON envelope, no delimiter tags. (Codex also
-// accepts the hookSpecificOutput envelope, but plain text renders more cleanly
-// as the injected developer message.)
+// accepts the hookSpecificOutput envelope; both forms reach the model
+// identically, but plain text renders more cleanly than raw JSON.)
+//
+// NOTE: unlike Claude, Codex does NOT conceal this from the user — its TUI
+// prints the hook's stdout as a visible "SessionStart hook (completed) / hook
+// context: …" event on every session start, regardless of output shape. The
+// "developer context" framing in Codex's docs refers to the model message
+// role, not TUI visibility. The JSON `suppressOutput` field is the documented
+// knob for hiding it, but it's currently a no-op in the interactive TUI (only
+// the non-interactive `codex exec` renderer honors it). Switching to the
+// envelope would not hide anything today and would render worse, so we stay on
+// plain stdout.
+//
+// TODO(codex#15497): once suppressOutput is honored in the TUI, emit the
+// hookSpecificOutput envelope with suppressOutput:true so the guide is injected
+// silently, matching Claude. https://github.com/openai/codex/issues/15497
 func (c *Codex) SessionContextOutput(body string) (string, error) {
 	return body, nil
 }
