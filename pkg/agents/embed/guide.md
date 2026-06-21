@@ -7,9 +7,13 @@ You have a local library of git repos managed by `repocache`.
 - **List the library**: `repocache repo list`
 - **Edit a repo**: `repocache workspace new <repo> <branch>` creates a writable workspace
   and prints its path. Make changes there, then commit, push, open PR with `gh` as normal.
-- **Library repo also checked out locally?** If the same repo exists as a separate
-  working-directory checkout (e.g. under `~/src`), don't assume — ask the user whether
-  to edit that checkout in place or create a `repocache workspace`.
+  But first — check for a local checkout collision (next bullet).
+- **⚠️ Before editing, check for a local checkout collision.** If the repo you're about to
+  edit is *also* checked out somewhere else on disk — a separate clone (e.g. under `~/src`),
+  which may even be your current working directory — then STOP and ask the user which to
+  use: edit that checkout in place, or create a `repocache workspace`. Do not assume: the
+  two are independent clones, so the choice decides where your commits actually land. This
+  applies even when the existing checkout is the directory you were launched in.
 - **Clean up**: `repocache workspace rm <repo> <branch>` when done.
 - **Need a repo not in the library?** Ask the user to run `repocache repo add <url>`.
 - **Track a whole user/org?** `repocache repo add <owner-url>` (e.g. a bare

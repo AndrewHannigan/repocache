@@ -5,10 +5,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/AndrewHannigan/repocache/pkg/agents"
+	"github.com/AndrewHannigan/repocache/pkg/config"
+	"github.com/AndrewHannigan/repocache/pkg/paths"
 )
 
 // SessionContextCommand is the canonical command string installed into
@@ -66,8 +71,92 @@ func printSessionContext(w io.Writer) error {
 // is best-effort: if the library can't be read it is simply omitted.
 func sessionContextBody() string {
 	body := string(agents.DocContent)
+	if w := cwdCollisionWarning(); w != "" {
+		body = w + "\n" + body
+	}
 	if list := repoListText(); list != "" {
 		body += "\nThe library currently contains (output of `repocache repo list`):\n\n```\n" + list + "```\n"
 	}
 	return body
+}
+
+// cwdCollisionWarning returns a prominent callout when the agent's current
+// working directory is itself a separate checkout of a library repo (matched
+// by its git "origin" remote, protocol-independently). This is exactly the
+// situation the guide's "local checkout collision" guardrail describes —
+// surfaced here for the specific repo so the agent can't skip the check.
+//
+// Best-effort: any failure (not in a git repo, no origin, unreadable config)
+// yields "" and the body is emitted unchanged. A cwd inside repocache's own
+// data dir (a workspace, or the read-only cache) shares the upstream origin
+// and is the intended place to edit, so it never warns there.
+func cwdCollisionWarning() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	if isWithin(cwd, paths.DataDir()) {
+		return ""
+	}
+	origin, err := gitOriginURL(cwd)
+	if err != nil {
+		return ""
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return ""
+	}
+	return collisionWarning(cwd, origin, cfg.Repos)
+}
+
+// collisionWarning is the pure core of cwdCollisionWarning: if origin (the
+// working directory's git remote) normalizes to the same host/owner/repo
+// identity as one of the library repos, it returns the callout naming that
+// repo; otherwise "". Both sides go through paths.DefaultName so https and
+// ssh URLs for the same repo match.
+func collisionWarning(cwd, origin string, repos []config.Repo) string {
+	originKey, err := paths.DefaultName(origin)
+	if err != nil {
+		return ""
+	}
+	for _, r := range repos {
+		key, err := paths.DefaultName(r.URL)
+		if err != nil || key != originKey {
+			continue
+		}
+		name, err := r.ResolvedName()
+		if err != nil {
+			name = originKey
+		}
+		return fmt.Sprintf("> ⚠️ HEADS UP — local checkout collision\n"+
+			">\n"+
+			"> Your current working directory `%s` is also library repo `%s`.\n"+
+			"> They are two independent clones. Before editing anything here, STOP\n"+
+			"> and ask the user which to use:\n"+
+			">   - edit this checkout in place, or\n"+
+			">   - create an isolated workspace: `repocache workspace new %s <branch>`\n"+
+			">\n"+
+			"> Do not assume — the choice decides where your commits land.\n",
+			paths.Display(cwd), name, name)
+	}
+	return ""
+}
+
+// gitOriginURL returns the "origin" remote URL of the git repo containing dir,
+// erroring if dir is not in a git repo or has no origin remote.
+func gitOriginURL(dir string) (string, error) {
+	out, err := exec.Command("git", "-C", dir, "remote", "get-url", "origin").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// isWithin reports whether path is dir or a descendant of it.
+func isWithin(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
