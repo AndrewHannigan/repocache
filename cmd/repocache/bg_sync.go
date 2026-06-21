@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"syscall"
@@ -19,11 +18,10 @@ import (
 const bgSyncWorkerEnv = "REPOCACHE_BG_SYNC_WORKER"
 
 // cacheEmptyHint nudges the user to populate an empty cache. It is printed to
-// stdout for the plain-stdout agents and injected as a message for antigravity.
+// stdout for the plain-stdout agents.
 const cacheEmptyHint = "repocache: cache is empty. Run `repocache sync` to fetch your tracked repos."
 
 func newBgSyncCmd() *cobra.Command {
-	var agentKey string
 	cmd := &cobra.Command{
 		Use:    "__bg-sync",
 		Short:  "(internal) Background sync invoked by session-start hooks",
@@ -32,16 +30,12 @@ func newBgSyncCmd() *cobra.Command {
 			if os.Getenv(bgSyncWorkerEnv) == "1" {
 				return bgSyncWorker()
 			}
-			if agentKey == "antigravity" {
-				return bgSyncAntigravity(os.Stdout, hookStdin())
-			}
 			if bgSyncStart() {
 				fmt.Println(cacheEmptyHint)
 			}
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&agentKey, "agent", "", "agent whose hook output shape to emit (only antigravity needs this)")
 	return cmd
 }
 
@@ -71,22 +65,6 @@ func bgSyncStart() (showEmptyHint bool) {
 	cmd.Stdin = nil
 	_ = cmd.Start()
 	return false
-}
-
-// bgSyncAntigravity runs bg-sync as an antigravity PreInvocation hook: it
-// acts once per conversation (gated by conversationId-scoped sentinel) and
-// always emits a JSON result — the cache-empty hint as an injected message,
-// or "{}".
-func bgSyncAntigravity(w io.Writer, stdin io.Reader) error {
-	if !antigravityShouldAct(stdin) {
-		_, err := fmt.Fprintln(w, "{}")
-		return err
-	}
-	if bgSyncStart() {
-		return printInjectMessage(w, cacheEmptyHint)
-	}
-	_, err := fmt.Fprintln(w, "{}")
-	return err
 }
 
 // bgSyncWorker runs as the detached child. Acquires the global lock
