@@ -375,6 +375,7 @@ type repoRow struct {
 	Source     string `json:"source,omitempty"`
 	Path       string `json:"path,omitempty"`
 	LastSyncAt any    `json:"last_sync_at"`
+	LastError  string `json:"last_error,omitempty"`
 }
 
 type ownerRow struct {
@@ -419,6 +420,7 @@ func collectRepoList(c *config.Config) ([]repoRow, []ownerRow, error) {
 			row.Path = paths.CacheRepoPath(name)
 			if meta, err := cache.LoadMeta(name); err == nil && meta != nil {
 				row.LastSyncAt = meta.LastSyncAt.UTC().Format(time.RFC3339)
+				row.LastError = meta.LastError
 			}
 		}
 		rows = append(rows, row)
@@ -455,6 +457,9 @@ func writeRepoTable(out io.Writer, rows []repoRow, owners []ownerRow) error {
 			if t, err := time.Parse(time.RFC3339, ts); err == nil {
 				last = relTime(t)
 			}
+		}
+		if r.LastError != "" {
+			last += "  ⚠ sync failing"
 		}
 		source := "—"
 		if r.Source != "" {

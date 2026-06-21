@@ -41,6 +41,7 @@ func newRootCmd() *cobra.Command {
 		newUninstallCmd(),
 		newRepoCmd(),
 		newSyncCmd(),
+		newStatusCmd(),
 		newWorkspaceCmd(),
 		newSessionContextCmd(),
 		newBgSyncCmd(),

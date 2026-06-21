@@ -311,14 +311,9 @@ func syncOne(name, url string, ifOlderThan time.Duration) syncResult {
 	lock, err := cache.AcquireLock(name, true, syncLockTimeout)
 	if err != nil {
 		if errors.Is(err, cache.ErrLocked) {
-			r.Status = "error"
-			r.Error = "locked"
-		} else {
-			r.Status = "error"
-			r.Error = err.Error()
+			return finishErr(r, start, errors.New("locked"))
 		}
-		r.DurationMs = time.Since(start).Milliseconds()
-		return r
+		return finishErr(r, start, err)
 	}
 	defer lock.Unlock()
 
@@ -375,6 +370,19 @@ func finishErr(r syncResult, start time.Time, err error) syncResult {
 	r.Status = "error"
 	r.Error = err.Error()
 	r.DurationMs = time.Since(start).Milliseconds()
+	// Persist the failure so `repo list` (and the session-context snapshot)
+	// can surface it. Best-effort: keep the prior LastSyncAt so the table
+	// still shows the last *successful* sync. Skipped when the cache dir is
+	// absent (a failed first clone) since there's nowhere to write the meta.
+	if cache.Exists(r.Name) {
+		m, _ := cache.LoadMeta(r.Name)
+		if m == nil {
+			m = &cache.Meta{}
+		}
+		m.LastError = err.Error()
+		m.LastErrorAt = time.Now().UTC()
+		_ = cache.SaveMeta(r.Name, m)
+	}
 	return r
 }
 

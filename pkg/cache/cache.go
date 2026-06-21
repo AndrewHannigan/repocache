@@ -21,10 +21,13 @@ import (
 // ErrLocked is returned when a cache repo's lock cannot be acquired in time.
 var ErrLocked = errors.New("cache repo locked by another process")
 
-// Meta is the JSON sidecar written at <cache>/.git/repocache.meta after
-// each successful sync.
+// Meta is the JSON sidecar written at <cache>/.git/repocache.meta after a
+// sync. LastSyncAt records the last *successful* sync; LastError/LastErrorAt
+// record the most recent failed attempt (cleared on the next success).
 type Meta struct {
-	LastSyncAt time.Time `json:"last_sync_at"`
+	LastSyncAt  time.Time `json:"last_sync_at"`
+	LastError   string    `json:"last_error,omitempty"`
+	LastErrorAt time.Time `json:"last_error_at,omitempty"`
 }
 
 // Exists returns true if the cache repo dir is present on disk.
