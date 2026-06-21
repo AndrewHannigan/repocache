@@ -135,11 +135,12 @@ func mergeInstalled(prev, now agents.Installed) agents.Installed {
 	return agents.Installed{
 		AddedPaths: merge(prev.AddedPaths, now.AddedPaths),
 		AddedHooks: merge(prev.AddedHooks, now.AddedHooks),
+		AddedFiles: merge(prev.AddedFiles, now.AddedFiles),
 	}
 }
 
 func printInstalled(i agents.Installed) {
-	if len(i.AddedPaths) == 0 && len(i.AddedHooks) == 0 {
+	if len(i.AddedPaths) == 0 && len(i.AddedHooks) == 0 && len(i.AddedFiles) == 0 {
 		fmt.Printf("  (already up to date)\n")
 		return
 	}
@@ -148,6 +149,9 @@ func printInstalled(i agents.Installed) {
 	}
 	for _, h := range i.AddedHooks {
 		fmt.Printf("  added hook:      %s\n", h)
+	}
+	for _, f := range i.AddedFiles {
+		fmt.Printf("  added plugin:    %s\n", paths.Display(f))
 	}
 }
 
