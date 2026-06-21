@@ -64,7 +64,7 @@ type injectStepsOutput struct {
 func renderInjectSteps(body string) (string, error) {
 	out := injectStepsOutput{
 		InjectSteps: []map[string]string{
-			{"userMessage": sessionContextOpenTag + "\n" + body + "\n" + sessionContextCloseTag},
+			{"userMessage": body},
 		},
 	}
 	data, err := json.Marshal(out)
@@ -86,7 +86,7 @@ func (c *Claude) SessionContextOutput(body string) (string, error) {
 // accepts the hookSpecificOutput envelope, but plain text renders more cleanly
 // as the injected developer message.)
 func (c *Codex) SessionContextOutput(body string) (string, error) {
-	return body, nil
+	return "\n" + body, nil
 }
 
 // Antigravity CLI injects the guide via a PreInvocation hook (it has no

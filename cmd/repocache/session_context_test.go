@@ -63,8 +63,9 @@ func TestPrintSessionContextAntigravity(t *testing.T) {
 
 	// First invocation (and no payload at all): inject the guide.
 	for name, stdin := range map[string]io.Reader{
-		"no payload":     nil,
-		"invocationNum0": strings.NewReader(`{"invocationNum":0}`),
+		"no payload":       nil,
+		"invocationNum0":   strings.NewReader(`{"invocationNum":0}`),
+		"invocationIndex0": strings.NewReader(`{"invocationIndex":0}`),
 	} {
 		t.Run(name, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -86,8 +87,8 @@ func TestPrintSessionContextAntigravity(t *testing.T) {
 			if !strings.Contains(msg, string(agents.DocContent)) {
 				t.Errorf("injected userMessage should contain the embedded guide:\n%s", msg)
 			}
-			if !strings.Contains(msg, "<repocache-session-context>") {
-				t.Errorf("injected userMessage should delimit the guide with tags:\n%s", msg)
+			if strings.Contains(msg, "<repocache-session-context>") {
+				t.Errorf("injected userMessage should not contain tags:\n%s", msg)
 			}
 		})
 	}
@@ -96,6 +97,16 @@ func TestPrintSessionContextAntigravity(t *testing.T) {
 	t.Run("invocationNum>0", func(t *testing.T) {
 		var buf bytes.Buffer
 		if err := printSessionContext(&buf, strings.NewReader(`{"invocationNum":3}`), "antigravity"); err != nil {
+			t.Fatalf("printSessionContext: %v", err)
+		}
+		if got := strings.TrimSpace(buf.String()); got != "{}" {
+			t.Errorf("later invocations should emit {}, got:\n%s", got)
+		}
+	})
+
+	t.Run("invocationIndex>0", func(t *testing.T) {
+		var buf bytes.Buffer
+		if err := printSessionContext(&buf, strings.NewReader(`{"invocationIndex":3}`), "antigravity"); err != nil {
 			t.Fatalf("printSessionContext: %v", err)
 		}
 		if got := strings.TrimSpace(buf.String()); got != "{}" {
@@ -120,8 +131,12 @@ func TestPrintSessionContextPlainTextAgents(t *testing.T) {
 			if strings.Contains(out, "<repocache-session-context>") || strings.Contains(out, "hookSpecificOutput") {
 				t.Errorf("%s output must be raw body, not the hook envelope:\n%s", agent, out)
 			}
-			if !strings.HasPrefix(out, string(agents.DocContent)) {
-				t.Errorf("%s output should start with the embedded guide:\n%s", agent, out)
+			wantPrefix := string(agents.DocContent)
+			if agent == "codex" {
+				wantPrefix = "\n" + wantPrefix
+			}
+			if !strings.HasPrefix(out, wantPrefix) {
+				t.Errorf("%s output should start with the expected prefix:\n%s", agent, out)
 			}
 			if !strings.HasSuffix(out, "\n") {
 				t.Errorf("output should be newline-terminated")

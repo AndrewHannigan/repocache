@@ -38,12 +38,20 @@ func antigravityFirstInvocation(stdin io.Reader) bool {
 		return true
 	}
 	var payload struct {
-		InvocationNum *int `json:"invocationNum"`
+		InvocationNum   *int `json:"invocationNum"`
+		InvocationIndex *int `json:"invocationIndex"`
 	}
-	if err := json.Unmarshal(data, &payload); err != nil || payload.InvocationNum == nil {
+	if err := json.Unmarshal(data, &payload); err != nil {
 		return true
 	}
-	return *payload.InvocationNum == 0
+	idx := payload.InvocationIndex
+	if idx == nil {
+		idx = payload.InvocationNum
+	}
+	if idx == nil {
+		return true
+	}
+	return *idx == 0
 }
 
 // printInjectMessage writes a PreInvocation injectSteps envelope carrying a

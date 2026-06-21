@@ -671,12 +671,12 @@ model call (`invocationNum==0`):
 
 - `__session-context` emits a PreInvocation `injectSteps` envelope that adds
   the guide (§8.3) to the conversation as a `userMessage` (it persists for
-  the session), wrapped in `<repocache-session-context>` tags. Antigravity
+  the session), with no `<repocache-session-context>` tags. Antigravity
   parses the hook's stdout as JSON, so this is a bare JSON document — no
   surrounding delimiter tags like Claude's envelope:
 
   ```json
-  {"injectSteps":[{"userMessage":"<repocache-session-context>\n…guide…\n</repocache-session-context>"}]}
+  {"injectSteps":[{"userMessage":"…guide…"}]}
   ```
 - `__bg-sync` runs the background refresh (§5.12) and emits `{}` (or, on an
   empty cache, an `injectSteps` message nudging `repocache sync`).
