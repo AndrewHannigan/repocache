@@ -121,7 +121,7 @@ repocache uninstall [--agents=...] [--purge]
 repocache repo {add [--owner|--repo],rm,list [--json]}
 repocache sync [<name>...] [--if-older-than <dur>] [--jobs N] [--json]
 repocache workspace {new,list [--json],path,rm [--force]}
-repocache __session-context
+repocache __session-context --agent <key>
 repocache help [<topic>]
 repocache --version
 ```

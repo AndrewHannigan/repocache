@@ -48,17 +48,17 @@ func (c *Codex) Install(opts InstallOptions) (Installed, error) {
 	// Migrate off the legacy @REPOCACHE.md import + on-disk doc. Best-effort.
 	_ = removeImportLine(c.memoryFile(), "REPOCACHE.md")
 	_ = os.Remove(c.legacyDocFile())
-	// The session-context hook command was renamed `session-context` →
-	// `__session-context`; strip the stale entry so the old (now-unknown)
-	// subcommand doesn't error on every session start. Best-effort.
-	_ = removeSessionStartHook(loadTOML, saveTOML, c.settingsFile(), legacySessionContextCommand)
+	// Strip superseded session-context hook commands (the pre-rename public
+	// subcommand and the pre-per-agent bare form) so they don't run or error
+	// on every session start. Best-effort.
+	removeLegacySessionContextHooks(loadTOML, saveTOML, c.settingsFile())
 
 	paths, err := ensureArrayEntries(loadTOML, saveTOML, c.settingsFile(),
 		[]string{"sandbox_workspace_write", "writable_roots"}, PathsToRegister())
 	if err != nil {
 		return Installed{}, err
 	}
-	hooks, err := installHooks(opts, func(command string) (bool, error) {
+	hooks, err := installHooks(opts, sessionContextCommand(c.Key()), func(command string) (bool, error) {
 		return ensureSessionStartHook(loadTOML, saveTOML, c.settingsFile(),
 			codexHookEntry(command), command)
 	})
