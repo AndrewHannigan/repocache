@@ -104,7 +104,7 @@ url = "https://github.com/octocat"
 
 ## Why `git clone --reference`, not `git worktree`
 
-Both share an underlying object store, but they are not interchangeable. A worktree of the cache *is* the cache: committing in it mutates `<cache>/.git/refs/...`, breaking the read-only invariant, and worktrees forbid checking out the same branch twice. `--reference` clones keep independent refs, allow two agents on the same branch, and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Repocache sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race. Full comparison in [SPEC.md](./SPEC.md).
+Both share an underlying object store, but they are not interchangeable. A worktree of the cache *is* the cache: committing in it mutates `<cache>/.git/refs/...`, breaking the read-only invariant, and worktrees forbid checking out the same branch twice. `--reference` clones keep independent refs, allow two agents on the same branch, and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Repocache sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race.
 
 ---
 
@@ -116,7 +116,6 @@ Repocache does not manage credentials. Every git operation defers to whatever `g
 
 ## Documentation
 
-- [SPEC.md](./SPEC.md) — full behavioral spec (commands, locking, exit codes, deadlock-freedom, agent integration)
 - `repocache --help` and `repocache <cmd> --help` — flag reference
 
 ## License

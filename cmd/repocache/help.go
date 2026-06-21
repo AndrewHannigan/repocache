@@ -73,8 +73,6 @@ Commands:
   help <topic>  long-form docs
 
 Topics: agents, auth, concepts, init, library, locking, owner, sync, workspace
-
-For SPEC see: https://github.com/AndrewHannigan/repocache/blob/main/SPEC.md
 `,
 
 	"concepts": `Concepts
