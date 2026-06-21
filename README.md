@@ -1,10 +1,10 @@
 # repocache
 
-> Give your terminal coding agent a fast, **read-only library** of git repos to search across — and a one-command shortcut to spin up **writable workspaces** from any branch when it wants to edit.
+![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
+
+git repo management for terminal coding agents
 
 Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](https://developers.openai.com/codex/), [Google Antigravity CLI](https://antigravity.google/), and [opencode](https://opencode.ai).
-
-![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
 
 - 🔒 **OS-enforced read-only repos** — every repo is a pristine reference that is impossible to clobber.
 - ⚡ **Cheap workspaces** — `git clone --reference` shares the object store; no history re-download.
