@@ -36,7 +36,7 @@ func newBgSyncCmd() *cobra.Command {
 // Always exits 0 — the SessionStart hook must not break the agent.
 func bgSyncEntry() error {
 	c, err := config.Load()
-	if err != nil || len(c.Repos) == 0 {
+	if err != nil || (len(c.Repos) == 0 && len(c.Owners) == 0) {
 		return nil
 	}
 	if !everSynced(c) {

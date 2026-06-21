@@ -64,13 +64,31 @@ url = "https://github.com/anthropics/claude-code"
 [[repo]]
 url = "git@github.com:foo/bar.git"
 name = "myorg/bar"        # optional override; must be unique across the config
+
+# A repo auto-added by an owner (see below) carries a `source` tag naming the
+# owner that added it. User-added repos have no source.
+[[repo]]
+url = "https://github.com/anthropics/anthropic-sdk-python"
+source = "github.com/anthropics"
+
+# One [[owner]] block per tracked user/org. sync discovers the owner's repos
+# (via gh) and materializes new ones as source-tagged [[repo]] entries.
+[[owner]]
+url = "https://github.com/anthropics"   # single-path-segment URL
+# name = "github.com/anthropics"         # optional override; default host/owner
+# include_forks = false                  # default false
+# include_archived = false               # default false
+# visibility = "all"                     # all|public|private; default all
 ```
 
 Rules:
 - `url` is required and must be a valid git URL (HTTPS or SSH).
-- `name` defaults to `<host>/<owner>/<repo>` derived from URL.
-- All names must be unique; duplicates → exit 7 on load.
-- Unknown TOML keys are ignored (forward-compatible).
+- `name` defaults to `<host>/<owner>/<repo>` for repos, `<host>/<owner>` for owners.
+- All names must be unique across **both** repos and owners (they share one
+  namespace, since commands resolve a single argument against both); duplicates → exit 7 on load.
+- `source` on a repo names the owner that auto-added it (informational; managed by sync — do not hand-edit). User-added repos omit it.
+- An owner URL has a single path segment (`host/owner`); a repo URL has two or more (`host/owner/repo`).
+- Unknown TOML keys are ignored (forward-compatible) — older binaries tolerate `[[owner]]` and `source`.
 - File is loaded with shared lock; written with exclusive lock (separate file: `~/.config/repocache/.lock`).
 
 ## 5. Commands
@@ -90,6 +108,8 @@ Resolution outcomes:
 - Two or more suffix matches → exit 2, message naming the ambiguity and listing the candidate full names so the user can disambiguate.
 
 The rule is identical across all commands; no command resolves names differently. Exact match always wins over suffix match, so a short name can never shadow a repo whose full resolved name equals that string.
+
+The same rule applies to **owner** names (`<host>/<owner>`). `repo rm` and `sync` resolve an argument against both repos and owners; since names are unique across the two (§4), at most one kind matches. The rare case where an argument matches both a repo and an owner → exit 2 asking for the full name.
 
 ### 5.1 `repocache init [--agents=auto|all|none|<list>] [--no-bg-sync]`
 
@@ -126,31 +146,31 @@ Behavior:
 
 Exit codes: 0; 7 (file write error).
 
-### 5.3 `repocache repo add <url> [--name <n>]`
+### 5.3 `repocache repo add <url> [--name <n>] [--owner|--repo]`
 
-Appends an entry to `config.toml`.
+Appends a `[[repo]]` or `[[owner]]` entry to `config.toml`.
 
 Behavior:
-1. Parse URL; derive default name.
-2. If `--name` given, use it.
-3. Reject if name already in config → exit 3.
-4. Acquire exclusive lock on config; append; release.
-5. Do not fetch. Print a hint to run `repocache sync`.
+1. Classify `<url>` as a repo or an owner. Default: by path-segment count — one segment (`host/owner`) ⇒ owner, two or more (`host/owner/repo`) ⇒ repo. `--owner` / `--repo` force it; passing both → exit 7.
+2. Parse URL; derive default name (`host/owner/repo` for a repo, `host/owner` for an owner). If `--name` given, use it.
+3. Reject if the name already exists as a repo or an owner → exit 3.
+4. Acquire exclusive lock on config; append the `[[repo]]` or `[[owner]]`; release.
+5. Do not fetch/discover. Print a hint to run `repocache sync`.
+6. For an owner, additionally check `gh` is installed and authenticated; if not, print a non-fatal warning (the entry is saved and will expand once `gh` is available).
 
-Output: `added <name> (run \`repocache sync\` to fetch)`
-JSON: `--json` emits the added entry.
-Exit codes: 0; 3 (name exists); 7 (config error).
+Output (repo): `added <name> (run \`repocache sync\` to fetch)`
+Output (owner): `added owner <name> (run \`repocache sync\` to discover and fetch its repos)`
+Exit codes: 0; 3 (name exists); 7 (config error or both `--owner` and `--repo`).
 
 ### 5.4 `repocache repo rm <name> [--force]`
 
-Removes a repo completely: the config entry, the cache on disk, and every workspace derived from it.
+Removes a repo completely: the config entry, the cache on disk, and every workspace derived from it. If `<name>` resolves to an owner, removes the owner entry and every repo it auto-added (Source == owner) in one cascade.
 
 Behavior:
-1. Resolve `<name>` per §5.0. If not found → exit 2; if ambiguous → exit 2 listing candidates.
-2. Inspect the repo's workspaces. Unless `--force` is given, refuse (exit 4) if any workspace has uncommitted or unpushed changes, listing the offending branches.
-3. Delete all workspaces for the repo (`rm -rf` the per-repo workspaces dir).
-4. Delete the cache on disk: acquire the exclusive per-cache-repo lock, restore writability (`chmod -R u+w`, since the working tree is left read-only between syncs — see §8.3), then `rm -rf` the cache dir.
-5. Acquire the exclusive config lock, remove the entry, release.
+1. Resolve `<name>` per §5.0 against both repos and owners. Not found → exit 2; ambiguous, or matching both a repo and an owner → exit 2 listing candidates.
+2. Gather the target repo(s): one repo, or — for an owner — every repo with `source == <owner>`. Inspect their workspaces. Unless `--force`, refuse (exit 4) if any has uncommitted or unpushed changes, listing the offending branches (checked across all managed repos up front, so the cascade is all-or-nothing).
+3. For each target repo: delete its workspaces (`rm -rf` the per-repo workspaces dir), then delete its cache (acquire the exclusive per-cache-repo lock, restore writability with `chmod -R u+w` — see §8.3 — then `rm -rf`).
+4. Acquire the exclusive config lock; remove the repo entries (and, for an owner, the `[[owner]]` entry) in one transaction; release.
 
 On-disk artifacts are removed before the config entry so a failure partway through leaves the entry as a record of remaining cleanup rather than orphaning untracked files.
 
@@ -158,7 +178,7 @@ Exit codes: 0; 2; 4 (workspace has unsaved work, no `--force`); 5 (cache lock co
 
 ### 5.5 `repocache repo list [--json]`
 
-Lists tracked repos with last sync time, on-disk size, and branch count.
+Lists tracked owners, then repos with last sync time, on-disk size, branch count, and the owner (if any) that auto-added each.
 
 Behavior:
 1. Read config.
@@ -167,19 +187,27 @@ Behavior:
    - `last_sync_at` from `.git/repocache.meta` (or `null`)
    - `size_bytes` = recursive size of the cache dir (best-effort)
    - `branch_count` = count of `refs/remotes/origin/*` (or `0` if never synced)
-3. Output table (human) or NDJSON array (JSON).
+3. Output table (human) or a JSON object (JSON).
 
-Human table columns: NAME, LAST SYNC (relative), SIZE, BRANCHES.
+Human output: when any owners are tracked, an `OWNER / REPOS` table first (each owner and its count of auto-added repos), then the repo table with columns NAME, LAST SYNC (relative), SIZE, BRANCHES, SOURCE (the owner that added the repo, or `—`).
 
-JSON object per repo:
+JSON is an object with `repos` and `owners` arrays:
 ```json
 {
-  "name": "...",
-  "url": "...",
-  "path": "...|null",
-  "last_sync_at": "ISO8601|null",
-  "size_bytes": 0,
-  "branch_count": 0
+  "repos": [
+    {
+      "name": "...",
+      "url": "...",
+      "source": "github.com/owner",  // omitted for user-added repos
+      "path": "...|null",
+      "last_sync_at": "ISO8601|null",
+      "size_bytes": 0,
+      "branch_count": 0
+    }
+  ],
+  "owners": [
+    { "name": "github.com/owner", "url": "...", "repo_count": 0 }
+  ]
 }
 ```
 
@@ -190,7 +218,11 @@ Exit codes: 0; 7.
 Fetches updates for all (or named) cache repos and refreshes their working trees. Idempotent. Safe to interrupt.
 
 Behavior:
-1. Resolve target set: no args = all repos in config; args = explicit subset, each resolved per §5.0 (unknown → exit 2; ambiguous → exit 2 listing candidates).
+0. **Reconcile owners in scope** (before resolving targets, so newly-discovered repos are fetched in this same pass). Owners in scope = all owners when no args, else the args that resolve to an owner. For each, run `gh repo list <owner>` (filtered by the owner's `include_forks` / `include_archived` / `visibility`), and for every repo not already tracked, append a `source`-tagged `[[repo]]` under a brief exclusive config-lock (2s). The `gh` call happens **outside** the config lock, and the lock is released before any per-repo lock is taken, preserving the §7 lock order (config → per-repo). This step is:
+   - **Additive only** — repos that disappeared upstream are never removed (that could delete a workspace with unpushed work); remove them with `repo rm`.
+   - **Gracefully degrading** — if `gh` is missing/unauthenticated or errors, print a warning to stderr, skip that owner, and continue. Already-known repos still sync. Discovery failures do not change the exit code.
+   - Not gated by `--if-older-than` (that gate is per-repo freshness, not owner enumeration), so new repos are caught even when unchanged repos are skipped.
+1. Resolve target set: no args = all repos in config (including those just added in step 0); args = explicit subset per §5.0. A repo arg resolves to that repo; an **owner** arg expands to all repos with `source == <owner>`. Unknown → exit 2; ambiguous → exit 2 listing candidates.
 2. For each target, in parallel up to `--jobs N` (default 4):
    1. If `<cache>` does not exist yet, clone first:
       `git clone --no-checkout --config gc.auto=0 <url> <cache>`

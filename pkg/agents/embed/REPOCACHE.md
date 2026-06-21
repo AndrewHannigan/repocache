@@ -12,6 +12,9 @@ You have a local library of git repos managed by `repocache`.
   to edit that checkout in place or create a `repocache workspace`.
 - **Clean up**: `repocache workspace rm <repo> <branch>` when done.
 - **Need a repo not in the library?** Ask the user to run `repocache repo add <url>`.
+- **Track a whole user/org?** `repocache repo add <owner-url>` (e.g. a bare
+  `https://github.com/<owner>`) tracks every repo under that owner; `sync` discovers
+  and fetches new ones automatically. Needs `gh` installed and authenticated.
 - **More details**: `repocache help <topic>` or `repocache <cmd> --help`.
 
 If `workspace new` says "not in cache", run `repocache sync <repo>` first.

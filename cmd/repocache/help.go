@@ -56,7 +56,7 @@ var helpTopics = map[string]string{
 The whole loop:
 
     repocache init                          # one-time: dirs + agent integration
-    repocache repo add <git-url>            # add a repo to the library
+    repocache repo add <git-url>            # add a repo (or a user/org) to the library
     repocache sync                          # fetch + chmod a-w on the working tree
     repocache workspace new <repo> <branch>            # prints path to a writable clone
     # ... edit there, commit, push ...
@@ -65,12 +65,12 @@ The whole loop:
 Commands:
   init          bootstrap + integrate with detected agents
   uninstall     reverse agent integration (--purge also deletes data + config)
-  repo          {add,rm,list} of tracked repos
+  repo          {add,rm,list} of tracked repos and owners
   sync          fetch tracked repos and re-apply read-only chmod
   workspace     {new,list,path,rm} of writable workspaces
   help <topic>  long-form docs
 
-Topics: agents, auth, concepts, init, locking, repo, sync, workspace
+Topics: agents, auth, concepts, init, locking, owner, repo, sync, workspace
 
 For SPEC see: https://github.com/AndrewHannigan/repocache/blob/main/SPEC.md
 `,
@@ -152,10 +152,15 @@ confirmation before deleting (and refuses when stdin is not a TTY).
 
 	"repo": `repo — manage the library
 
-  repocache repo add <url> [--name <n>]
+  repocache repo add <url> [--name <n>] [--owner|--repo]
     Add a repo to the library. Name defaults to <host>/<owner>/<repo>
     derived from URL. --name overrides. Does not fetch — run 'sync'.
     Exit 3 if the name already exists.
+
+    If <url> is a bare user/org (one path segment, e.g.
+    https://github.com/AndrewHannigan) it is tracked as an owner instead;
+    sync then discovers and adds that owner's repos. Detection is automatic;
+    --owner / --repo force it. See 'repocache help owner'.
 
   repocache repo rm <name> [--force]
     Remove a repo completely: the config entry, the cache on disk, and
@@ -163,13 +168,54 @@ confirmation before deleting (and refuses when stdin is not a TTY).
     uncommitted or unpushed changes unless --force is given. Restores
     write permissions on the read-only cache tree automatically.
 
+    If <name> is an owner, removes the owner entry and every repo it
+    auto-added (with the same safety checks).
+
   repocache repo list [--json]
-    Show tracked repos with last sync, on-disk size, branch count.
+    Show tracked owners, then repos with last sync, on-disk size, branch
+    count, and the owner that auto-added each (if any).
+`,
+
+	"owner": `owner — track a whole user or org
+
+Add an owner with 'repocache repo add <owner-url>' (a URL with a single
+path segment, e.g. https://github.com/AndrewHannigan). On every sync,
+repocache lists that owner's repos and adds any new ones to the library
+automatically, so repos created upstream after you start tracking are
+picked up and fetched without another 'repo add'. This also happens in
+the background at each agent session start (see 'repocache help sync').
+
+Discovery uses the 'gh' CLI — repocache's only dependency beyond 'git',
+and only for discovery. Once a repo has been discovered it is an ordinary
+library entry that syncs with plain 'git'. So if 'gh' is missing or not
+authenticated, repocache degrades gracefully: it warns and skips
+discovery, but already-known repos still sync.
+
+By default an owner pulls its non-fork, non-archived repos (including
+private ones you can access). Tune per owner in config.toml:
+
+  [[owner]]
+  url = "https://github.com/AndrewHannigan"
+  include_forks = false       # default
+  include_archived = false    # default
+  visibility = "all"          # all|public|private
+
+Reconciliation is additive: repos that disappear upstream are left in
+place (so a workspace with unpushed work is never deleted out from under
+you). Remove them yourself with 'repocache repo rm <name>', or drop the
+whole owner with 'repocache repo rm <owner>'.
 `,
 
 	"sync": `sync — fetch repos and re-apply read-only chmod
 
   repocache sync [<name>...] [--if-older-than <dur>] [--jobs N] [--json]
+
+Before fetching, sync expands any tracked owners in scope: it lists each
+owner's repos via 'gh' and adds new ones to the library, then fetches them
+in the same pass (a brand-new repo has no cache, so it is cloned). Naming
+an owner syncs all of its repos. If 'gh' is unavailable, discovery is
+skipped with a warning and already-known repos still sync. See
+'repocache help owner'.
 
 Behavior per repo:
   1. Clone if missing (with gc.auto=0).
