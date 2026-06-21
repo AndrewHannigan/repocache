@@ -17,7 +17,7 @@ import (
 )
 
 func newSessionContextCmd() *cobra.Command {
-	var text bool
+	var text, cursor bool
 	cmd := &cobra.Command{
 		Use:    "__session-context",
 		Short:  "(internal) Emit the repocache guide as SessionStart hook context (JSON)",
@@ -39,17 +39,26 @@ without having to run it.
 --text prints just the Markdown guide body, with no JSON envelope or
 delimiters. opencode's plugin consumes this and pushes it into the
 model's system prompt itself, so it needs the raw text, not the hook
-envelope.`,
+envelope.
+
+--cursor prints Cursor CLI's native flat format:
+{"additional_context":"..."}. Cursor's sessionStart hook accepts this
+directly.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if text {
+			switch {
+			case text:
 				_, err := fmt.Fprintln(os.Stdout, sessionContextBody())
 				return err
+			case cursor:
+				return printSessionContextCursor(os.Stdout)
+			default:
+				return printSessionContext(os.Stdout)
 			}
-			return printSessionContext(os.Stdout)
 		},
 	}
 	cmd.Flags().BoolVar(&text, "text", false, "print the raw guide body (no JSON envelope); for opencode's plugin")
+	cmd.Flags().BoolVar(&cursor, "cursor", false, "print Cursor CLI native flat format")
 	return cmd
 }
 
@@ -72,6 +81,21 @@ func printSessionContext(w io.Writer) error {
 		return err
 	}
 	_, err = fmt.Fprintf(w, "<repocache-session-context>%s</repocache-session-context>\n", string(data))
+	return err
+}
+
+// printSessionContextCursor prints the guide in Cursor CLI's native flat format:
+//
+//	{"additional_context":"..."}
+//
+// Cursor's sessionStart hook accepts this directly.
+func printSessionContextCursor(w io.Writer) error {
+	env := map[string]string{"additional_context": sessionContextBody()}
+	data, err := json.Marshal(env)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(w, string(data))
 	return err
 }
 

@@ -1,0 +1,9 @@
+{
+  "name": "repocache",
+  "version": "1.0.0",
+  "description": "Git repo management for terminal coding agents — read-only mirrors, writable workspaces, and library management",
+  "author": {
+    "name": "Andrew Hannigan"
+  },
+  "keywords": ["git", "repo", "workspace", "cache"]
+}

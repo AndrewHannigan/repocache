@@ -276,10 +276,11 @@ first 'git push -u origin <branch>'.
 
 Supported (auto-detected by config-dir presence):
 
-  claude       ~/.claude/          — Claude Code
-  codex        ~/.codex/           — OpenAI's Codex CLI
-  antigravity  ~/.antigravity/     — Google's Antigravity CLI
-  opencode     ~/.config/opencode/ — opencode
+  claude       ~/.claude/              — Claude Code
+  codex        ~/.codex/               — OpenAI's Codex CLI
+  antigravity  ~/.antigravity/         — Google's Antigravity CLI
+  cursor       ~/.cursor/plugins/      — Cursor CLI
+  opencode     ~/.config/opencode/     — opencode
 
 For claude, codex, and antigravity, 'repocache init' writes (idempotently,
 recorded in a sidecar state file so 'uninstall' can reverse precisely):
@@ -298,6 +299,13 @@ drops a plugin at ~/.config/opencode/plugin/repocache.js. It runs
 'repocache __bg-sync' at startup and injects the guide ('repocache
 __session-context --text') into the model's system prompt. 'uninstall'
 deletes the file.
+
+cursor also has no path allowlist but supports a sessionStart hook
+(vendor-agnostic JSON over stdio). 'init' drops a Cursor plugin at
+~/.cursor/plugins/local/repocache/ with a sessionStart hook that runs
+'repocache __session-context --cursor' to inject the guide and
+'repocache __bg-sync' to refresh the cache. 'uninstall' removes the
+plugin directory.
 `,
 
 	"auth": `auth — repocache delegates to git

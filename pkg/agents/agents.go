@@ -56,6 +56,7 @@ func All() []Agent {
 		NewClaude(),
 		NewCodex(),
 		NewAntigravity(),
+		NewCursor(),
 		NewOpencode(),
 	}
 }
