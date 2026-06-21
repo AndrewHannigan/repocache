@@ -4,8 +4,6 @@
 
 git repo management for terminal coding agents
 
-Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](https://developers.openai.com/codex/), [Google Antigravity CLI](https://antigravity.google/), and [opencode](https://opencode.ai).
-
 - 🔒 **OS-enforced read-only repos** — every repo is a pristine reference that is impossible to clobber.
 - ⚡ **Cheap workspaces** — `git clone --reference` shares the object store; no history re-download.
 - 🔄 **Repos never stale** — refreshed in the background at session start.
@@ -13,6 +11,8 @@ Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](http
 - 📦 **Persistent shared library** — cached once and reused across sessions, never re-cloned to `/tmp`.
 - 🧰 **Natively searchable** — `rg`, `grep`, `git`, and `gh` work directly; no wrappers.
 - 🌐 **Simpler multi-repo PRs** — spin up writable workspaces on demand from the read-only repos.
+
+Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](https://developers.openai.com/codex/), [Google Antigravity CLI](https://antigravity.google/), and [opencode](https://opencode.ai).
 
 ---
 
