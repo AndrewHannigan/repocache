@@ -82,16 +82,16 @@ func TestSessionContextBodyEmptyLibrary(t *testing.T) {
 // repo, regardless of URL protocol, and names the repo for `workspace new`.
 func TestCollisionWarning(t *testing.T) {
 	repos := []config.Repo{
-		{URL: "git@github.com:AndrewHannigan/repocache.git"}, // ssh form
+		{URL: "git@github.com:octocat/hello-world.git"}, // ssh form
 		{URL: "https://github.com/acme/widget"},
 	}
 
 	// https working-dir origin matches the ssh-form library entry.
-	w := collisionWarning("/home/u/src/repocache", "https://github.com/AndrewHannigan/repocache.git", repos)
+	w := collisionWarning("/home/u/src/hello-world", "https://github.com/octocat/hello-world.git", repos)
 	for _, want := range []string{
 		"local checkout collision",
-		"/home/u/src/repocache",
-		"workspace new github.com/AndrewHannigan/repocache <branch>",
+		"/home/u/src/hello-world",
+		"workspace new github.com/octocat/hello-world <branch>",
 	} {
 		if !strings.Contains(w, want) {
 			t.Errorf("warning missing %q:\n%s", want, w)
@@ -99,13 +99,13 @@ func TestCollisionWarning(t *testing.T) {
 	}
 
 	// A repo not in the library produces no warning.
-	if w := collisionWarning("/home/u/src/other", "https://github.com/AndrewHannigan/other", repos); w != "" {
+	if w := collisionWarning("/home/u/src/other", "https://github.com/octocat/other", repos); w != "" {
 		t.Errorf("expected no warning for unlisted repo, got:\n%s", w)
 	}
 
 	// The workspace command uses the library's resolved (custom) name.
-	named := []config.Repo{{URL: "https://github.com/AndrewHannigan/repocache", Name: "myrepo"}}
-	if w := collisionWarning("/x", "https://github.com/AndrewHannigan/repocache", named); !strings.Contains(w, "workspace new myrepo <branch>") {
+	named := []config.Repo{{URL: "https://github.com/octocat/hello-world", Name: "myrepo"}}
+	if w := collisionWarning("/x", "https://github.com/octocat/hello-world", named); !strings.Contains(w, "workspace new myrepo <branch>") {
 		t.Errorf("warning should use the resolved library name:\n%s", w)
 	}
 }

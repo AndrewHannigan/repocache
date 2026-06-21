@@ -158,7 +158,7 @@ confirmation before deleting (and refuses when stdin is not a TTY).
     (runs a scoped 'sync'). Exit 3 if the name already exists.
 
     If <url> is a bare user/org (one path segment, e.g.
-    https://github.com/AndrewHannigan) it is tracked as an owner instead;
+    https://github.com/octocat) it is tracked as an owner instead;
     sync then discovers and adds that owner's repos. Detection is automatic;
     --owner / --repo force it. See 'repocache help owner'.
 
@@ -179,7 +179,7 @@ confirmation before deleting (and refuses when stdin is not a TTY).
 	"owner": `owner — track a whole user or org
 
 Add an owner with 'repocache repo add <owner-url>' (a URL with a single
-path segment, e.g. https://github.com/AndrewHannigan). On every sync,
+path segment, e.g. https://github.com/octocat). On every sync,
 repocache lists that owner's repos and adds any new ones to the library
 automatically, so repos created upstream after you start tracking are
 picked up and fetched without another 'repo add'. This also happens in
@@ -195,7 +195,7 @@ By default an owner pulls its non-fork, non-archived repos (including
 private ones you can access). Tune per owner in config.toml:
 
   [[owner]]
-  url = "https://github.com/AndrewHannigan"
+  url = "https://github.com/octocat"
   include_forks = false       # default
   include_archived = false    # default
   visibility = "all"          # all|public|private

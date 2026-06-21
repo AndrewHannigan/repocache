@@ -16,9 +16,9 @@ func TestBuildListArgs(t *testing.T) {
 	}{
 		{
 			name:  "defaults exclude forks and archived",
-			login: "AndrewHannigan",
+			login: "octocat",
 			f:     Filter{},
-			want: []string{"repo", "list", "AndrewHannigan",
+			want: []string{"repo", "list", "octocat",
 				"--limit", "1000",
 				"--json", "name,url,sshUrl,isFork,isArchived,visibility",
 				"--source", "--no-archived"},
