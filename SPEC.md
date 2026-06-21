@@ -97,7 +97,7 @@ For each command: signature, behavior, output, exit codes used. All commands acc
 
 ### 5.0 Repo name resolution
 
-Commands that resolve a `<repo>`/`<name>` argument against the configured repos (`sync`, `repo rm`, `workspace new`) use a single shared rule, in order:
+Commands that resolve a `<repo>`/`<name>` argument against the configured repos (`sync`, `repo rm`, `workspace new`, `workspace path`, `workspace rm`) use a single shared rule, in order:
 
 1. **Exact match** on a repo's resolved name (`<host>/<owner>/<repo>`, or the explicit `name` override). If one matches, use it.
 2. **Unambiguous suffix match.** Otherwise, match the argument against the trailing path segments of each resolved name, on segment (`/`) boundaries. `hello-world` matches `github.com/octocat/hello-world`; `octocat/hello-world` matches it too; `world` does not (not a segment boundary). If exactly one repo matches, use it.
@@ -253,8 +253,12 @@ Creates a workspace at `~/.repocache/workspaces/<name>/<branch>/` derived from t
 
 Behavior:
 1. Resolve `<repo>` to a config entry per §5.0; if not in config → exit 2; if ambiguous → exit 2 listing candidates.
-2. If cache does not exist → exit 2 with hint to run `repocache sync <repo>` first.
-3. Compute workspace path. If exists → exit 3.
+2. Compute workspace path. If exists → exit 3.
+3. Sync the repo first (equivalent to `repocache sync <repo>`, §5.12) so the
+   workspace forks from up-to-date code. This clones the repo into the cache
+   if it isn't cached yet. If the sync fails (e.g. offline):
+   - cache already exists → warn on stderr and proceed from the existing cache.
+   - cache does not exist → exit 6 (network), or exit 5 if the failure was a lock timeout.
 4. Acquire shared flock on cache repo.
 5. If `<branch>` exists on origin (check `refs/remotes/origin/<branch>` in cache):
    - `git clone --reference <cache> --branch <branch> <url> <workspace>`
@@ -263,13 +267,14 @@ Behavior:
    - `git clone --reference <cache> --branch <base> <url> <workspace>`
    - `git -C <workspace> checkout -b <branch>`
 7. Release cache lock.
-8. Print absolute workspace path on stdout (nothing else).
+8. Print absolute workspace path on stdout (nothing else; sync progress and warnings go to stderr).
 
 Notes:
 - The new workspace's `origin` points at the upstream URL. `git push` works normally.
 - New branches have no upstream tracking until the user runs `git push -u origin <branch>`.
+- Because `new` syncs first, the old "not in cache; run sync first" failure is gone — an uncached repo is fetched on demand.
 
-Exit codes: 0; 2 (repo not in cache); 3 (workspace exists); 5 (locked); 6 (clone failed); 7 (config); 8 (`git` not on PATH).
+Exit codes: 0; 3 (workspace exists); 5 (locked); 6 (clone/sync failed); 7 (config); 8 (`git` not on PATH).
 
 ### 5.8 `repocache workspace list [--json]`
 
