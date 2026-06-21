@@ -23,16 +23,7 @@ import (
 
 const configLockTimeout = 2 * time.Second
 
-func newRepoCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "repo",
-		Short: "Manage the library of tracked repositories",
-	}
-	cmd.AddCommand(newRepoAddCmd(), newRepoRmCmd(), newRepoListCmd())
-	return cmd
-}
-
-func newRepoAddCmd() *cobra.Command {
+func newAddCmd() *cobra.Command {
 	var name string
 	var asOwner, asRepo bool
 	cmd := &cobra.Command{
@@ -41,7 +32,7 @@ func newRepoAddCmd() *cobra.Command {
 		Long: `add appends a repo to the library. <repo> may be a full git URL
 (https://, ssh://, or scp-style git@host:owner/repo) or GitHub shorthand:
 a bare "owner/repo" or "owner" is expanded against github.com, so
-"repocache repo add octocat/Hello-World" and "repocache repo add octocat"
+"repocache add octocat/Hello-World" and "repocache add octocat"
 both just work.
 
 If <repo> points at a bare user or org (a single path segment, e.g.
@@ -154,7 +145,7 @@ func runOwnerAdd(url, overrideName string) error {
 	return runSync([]string{effectiveName}, syncDefaultJobs, 0, false)
 }
 
-func newRepoRmCmd() *cobra.Command {
+func newRmCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
 		Use:   "rm <name>",
@@ -356,10 +347,10 @@ func pluralize(n int, noun string) string {
 	return fmt.Sprintf("%d %ss", n, noun)
 }
 
-func newRepoListCmd() *cobra.Command {
+func newLsCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
-		Use:   "list",
+		Use:   "ls",
 		Short: "List tracked repos with last sync and source",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRepoList(jsonOut)
@@ -404,7 +395,7 @@ func runRepoList(jsonOut bool) error {
 	return writeRepoTable(os.Stdout, rows, owners)
 }
 
-// collectRepoList gathers the rows behind `repo list`, probing the cache for
+// collectRepoList gathers the rows behind `ls`, probing the cache for
 // each tracked repo's last-sync time. The probes are deliberately cheap (a
 // stat and a small metadata read, no size walk or git subprocess) so this is
 // safe to run on the session-context hot path via repoListText.
@@ -436,10 +427,10 @@ func collectRepoList(c *config.Config) ([]repoRow, []ownerRow, error) {
 	return rows, owners, nil
 }
 
-// writeRepoTable renders the human-readable `repo list` table to out.
+// writeRepoTable renders the human-readable `ls` table to out.
 func writeRepoTable(out io.Writer, rows []repoRow, owners []ownerRow) error {
 	if len(rows) == 0 && len(owners) == 0 {
-		fmt.Fprintln(out, "(no repos tracked; add with `repocache repo add <url>`)")
+		fmt.Fprintln(out, "(no repos tracked; add with `repocache add <url>`)")
 		return nil
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
@@ -470,7 +461,7 @@ func writeRepoTable(out io.Writer, rows []repoRow, owners []ownerRow) error {
 	return w.Flush()
 }
 
-// repoListText renders the `repo list` table to a string for embedding in
+// repoListText renders the `ls` table to a string for embedding in
 // session context. Best-effort: returns "" if the library can't be read, so
 // a config hiccup never breaks session startup.
 func repoListText() string {

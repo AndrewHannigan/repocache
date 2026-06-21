@@ -4,7 +4,7 @@ You have a local library of git repos managed by `repocache`.
 
 - **Read repos** at `~/.repocache/repos/<host>/<owner>/<repo>/` (read-only).
   Search and read them with your usual tools. Do not modify files here.
-- **List the library**: `repocache repo list` (a `⚠ sync failing` marker means
+- **List the library**: `repocache ls` (a `⚠ sync failing` marker means
   that repo's cached copy is stale — its last fetch failed).
 - **Stale cache?** If a repo is marked failing (or you see a STALE CACHE banner above),
   treat what you read from it as possibly out of date and tell the user. Run
@@ -24,9 +24,9 @@ You have a local library of git repos managed by `repocache`.
   at the top of this context. A checkout that is merely *nearby* on disk (not your cwd) is
   not this case — prefer the fresh workspace.
 - **Clean up**: `repocache workspace rm <repo> <branch>` when done.
-- **Need a repo not in the library?** Ask the user to run `repocache repo add <repo>`
+- **Need a repo not in the library?** Ask the user to run `repocache add <repo>`
   (a full URL or GitHub `owner/repo` shorthand).
-- **Track a whole user/org?** `repocache repo add <owner>` (a bare `owner` or
+- **Track a whole user/org?** `repocache add <owner>` (a bare `owner` or
   `https://github.com/<owner>`) tracks every repo under that owner; `sync` discovers
   and fetches new ones automatically. Needs `gh` installed and authenticated.
 - **More details**: `repocache help <topic>` or `repocache <cmd> --help`.

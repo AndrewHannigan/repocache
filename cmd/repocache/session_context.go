@@ -43,7 +43,7 @@ prompt itself.
 
 The guide is generated from the running binary, so it is always current —
 there is no on-disk doc to drift after an upgrade. It also appends a live
-snapshot of the library (the "repo list" table) so the agent knows which
+snapshot of the library (the "ls" table) so the agent knows which
 repos are available without having to run it.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -78,7 +78,7 @@ func printSessionContext(w io.Writer, agentKey string) error {
 
 // sessionContextBody is the bundled guide followed by a live snapshot of the
 // library, so the agent starts each session already knowing which repos are
-// available without having to run `repocache repo list` itself. The snapshot
+// available without having to run `repocache ls` itself. The snapshot
 // is best-effort: if the library can't be read it is simply omitted.
 func sessionContextBody() string {
 	body := string(agents.DocContent)
@@ -89,7 +89,7 @@ func sessionContextBody() string {
 		body = w + "\n" + body
 	}
 	if list := repoListText(); list != "" {
-		body += "\nThe library currently contains (output of `repocache repo list`):\n\n```\n" + list + "```\n"
+		body += "\nThe library currently contains (output of `repocache ls`):\n\n```\n" + list + "```\n"
 	}
 	return body
 }

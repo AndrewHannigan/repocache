@@ -56,7 +56,7 @@ var helpTopics = map[string]string{
 The whole loop:
 
     repocache init                          # one-time: dirs + agent integration
-    repocache repo add <git-url>            # add a repo (or a user/org) to the library
+    repocache add <git-url>                 # add a repo (or a user/org) to the library
     repocache sync                          # fetch + chmod a-w on the working tree
     repocache workspace new <repo> <branch>            # prints path to a writable clone
     # ... edit there, commit, push ...
@@ -65,12 +65,14 @@ The whole loop:
 Commands:
   init          bootstrap + integrate with detected agents
   uninstall     reverse agent integration (--purge also deletes data + config)
-  repo          {add,rm,list} of tracked repos and owners
+  add           add a repo (or a whole user/org) to the library
+  ls            list tracked repos and owners
+  rm            remove a tracked repo or owner
   sync          fetch tracked repos and re-apply read-only chmod
   workspace     {new,list,path,rm} of writable workspaces
   help <topic>  long-form docs
 
-Topics: agents, auth, concepts, init, locking, owner, repo, sync, workspace
+Topics: agents, auth, concepts, init, library, locking, owner, sync, workspace
 
 For SPEC see: https://github.com/AndrewHannigan/repocache/blob/main/SPEC.md
 `,
@@ -79,7 +81,7 @@ For SPEC see: https://github.com/AndrewHannigan/repocache/blob/main/SPEC.md
 
 Library
   The set of repos you've told repocache to track. Stored in
-  ~/.config/repocache/config.toml. Edit via 'repocache repo add/rm/list'.
+  ~/.config/repocache/config.toml. Edit via 'repocache add/rm/ls'.
 
 Cache repo
   A full clone of one library repo, kept on disk with its working tree
@@ -150,12 +152,12 @@ unpushed work, --purge lists those workspaces and asks for
 confirmation before deleting (and refuses when stdin is not a TTY).
 `,
 
-	"repo": `repo — manage the library
+	"library": `library — manage tracked repos and owners
 
-  repocache repo add <repo> [--name <n>] [--owner|--repo]
+  repocache add <repo> [--name <n>] [--owner|--repo]
     Add a repo to the library. <repo> may be a full git URL or GitHub
     shorthand: a bare 'owner/repo' or 'owner' is expanded against
-    github.com, so 'repocache repo add octocat/Hello-World' works.
+    github.com, so 'repocache add octocat/Hello-World' works.
     Name defaults to <host>/<owner>/<repo> derived from the URL. --name
     overrides. Fetches the new repo right away (runs a scoped 'sync').
     Exit 3 if the name already exists.
@@ -165,7 +167,7 @@ confirmation before deleting (and refuses when stdin is not a TTY).
     sync then discovers and adds that owner's repos. Detection is automatic;
     --owner / --repo force it. See 'repocache help owner'.
 
-  repocache repo rm <name> [--force]
+  repocache rm <name> [--force]
     Remove a repo completely: the config entry, the cache on disk, and
     every workspace derived from it. Refuses if any workspace has
     uncommitted or unpushed changes unless --force is given. Restores
@@ -174,18 +176,18 @@ confirmation before deleting (and refuses when stdin is not a TTY).
     If <name> is an owner, removes the owner entry and every repo it
     auto-added (with the same safety checks).
 
-  repocache repo list [--json]
+  repocache ls [--json]
     Show tracked owners, then repos with last sync and the owner that
     auto-added each (if any).
 `,
 
 	"owner": `owner — track a whole user or org
 
-Add an owner with 'repocache repo add <owner-url>' (a URL with a single
+Add an owner with 'repocache add <owner-url>' (a URL with a single
 path segment, e.g. https://github.com/octocat). On every sync,
 repocache lists that owner's repos and adds any new ones to the library
 automatically, so repos created upstream after you start tracking are
-picked up and fetched without another 'repo add'. This also happens in
+picked up and fetched without another 'add'. This also happens in
 the background at each agent session start (see 'repocache help sync').
 
 Discovery uses the 'gh' CLI — repocache's only dependency beyond 'git',
@@ -205,8 +207,8 @@ private ones you can access). Tune per owner in config.toml:
 
 Reconciliation is additive: repos that disappear upstream are left in
 place (so a workspace with unpushed work is never deleted out from under
-you). Remove them yourself with 'repocache repo rm <name>', or drop the
-whole owner with 'repocache repo rm <owner>'.
+you). Remove them yourself with 'repocache rm <name>', or drop the
+whole owner with 'repocache rm <owner>'.
 `,
 
 	"sync": `sync — fetch repos and re-apply read-only chmod
@@ -324,7 +326,7 @@ Three lock scopes:
 
   config          ~/.config/repocache/.lock
                   exclusive, 2s timeout. Held briefly for config edits
-                  (repo add/rm).
+                  (add/rm).
 
   per-cache-repo  <cache>/.git/repocache.lock
                   exclusive (5min timeout) for sync, shared (2s timeout)

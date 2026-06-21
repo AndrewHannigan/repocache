@@ -26,7 +26,7 @@ func mkMeta(t *testing.T, name string, m cache.Meta) {
 func TestLikelyCause(t *testing.T) {
 	cases := []struct{ name, err, want string }{
 		{"auth", "git fetch: exit status 128 (output: fatal: could not read Username for 'https://github.com')", "gh auth login"},
-		{"notfound", "git fetch: exit status 128 (output: ERROR: Repository not found.)", "repo rm"},
+		{"notfound", "git fetch: exit status 128 (output: ERROR: Repository not found.)", "repocache rm"},
 		{"network", "git fetch: exit status 128 (output: fatal: unable to access: Could not resolve host: github.com)", "network"},
 		{"locked", "locked", "lock"},
 		{"disk", "fatal: write error: No space left on device", "disk full"},
