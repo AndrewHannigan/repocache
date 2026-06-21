@@ -9,6 +9,7 @@ Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](http
 - 🔒 **OS-enforced read-only cache** — every repo is `chmod a-w`; safe to `rg`/`grep`, impossible to clobber.
 - ⚡ **Cheap workspaces** — `git clone --reference` shares the object store; no history re-download.
 - 🔄 **Repos never stale** — refreshed in the background at session start.
+- 📚 **Reference repos stay pristine** — your source-of-truth clones can't be edited and are kept current automatically, so the agent always reads the real thing.
 - 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, and Gemini CLI.
 - 📦 **Persistent shared library** — cached once and reused across sessions, never re-cloned to `/tmp`.
 - 🧰 **Natively searchable** — `rg`, `grep`, `git`, and `gh` work directly; no wrappers.
