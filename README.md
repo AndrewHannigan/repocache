@@ -35,20 +35,20 @@ curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/insta
 repocache init
 
 # add a repo — it's fetched right away (read-only)
-repocache add https://github.com/anthropics/anthropic-sdk-python
+repocache add https://github.com/octocat/Hello-World
 
 # GitHub shorthand works too — "owner/repo" is expanded against github.com
-repocache add anthropics/anthropic-sdk-python
+repocache add octocat/Hello-World
 
 # ...or track a whole user/org: add discovers its repos and fetches them;
 # later syncs keep pulling any new ones
-repocache add anthropics   # bare "owner" shorthand; needs gh
+repocache add octocat   # bare "owner" shorthand; needs gh
 
 # re-fetch tracked repos any time
 repocache sync
 
 # your agent can now search it; when it wants to edit, this prints a writable path:
-repocache workspace new anthropics/anthropic-sdk-python fix-typo
+repocache workspace new octocat/Hello-World fix-typo
 ```
 
 That's the whole loop. Repocache adds exactly two things to your agent's world:
@@ -96,7 +96,7 @@ Config example:
 
 ```toml
 [[repo]]
-url = "https://github.com/anthropics/anthropic-sdk-python"
+url = "https://github.com/octocat/Hello-World"
 
 [[repo]]
 url = "git@github.com:foo/bar.git"
@@ -105,7 +105,7 @@ name = "myorg/bar"   # optional override; default derived from URL
 # Track a whole user/org. sync discovers its repos via gh and adds new ones
 # automatically (as [[repo]] entries tagged with source = this owner).
 [[owner]]
-url = "https://github.com/anthropics"
+url = "https://github.com/octocat"
 # include_forks = false      # default
 # include_archived = false   # default
 # visibility = "all"         # all|public|private

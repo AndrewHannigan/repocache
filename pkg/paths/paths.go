@@ -61,8 +61,8 @@ func WorkspacePath(name, branch string) string {
 // treated as shorthand and expanded so the common cases just work:
 //
 //	octocat                         -> https://github.com/octocat
-//	anthropics/anthropic-sdk-python -> https://github.com/anthropics/anthropic-sdk-python
-//	github.com/anthropics           -> https://github.com/anthropics
+//	octocat/Hello-World             -> https://github.com/octocat/Hello-World
+//	github.com/octocat              -> https://github.com/octocat
 //	gitlab.com/foo/bar              -> https://gitlab.com/foo/bar
 //
 // A leading segment that looks like a host (contains "." or ":") is taken as

@@ -58,8 +58,8 @@ bg_sync_interval = "1h"   # optional staleness gate for __bg-sync's `sync
 
 # One [[repo]] block per tracked repository.
 [[repo]]
-url = "https://github.com/anthropics/claude-code"
-# Implicit: name = "github.com/anthropics/claude-code"
+url = "https://github.com/octocat/Hello-World"
+# Implicit: name = "github.com/octocat/Hello-World"
 
 [[repo]]
 url = "git@github.com:foo/bar.git"
@@ -68,14 +68,14 @@ name = "myorg/bar"        # optional override; must be unique across the config
 # A repo auto-added by an owner (see below) carries a `source` tag naming the
 # owner that added it. User-added repos have no source.
 [[repo]]
-url = "https://github.com/anthropics/anthropic-sdk-python"
-source = "github.com/anthropics"
+url = "https://github.com/octocat/Hello-World"
+source = "github.com/octocat"
 
 # One [[owner]] block per tracked user/org. sync discovers the owner's repos
 # (via gh) and materializes new ones as source-tagged [[repo]] entries.
 [[owner]]
-url = "https://github.com/anthropics"   # single-path-segment URL
-# name = "github.com/anthropics"         # optional override; default host/owner
+url = "https://github.com/octocat"   # single-path-segment URL
+# name = "github.com/octocat"         # optional override; default host/owner
 # include_forks = false                  # default false
 # include_archived = false               # default false
 # visibility = "all"                     # all|public|private; default all
@@ -237,7 +237,7 @@ Behavior:
 Output (human):
 ```
 syncing 3 repos (jobs=4)
-  github.com/anthropics/claude-code  ✓  142 MB  (3.2s)
+  github.com/octocat/Hello-World  ✓  142 MB  (3.2s)
   github.com/foo/bar                 -  skipped (synced 4 min ago)
   github.com/baz/qux                 ✗  fetch failed: authentication required
 2 of 3 ok; 1 failed; 0 skipped
