@@ -12,7 +12,7 @@ Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](http
 - 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, and Gemini CLI.
 - 📦 **Persistent shared library** — cached once and reused across sessions, never re-cloned to `/tmp`.
 - 🧰 **Natively searchable** — `rg`, `grep`, `git`, and `gh` work directly; no wrappers.
-- 🌐 **Simpler multi-repo PRs** — search across every cached repo and spin up writable workspaces on demand, making it easier for your agent to author PRs across multiple repos in a single session.
+- 🌐 **Simpler multi-repo PRs** — search across every cached repo and spin up writable workspaces on demand, so your agent can author PRs across multiple repos in a single session with ease.
 
 ---
 
