@@ -343,6 +343,32 @@ Behavior:
 
 Exit codes: 0 (always; bg failures don't propagate).
 
+### 5.13 `repocache status [<repo>]`
+
+Reports sync health from the on-disk `.git/repocache.meta` sidecars. No
+network, no `git` subprocess, no locks — like `repo list` (§5.5) the probes
+are a cheap meta read per repo. It shares its failure-collection logic with
+the `session-context` staleness banner (§8.2), so what the agent sees at
+session start and what `status` prints stay consistent.
+
+Behavior:
+1. Read config.
+2. **No argument** — list every tracked repo whose most recent sync attempt
+   failed (`last_error` set in its meta), newest failure first, each with the
+   age of its last *successful* sync. If none failed, print `All N tracked
+   repos synced cleanly.`
+3. **`<repo>`** (resolved per §5.0) — print that repo's last good sync time,
+   and if its last attempt failed, when it failed, the full captured git
+   error, and a one-line "likely cause" that maps common git failures (auth,
+   repo-not-found, network, lock contention, disk-full) to a suggested fix.
+   The cause is a best-effort string heuristic over git's output, never
+   authoritative. An unsynced repo prints a "not synced yet" hint instead.
+
+Output (human): a summary table (no arg) or a per-repo detail block. No JSON
+mode.
+
+Exit codes: 0; 2 (`<repo>` not in config); 7 (config unreadable).
+
 ## 6. Read-only enforcement
 
 Cache working trees are made read-only after each sync:
@@ -660,7 +686,7 @@ inherently less stable than the declarative-hook agents.
 | 2 | Not found (repo or workspace doesn't exist where expected) |
 | 3 | Already exists (duplicate config entry, workspace already on disk) |
 | 4 | Dirty (workspace has uncommitted or unpushed work; refused without `--force`) |
-| 5 | Locked (couldn't acquire lock within 2s timeout) |
+| 5 | Locked (couldn't acquire a lock within its timeout — see §7 for per-lock timeouts) |
 | 6 | Network (git fetch or clone failed) |
 | 7 | Config (config invalid, unreadable, or unwritable; or agent settings file malformed) |
 | 8 | Missing dependency (`git` not found on PATH) |
@@ -671,8 +697,8 @@ Reserved for future use: 9–15.
 
 - **TTY detection**: color enabled only when stdout is a TTY.
 - **Human mode**: terse. No banners. No progress spinners by default (Git's own progress is acceptable for `sync` since it streams to stderr).
-- **`--json` mode**: structured output for every command that has list/show semantics. NDJSON (one record per line) where multiple records stream over time, e.g. `sync` results.
-- **Error envelope** in JSON mode: `{"error": "<message>", "code": "<short_code>"}` on stderr, with matching numeric exit code.
+- **`--json` mode**: structured output for every command that has list/show semantics (`repo list`, `workspace list`, `sync`). NDJSON (one record per line) where multiple records stream over time, e.g. `sync` results.
+- **Errors**: a fatal error prints a plain `error: <message>` line on stderr (in every mode, including `--json`) and the process exits with the matching numeric code from §9. There is no separate JSON error envelope — only list/show *output* is structured; failures are reported uniformly as the text line plus the exit code.
 - **`repocache <cmd> --help`** always works for every command.
 
 ## 11. Authentication

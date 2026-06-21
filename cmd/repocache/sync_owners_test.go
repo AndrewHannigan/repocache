@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/AndrewHannigan/repocache/pkg/config"
+	"github.com/AndrewHannigan/repocache/pkg/errs"
 	"github.com/AndrewHannigan/repocache/pkg/forge"
 )
 
@@ -79,6 +80,27 @@ func TestResolveSyncTargetsExpandsOwners(t *testing.T) {
 
 	if _, err := resolveSyncTargets(c, []string{"nope"}); err == nil {
 		t.Fatal("unknown name should error")
+	}
+}
+
+// An argument that suffix-matches both a repo and an owner is ambiguous and
+// must exit 2 (§5.0), the same as `repo rm` — not silently resolve to the repo.
+func TestResolveSyncTargetsRepoOwnerAmbiguity(t *testing.T) {
+	c := &config.Config{
+		Repos:  []config.Repo{{URL: "https://github.com/foo/acme"}},
+		Owners: []config.Owner{{URL: "https://gitlab.com/acme"}},
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("config should be valid (distinct full names): %v", err)
+	}
+
+	_, err := resolveSyncTargets(c, []string{"acme"})
+	if err == nil {
+		t.Fatal("arg matching both a repo and an owner should be ambiguous")
+	}
+	var coded *errs.Coded
+	if !errors.As(err, &coded) || coded.Code != errs.NotFound {
+		t.Fatalf("want exit %d (NotFound), got %v", errs.NotFound, err)
 	}
 }
 

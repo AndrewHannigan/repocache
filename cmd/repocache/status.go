@@ -90,7 +90,7 @@ func runStatusSummary(c *config.Config) error {
 func runStatusRepo(c *config.Config, arg string) error {
 	r, err := c.Resolve(arg)
 	if err != nil {
-		return errs.Wrap(errs.Config, err)
+		return err // already coded errs.NotFound (exit 2), like every other command
 	}
 	name, err := r.ResolvedName()
 	if err != nil {

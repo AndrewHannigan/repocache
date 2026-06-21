@@ -108,6 +108,16 @@ func configBgInterval() time.Duration {
 	return d
 }
 
+// bgLogMaxBytes is the size at which openBgLog rotates the bg-sync log so it
+// can't grow unbounded across sessions (SPEC §5.12).
+const bgLogMaxBytes = 5 << 20 // 5 MB
+
 func openBgLog() (*os.File, error) {
-	return os.OpenFile(paths.BgSyncLogFile(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	path := paths.BgSyncLogFile()
+	// Single-backup rotation: when the log reaches the cap, move it aside to
+	// <log>.1 (replacing any previous backup) and start a fresh file.
+	if fi, err := os.Stat(path); err == nil && fi.Size() >= bgLogMaxBytes {
+		_ = os.Rename(path, path+".1")
+	}
+	return os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 }

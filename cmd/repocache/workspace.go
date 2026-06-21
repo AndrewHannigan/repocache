@@ -77,8 +77,8 @@ func runWorkspaceNew(name, branch, base string) error {
 	fmt.Fprintf(os.Stderr, "syncing %s...\n", name)
 	if res := syncOne(name, repo.URL, 0); res.Status == "error" {
 		if !cache.Exists(name) {
-			if res.Error == "locked" {
-				return errs.New(errs.Locked, "could not sync %s: locked by another process", name)
+			if res.locked {
+				return errs.New(errs.Locked, "could not sync %s: %s", name, res.Error)
 			}
 			return errs.New(errs.Network, "could not sync %s: %s", name, res.Error)
 		}
