@@ -203,6 +203,10 @@ func runRepoRmOne(r *config.Repo, force bool) error {
 		}
 	}
 
+	if r.Source != "" {
+		return rmOwnedRepo(r, resolved, force, workspaces)
+	}
+
 	if err := removeRepoArtifacts(resolved); err != nil {
 		return err
 	}
@@ -216,6 +220,63 @@ func runRepoRmOne(r *config.Repo, force bool) error {
 		fmt.Printf(", %s", pluralize(len(workspaces), "workspace"))
 	}
 	fmt.Println(", cache on disk)")
+	return nil
+}
+
+// rmOwnedRepo removes a repo that was auto-added by an owner. Instead of
+// silently removing the config entry (which would be re-created on the next
+// sync), it adds the repo to the owner's Exclude list so it stays gone.
+func rmOwnedRepo(r *config.Repo, resolved string, force bool, workspaces []workspace.Info) error {
+	if err := removeRepoArtifacts(resolved); err != nil {
+		return err
+	}
+
+	ownerName := r.Source
+	var lerr error
+	if lerr = config.WithLock(configLockTimeout, func(c *config.Config) error {
+		for i := range c.Owners {
+			on, err := c.Owners[i].ResolvedName()
+			if err != nil {
+				continue
+			}
+			if on == ownerName {
+				already := false
+				for _, e := range c.Owners[i].Exclude {
+					if e == resolved {
+						already = true
+						break
+					}
+				}
+				if !already {
+					c.Owners[i].Exclude = append(c.Owners[i].Exclude, resolved)
+				}
+				break
+			}
+		}
+		kept := c.Repos[:0]
+		for _, r := range c.Repos {
+			n, _ := r.ResolvedName()
+			if n == resolved {
+				continue
+			}
+			kept = append(kept, r)
+		}
+		c.Repos = kept
+		return config.Save(c)
+	}); lerr != nil {
+		if errors.Is(lerr, config.ErrLocked) {
+			return errs.Wrap(errs.Locked, lerr)
+		}
+		return wrapIfNotCoded(lerr, errs.Config)
+	}
+
+	fmt.Printf("removed %s (config", resolved)
+	if len(workspaces) > 0 {
+		fmt.Printf(", %s", pluralize(len(workspaces), "workspace"))
+	}
+	fmt.Println(", cache on disk)")
+	fmt.Printf("  note: %s was auto-added by owner %s — it has been added\n", resolved, ownerName)
+	fmt.Printf("        to that owner's exclude list so it won't be re-added on sync.\n")
 	return nil
 }
 

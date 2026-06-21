@@ -42,13 +42,18 @@ type Repo struct {
 // repos (via `gh`) and materializes any new ones as Source-tagged Repo
 // entries, so the rest of repocache treats them as ordinary cache repos.
 type Owner struct {
-	URL             string `toml:"url"`
-	Name            string `toml:"name,omitempty"`
-	IncludeForks    bool   `toml:"include_forks,omitempty"`
-	IncludeArchived bool   `toml:"include_archived,omitempty"`
+	URL             string   `toml:"url"`
+	Name            string   `toml:"name,omitempty"`
+	IncludeForks    bool     `toml:"include_forks,omitempty"`
+	IncludeArchived bool     `toml:"include_archived,omitempty"`
 	// Visibility filters discovered repos: "all" (default), "public", or
 	// "private". Empty is treated as "all".
 	Visibility string `toml:"visibility,omitempty"`
+	// Exclude lists resolved repo names (e.g. "github.com/owner/repo") that
+	// should not be auto-added on sync, even though they belong to this owner.
+	// Populated automatically when `repocache rm` is called on a repo that was
+	// added by this owner.
+	Exclude []string `toml:"exclude,omitempty"`
 }
 
 // Name returns the effective name for a repo: the explicit Name field if
@@ -288,6 +293,7 @@ func EmptyTemplate() []byte {
 # # include_forks = false
 # # include_archived = false
 # # visibility = "all"   # all|public|private
+# # exclude = ["owner/repo"]
 
 `)
 }

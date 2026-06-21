@@ -21,7 +21,7 @@ func TestNewOwnerRepos(t *testing.T) {
 		{Name: "new2", CloneURL: "https://github.com/acme/new2"},
 		{Name: "empty", CloneURL: ""}, // skipped
 	}
-	got := newOwnerRepos(c, "github.com/acme", discovered)
+	got := newOwnerRepos(c, c.Owners[0], discovered)
 	if len(got) != 2 {
 		t.Fatalf("want 2 new repos, got %d: %+v", len(got), got)
 	}
@@ -32,6 +32,24 @@ func TestNewOwnerRepos(t *testing.T) {
 	}
 	if got[0].URL != "https://github.com/acme/new1" || got[1].URL != "https://github.com/acme/new2" {
 		t.Fatalf("unexpected repos added: %+v", got)
+	}
+}
+
+func TestNewOwnerReposExcludes(t *testing.T) {
+	owner := config.Owner{URL: "https://github.com/acme", Exclude: []string{"github.com/acme/new1"}}
+	c := &config.Config{
+		Owners: []config.Owner{owner},
+	}
+	discovered := []forge.Repo{
+		{Name: "new1", CloneURL: "https://github.com/acme/new1"}, // excluded
+		{Name: "new2", CloneURL: "https://github.com/acme/new2"}, // not excluded
+	}
+	got := newOwnerRepos(c, owner, discovered)
+	if len(got) != 1 {
+		t.Fatalf("want 1 new repo (new2), got %d: %+v", len(got), got)
+	}
+	if got[0].URL != "https://github.com/acme/new2" {
+		t.Fatalf("unexpected repo added: %+v", got[0])
 	}
 }
 
