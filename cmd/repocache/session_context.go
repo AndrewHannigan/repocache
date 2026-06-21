@@ -16,16 +16,12 @@ import (
 	"github.com/AndrewHannigan/repocache/pkg/paths"
 )
 
-// SessionContextCommand is the canonical command string installed into
-// each agent's SessionStart hook to inject the repocache guide as
-// context. Shared so install/uninstall can match it for idempotency.
-const SessionContextCommand = "repocache session-context"
-
 func newSessionContextCmd() *cobra.Command {
 	var text bool
 	cmd := &cobra.Command{
-		Use:   "session-context",
-		Short: "Emit the repocache guide as SessionStart hook context (JSON)",
+		Use:    "__session-context",
+		Short:  "(internal) Emit the repocache guide as SessionStart hook context (JSON)",
+		Hidden: true,
 		Long: `session-context prints a JSON object that terminal coding agents read
 from their SessionStart hook and inject into the model's context,
 delimited by <repocache-session-context>...</repocache-session-context>

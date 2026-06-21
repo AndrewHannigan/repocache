@@ -99,6 +99,33 @@ func TestClaudeInstallMigratesLegacy(t *testing.T) {
 	}
 }
 
+// Install migrates the renamed session-context hook: an older install
+// wrote the public `repocache session-context` command into SessionStart;
+// it must be stripped (the subcommand no longer exists) and replaced with
+// the internal `repocache __session-context`.
+func TestClaudeInstallMigratesRenamedHook(t *testing.T) {
+	home := withHome(t)
+	dir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(dir, "settings.json")
+	os.WriteFile(settings, []byte(`{"hooks":{"SessionStart":[`+
+		`{"hooks":[{"type":"command","command":"`+legacySessionContextCommand+`"}]}]}}`), 0644)
+
+	if _, err := NewClaude().Install(InstallOptions{}); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	data, _ := os.ReadFile(settings)
+	if strings.Contains(string(data), legacySessionContextCommand) {
+		t.Errorf("legacy session-context hook should be stripped:\n%s", data)
+	}
+	if !strings.Contains(string(data), SessionContextCommand) {
+		t.Errorf("renamed __session-context hook should be present:\n%s", data)
+	}
+}
+
 // opencode integrates via a dropped-in plugin file (no settings edits, no
 // path allowlist). Install writes the plugin and records it in AddedFiles.
 func TestOpencodeInstallWritesPlugin(t *testing.T) {
@@ -121,7 +148,7 @@ func TestOpencodeInstallWritesPlugin(t *testing.T) {
 	}
 
 	data, _ := os.ReadFile(plugin)
-	if !strings.Contains(string(data), "session-context --text") {
+	if !strings.Contains(string(data), "__session-context --text") {
 		t.Errorf("plugin missing session-context call:\n%s", data)
 	}
 
