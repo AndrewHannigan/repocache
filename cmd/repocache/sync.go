@@ -60,6 +60,9 @@ type syncResult struct {
 type syncTarget struct{ name, url string }
 
 func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) error {
+	if err := cache.RequireGit(); err != nil {
+		return errs.Wrap(errs.MissingDep, err)
+	}
 	if jobs < 1 {
 		jobs = 1
 	}

@@ -52,6 +52,9 @@ origin/HEAD (or --base). Prints the workspace path on stdout.`,
 }
 
 func runWorkspaceNew(name, branch, base string) error {
+	if err := cache.RequireGit(); err != nil {
+		return errs.Wrap(errs.MissingDep, err)
+	}
 	c, err := config.Load()
 	if err != nil {
 		return errs.Wrap(errs.Config, err)

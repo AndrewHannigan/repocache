@@ -161,7 +161,7 @@ Behavior:
 
 Output (repo): `added <name>` followed by the scoped `sync` output.
 Output (owner): `added owner <name>` followed by the scoped `sync` output.
-Exit codes: 0; 3 (name exists); 7 (config error or both `--owner` and `--repo`); plus the `sync` exit codes (5 lock, 6 network) if the implicit sync fails.
+Exit codes: 0; 3 (name exists); 7 (config error or both `--owner` and `--repo`); plus the `sync` exit codes (5 lock, 6 network, 8 `git` missing) if the implicit sync fails.
 
 ### 5.4 `repocache repo rm <name> [--force]`
 
@@ -245,7 +245,7 @@ syncing 3 repos (jobs=4)
 
 JSON: NDJSON per-repo with `{name, status: "ok"|"skipped"|"error", duration_ms, error?}`.
 
-Exit codes: 0 (all ok or skipped); 2 (unknown name); 5 (lock contention timed out for any repo); 6 (any network failure); 7 (config).
+Exit codes: 0 (all ok or skipped); 2 (unknown name); 5 (lock contention timed out for any repo); 6 (any network failure); 7 (config); 8 (`git` not on PATH).
 
 ### 5.7 `repocache workspace new <repo> <branch> [--base <branch>]`
 
@@ -269,7 +269,7 @@ Notes:
 - The new workspace's `origin` points at the upstream URL. `git push` works normally.
 - New branches have no upstream tracking until the user runs `git push -u origin <branch>`.
 
-Exit codes: 0; 2 (repo not in cache); 3 (workspace exists); 5 (locked); 6 (clone failed); 7 (config).
+Exit codes: 0; 2 (repo not in cache); 3 (workspace exists); 5 (locked); 6 (clone failed); 7 (config); 8 (`git` not on PATH).
 
 ### 5.8 `repocache workspace list [--json]`
 
@@ -586,8 +586,9 @@ copy and nothing to reconcile.
 | 5 | Locked (couldn't acquire lock within 2s timeout) |
 | 6 | Network (git fetch or clone failed) |
 | 7 | Config (config invalid, unreadable, or unwritable; or agent settings file malformed) |
+| 8 | Missing dependency (`git` not found on PATH) |
 
-Reserved for future use: 8–15.
+Reserved for future use: 9–15.
 
 ## 10. Output conventions
 
@@ -604,7 +605,7 @@ Reserved for future use: 8–15.
 - HTTPS: credential helper (`gh auth setup-git`, `git-credential-manager`, OS keychain helpers, etc.).
 - SSH: `ssh-agent` and the user's SSH config for `git@github.com:...` style URLs.
 
-If `git clone <url>` works at the user's shell, `repocache` works. If it doesn't, `repocache` exits 6 with the underlying git error.
+If `git clone <url>` works at the user's shell, `repocache` works. If it doesn't, `repocache` exits 6 with the underlying git error. If `git` itself is not on PATH, commands that need it (`sync`, `repo add`, `workspace new`) fail fast with exit 8 and a one-line "install git" message rather than a raw exec error.
 
 ## 12. Concurrency model
 

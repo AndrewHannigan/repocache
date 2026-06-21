@@ -141,6 +141,7 @@ Repocache does not manage credentials. Every git operation defers to whatever `g
 
 ## Limitations & gotchas
 
+- **Requires `git`.** It's the one hard dependency — every cache and workspace operation shells out to it. Commands that need git (`sync`, `repo add`, `workspace new`) check for it up front and exit 8 with an "install git" message if it's missing, instead of a cryptic exec error.
 - **Large repos.** Full clones only — no sparse-checkout or partial-clone yet. Chromium/llvm-sized repos will feel it.
 - **Owner tracking needs `gh`.** Discovering a user/org's repos shells out to the [`gh` CLI](https://cli.github.com/) (GitHub / GHE only). It's the one dependency beyond `git`, and only for discovery — if `gh` is missing or unauthenticated, repocache warns and skips discovery while already-known repos keep syncing. Owner reconciliation is additive: repos deleted upstream stay until you `repocache repo rm` them.
 
