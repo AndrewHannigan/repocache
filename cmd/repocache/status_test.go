@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/AndrewHannigan/repocache/pkg/cache"
 	"github.com/AndrewHannigan/repocache/pkg/config"
+	"github.com/AndrewHannigan/repocache/pkg/errs"
 	"github.com/AndrewHannigan/repocache/pkg/paths"
 )
 
@@ -39,6 +41,20 @@ func TestLikelyCause(t *testing.T) {
 				t.Fatalf("likelyCause(%q) = %q, want substring %q", tc.err, got, tc.want)
 			}
 		})
+	}
+}
+
+// status on an unknown repo must exit 2 (NotFound), consistent with every
+// other repo-resolving command — not the config code 7.
+func TestStatusRepoUnknownExitsNotFound(t *testing.T) {
+	c := &config.Config{Repos: []config.Repo{{URL: "https://github.com/foo/bar"}}}
+	err := runStatusRepo(c, "nope")
+	if err == nil {
+		t.Fatal("unknown repo should error")
+	}
+	var coded *errs.Coded
+	if !errors.As(err, &coded) || coded.Code != errs.NotFound {
+		t.Fatalf("want exit %d (NotFound), got %v", errs.NotFound, err)
 	}
 }
 

@@ -55,6 +55,11 @@ type syncResult struct {
 	Error      string `json:"error,omitempty"`
 	Note       string `json:"note,omitempty"`
 	SizeBytes  int64  `json:"size_bytes,omitempty"`
+
+	// locked marks an error caused by a cache-lock timeout (vs a network
+	// failure), so callers can classify it without matching on Error text.
+	// Not serialized — the message in Error carries the user-facing detail.
+	locked bool
 }
 
 type syncTarget struct{ name, url string }
@@ -151,31 +156,36 @@ func resolveSyncTargets(c *config.Config, names []string) ([]syncTarget, error) 
 		}
 	}
 	for _, name := range names {
-		// A name may be a repo or an owner. Try repo first; if that fails,
-		// expand an owner into its managed repos. Surface the repo resolution
-		// error (which carries not-found/ambiguous detail) only when neither
-		// matches.
+		// A name may be a repo or an owner. Resolve both: a repo expands to
+		// itself, an owner expands to its managed repos. Matching both (a rare
+		// suffix collision — exact names are unique per §4) is ambiguous → exit
+		// 2 asking for the full name, identical to `repo rm` (§5.0).
 		r, repoErr := c.Resolve(name)
-		if repoErr == nil {
+		o, ownerErr := c.ResolveOwner(name)
+		switch {
+		case repoErr == nil && ownerErr == nil:
+			rn, _ := r.ResolvedName()
+			on, _ := o.ResolvedName()
+			return nil, errs.New(errs.NotFound,
+				"%q is ambiguous; matches owner %q and repo %q — use the full name", name, on, rn)
+		case repoErr == nil:
 			n, err := r.ResolvedName()
 			if err != nil {
 				return nil, errs.Wrap(errs.Config, err)
 			}
 			add(n, r.URL)
-			continue
-		}
-		o, ownerErr := c.ResolveOwner(name)
-		if ownerErr != nil {
-			return nil, repoErr // repo not-found/ambiguous message is the common case
-		}
-		on, err := o.ResolvedName()
-		if err != nil {
-			return nil, errs.Wrap(errs.Config, err)
-		}
-		for _, rn := range c.ReposForOwner(on) {
-			if rr := c.FindByName(rn); rr != nil {
-				add(rn, rr.URL)
+		case ownerErr == nil:
+			on, err := o.ResolvedName()
+			if err != nil {
+				return nil, errs.Wrap(errs.Config, err)
 			}
+			for _, rn := range c.ReposForOwner(on) {
+				if rr := c.FindByName(rn); rr != nil {
+					add(rn, rr.URL)
+				}
+			}
+		default:
+			return nil, repoErr // repo not-found/ambiguous message is the common case
 		}
 	}
 	return out, nil
@@ -314,7 +324,10 @@ func syncOne(name, url string, ifOlderThan time.Duration) syncResult {
 	lock, err := cache.AcquireLock(name, true, syncLockTimeout)
 	if err != nil {
 		if errors.Is(err, cache.ErrLocked) {
-			return finishErr(r, start, errors.New("locked"))
+			r.locked = true
+			return finishErr(r, start, fmt.Errorf(
+				"locked: could not acquire %s within %s (held by another repocache process)",
+				paths.CacheRepoLockFile(name), syncLockTimeout))
 		}
 		return finishErr(r, start, err)
 	}
@@ -414,7 +427,7 @@ func summarizeSync(results []syncResult, total int, jsonOut bool) error {
 			skip++
 		case "error":
 			errCnt++
-			if r.Error == "locked" {
+			if r.locked {
 				lockCnt++
 			} else {
 				netCnt++
