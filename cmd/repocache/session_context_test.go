@@ -11,6 +11,10 @@ import (
 )
 
 func TestPrintSessionContext(t *testing.T) {
+	// Isolate from the real user config so the snapshot and the
+	// collision-detection both see an empty library.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
 	var buf bytes.Buffer
 	if err := printSessionContext(&buf); err != nil {
 		t.Fatalf("printSessionContext: %v", err)
@@ -63,5 +67,37 @@ func TestSessionContextBodyEmptyLibrary(t *testing.T) {
 	}
 	if strings.Contains(body, "repocache repo list`):") {
 		t.Errorf("empty library should not append a snapshot section\n%s", body)
+	}
+}
+
+// collisionWarning fires when the working directory's origin matches a library
+// repo, regardless of URL protocol, and names the repo for `workspace new`.
+func TestCollisionWarning(t *testing.T) {
+	repos := []config.Repo{
+		{URL: "git@github.com:AndrewHannigan/repocache.git"}, // ssh form
+		{URL: "https://github.com/acme/widget"},
+	}
+
+	// https working-dir origin matches the ssh-form library entry.
+	w := collisionWarning("/home/u/src/repocache", "https://github.com/AndrewHannigan/repocache.git", repos)
+	for _, want := range []string{
+		"local checkout collision",
+		"/home/u/src/repocache",
+		"workspace new github.com/AndrewHannigan/repocache <branch>",
+	} {
+		if !strings.Contains(w, want) {
+			t.Errorf("warning missing %q:\n%s", want, w)
+		}
+	}
+
+	// A repo not in the library produces no warning.
+	if w := collisionWarning("/home/u/src/other", "https://github.com/AndrewHannigan/other", repos); w != "" {
+		t.Errorf("expected no warning for unlisted repo, got:\n%s", w)
+	}
+
+	// The workspace command uses the library's resolved (custom) name.
+	named := []config.Repo{{URL: "https://github.com/AndrewHannigan/repocache", Name: "myrepo"}}
+	if w := collisionWarning("/x", "https://github.com/AndrewHannigan/repocache", named); !strings.Contains(w, "workspace new myrepo <branch>") {
+		t.Errorf("warning should use the resolved library name:\n%s", w)
 	}
 }
