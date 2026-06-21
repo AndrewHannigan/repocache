@@ -7,13 +7,18 @@ You have a local library of git repos managed by `repocache`.
 - **List the library**: `repocache repo list`
 - **Edit a repo**: `repocache workspace new <repo> <branch>` creates a writable workspace
   and prints its path. Make changes there, then commit, push, open PR as normal.
-  But first — check for a local checkout collision (next bullet).
-- **⚠️ Before editing, check for a local checkout collision.** If the repo you're about to
-  edit is *also* checked out somewhere else on disk — a separate clone (e.g. under `~/src`),
-  which may even be your current working directory — then STOP and ask the user which to
-  use: edit that checkout in place, or create a `repocache workspace`. Do not assume: the
-  two are independent clones, so the choice decides where your commits actually land. This
-  applies even when the existing checkout is the directory you were launched in.
+  **Prefer this over any other checkout of the repo you happen to find on disk.** Library
+  repos are kept up to date automatically, so a fresh workspace is guaranteed current; a
+  stray clone sitting elsewhere on disk — a sibling, or a child of your working directory —
+  may be stale. Default to the workspace.
+- **⚠️ One exception — a local checkout collision.** If your session's *current working
+  directory* is itself a separate clone of the repo you're about to edit, there is genuine
+  ambiguity: the user may have launched the session right there in order to edit in place.
+  Only in that case, STOP and ask which to use — edit that checkout in place, or create a
+  `repocache workspace`. The two are independent clones, so the choice decides where your
+  commits land. When this applies, a "HEADS UP — local checkout collision" callout appears
+  at the top of this context. A checkout that is merely *nearby* on disk (not your cwd) is
+  not this case — prefer the fresh workspace.
 - **Clean up**: `repocache workspace rm <repo> <branch>` when done.
 - **Need a repo not in the library?** Ask the user to run `repocache repo add <repo>`
   (a full URL or GitHub `owner/repo` shorthand).
