@@ -4,7 +4,11 @@ You have a local library of git repos managed by `repocache`.
 
 - **Read repos** at `~/.repocache/repos/<host>/<owner>/<repo>/` (read-only).
   Search and read them with your usual tools. Do not modify files here.
-- **List the library**: `repocache repo list`
+- **List the library**: `repocache repo list` (a `⚠ sync failing` marker means
+  that repo's cached copy is stale — its last fetch failed).
+- **Stale cache?** If a repo is marked failing (or you see a STALE CACHE banner above),
+  treat what you read from it as possibly out of date and tell the user. Run
+  `repocache status <repo>` for the error and the suggested fix.
 - **Edit a repo**: `repocache workspace new <repo> <branch>` creates a writable workspace
   and prints its path. Make changes there, then commit, push, open PR as normal.
   **Prefer this over any other checkout of the repo you happen to find on disk.** Library

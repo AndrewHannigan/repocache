@@ -85,6 +85,9 @@ func printSessionContext(w io.Writer) error {
 // is best-effort: if the library can't be read it is simply omitted.
 func sessionContextBody() string {
 	body := string(agents.DocContent)
+	if w := syncHealthBanner(); w != "" {
+		body = w + "\n" + body
+	}
 	if w := cwdCollisionWarning(); w != "" {
 		body = w + "\n" + body
 	}
@@ -92,6 +95,34 @@ func sessionContextBody() string {
 		body += "\nThe library currently contains (output of `repocache repo list`):\n\n```\n" + list + "```\n"
 	}
 	return body
+}
+
+// syncHealthBanner returns a prominent callout when one or more tracked repos
+// failed their most recent sync, so the agent treats their cached copies as
+// possibly stale rather than asserting on out-of-date code. Best-effort: any
+// failure to read the library yields "" and the body is emitted unchanged.
+func syncHealthBanner() string {
+	c, err := config.Load()
+	if err != nil {
+		return ""
+	}
+	fails := collectSyncFailures(c)
+	if len(fails) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "> ⚠️ STALE CACHE — %d of %d repos failed their most recent sync.\n", len(fails), len(c.Repos))
+	b.WriteString("> Their cached copies are NOT current; treat anything you read from them as\n")
+	b.WriteString("> possibly out of date, and tell the user:\n")
+	for _, f := range fails {
+		if f.LastSyncAt.IsZero() {
+			fmt.Fprintf(&b, ">   - %s — never synced successfully\n", f.Name)
+		} else {
+			fmt.Fprintf(&b, ">   - %s — last good sync %s\n", f.Name, relTime(f.LastSyncAt))
+		}
+	}
+	b.WriteString("> Run `repocache status <repo>` for the error and the fix.\n")
+	return b.String()
 }
 
 // cwdCollisionWarning returns a prominent callout when the agent's current
