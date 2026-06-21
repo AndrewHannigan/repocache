@@ -6,3 +6,6 @@
 # goreleaser snapshot artifacts
 /dist
 
+# playwright-cli scratch artifacts (browser snapshots/console logs)
+/.playwright-cli/
+

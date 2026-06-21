@@ -68,7 +68,7 @@ func (c *Claude) Install(opts InstallOptions) (Installed, error) {
 	if err != nil {
 		return Installed{}, err
 	}
-	hooks, err := installHooks(opts, sessionContextCommand(c.Key()), func(command string) (bool, error) {
+	hooks, err := installHooks(opts, sessionContextCommand(c.Key()), bgSyncCommand(c.Key()), func(command string) (bool, error) {
 		return ensureSessionStartHook(loadJSONC, saveJSON, c.settingsFile(),
 			claudeHookEntry(command), command)
 	})

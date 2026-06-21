@@ -122,18 +122,18 @@ func PathsToRegister() []string {
 	return []string{paths.ReposDir(), paths.WorkspacesDir()}
 }
 
-// installHooks installs the SessionStart hook commands every agent gets:
-// session-context (always — it replaces the old @import as how the agent
-// learns about repocache) and bg-sync (unless --no-bg-sync). sessionContextCmd
-// is the agent-specific session-context command (it carries --agent <key> so
-// the subcommand renders the shape that agent expects). ensure is an
-// agent-specific closure that adds one hook entry for a command and reports
-// whether it was newly added. Returns the commands added this call, for the
-// install state.
-func installHooks(opts InstallOptions, sessionContextCmd string, ensure func(command string) (bool, error)) ([]string, error) {
+// installHooks installs the hook commands every agent gets: session-context
+// (always — it replaces the old @import as how the agent learns about
+// repocache) and bg-sync (unless --no-bg-sync). sessionContextCmd and bgSyncCmd
+// are the agent-specific commands; both may carry a trailing --agent <key> so
+// the subcommand renders the shape that agent expects (antigravity needs it on
+// bg-sync too, to emit JSON). ensure is an agent-specific closure that adds one
+// hook entry for a command and reports whether it was newly added. Returns the
+// commands added this call, for the install state.
+func installHooks(opts InstallOptions, sessionContextCmd, bgSyncCmd string, ensure func(command string) (bool, error)) ([]string, error) {
 	commands := []string{sessionContextCmd}
 	if !opts.NoBgSync {
-		commands = append(commands, BgSyncCommand)
+		commands = append(commands, bgSyncCmd)
 	}
 	var added []string
 	for _, command := range commands {
@@ -149,12 +149,12 @@ func installHooks(opts InstallOptions, sessionContextCmd string, ensure func(com
 }
 
 // hookLabel is the short human label for a hook command, used for the
-// Codex statusMessage and (dashed) the Google CLI hook name. The
-// session-context command carries a trailing --agent <key>, so it is
-// matched by prefix rather than exact equality.
+// Codex statusMessage and (dashed) the Google CLI hook name. Both commands
+// may carry a trailing --agent <key>, so they are matched by prefix rather
+// than exact equality.
 func hookLabel(command string) string {
 	switch {
-	case command == BgSyncCommand:
+	case strings.HasPrefix(command, BgSyncCommand):
 		return "repocache bg-sync"
 	case strings.HasPrefix(command, SessionContextCommand):
 		return "repocache session-context"

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"strings"
 	"testing"
 
@@ -10,51 +11,97 @@ import (
 	"github.com/AndrewHannigan/repocache/pkg/config"
 )
 
-// The envelope agents (claude, antigravity) get the JSON envelope, wrapped in
+// Claude gets the hookSpecificOutput JSON envelope, wrapped in
 // <repocache-session-context> tags, carrying the guide as additionalContext.
-func TestPrintSessionContextEnvelopeAgents(t *testing.T) {
-	for _, agent := range []string{"claude", "antigravity"} {
-		t.Run(agent, func(t *testing.T) {
-			// Isolate from the real user config so the snapshot and the
-			// collision-detection both see an empty library.
-			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+func TestPrintSessionContextClaudeEnvelope(t *testing.T) {
+	// Isolate from the real user config so the snapshot and the
+	// collision-detection both see an empty library.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
+	var buf bytes.Buffer
+	if err := printSessionContext(&buf, nil, "claude"); err != nil {
+		t.Fatalf("printSessionContext: %v", err)
+	}
+
+	// Output is wrapped in <repocache-session-context>...</> tags so it
+	// can be extracted unambiguously from surrounding hook output.
+	out := strings.TrimSuffix(buf.String(), "\n")
+	if !strings.HasPrefix(out, "<repocache-session-context>") || !strings.HasSuffix(out, "</repocache-session-context>") {
+		t.Fatalf("output should be wrapped in <repocache-session-context> tags:\n%s", buf.String())
+	}
+	inner := strings.TrimSuffix(strings.TrimPrefix(out, "<repocache-session-context>"), "</repocache-session-context>")
+
+	var env struct {
+		HookSpecificOutput struct {
+			HookEventName     string `json:"hookEventName"`
+			AdditionalContext string `json:"additionalContext"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal([]byte(inner), &env); err != nil {
+		t.Fatalf("wrapped output is not valid JSON: %v\n%s", err, inner)
+	}
+	if env.HookSpecificOutput.HookEventName != "SessionStart" {
+		t.Errorf("hookEventName = %q, want SessionStart", env.HookSpecificOutput.HookEventName)
+	}
+	if !strings.HasPrefix(env.HookSpecificOutput.AdditionalContext, string(agents.DocContent)) {
+		t.Errorf("additionalContext should start with the embedded guide")
+	}
+	if !strings.HasSuffix(buf.String(), "\n") {
+		t.Errorf("output should be newline-terminated")
+	}
+}
+
+// Antigravity gets a PreInvocation injectSteps envelope (pure JSON, no tags),
+// carrying the guide as a userMessage — but only on the first model call of the
+// conversation (invocationNum==0); later invocations emit "{}".
+func TestPrintSessionContextAntigravity(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	type injectOut struct {
+		InjectSteps []map[string]string `json:"injectSteps"`
+	}
+
+	// First invocation (and no payload at all): inject the guide.
+	for name, stdin := range map[string]io.Reader{
+		"no payload":     nil,
+		"invocationNum0": strings.NewReader(`{"invocationNum":0}`),
+	} {
+		t.Run(name, func(t *testing.T) {
 			var buf bytes.Buffer
-			if err := printSessionContext(&buf, agent); err != nil {
+			if err := printSessionContext(&buf, stdin, "antigravity"); err != nil {
 				t.Fatalf("printSessionContext: %v", err)
 			}
-
-			// Output is wrapped in <repocache-session-context>...</> tags so it
-			// can be extracted unambiguously from surrounding hook output.
-			out := strings.TrimSuffix(buf.String(), "\n")
-			if !strings.HasPrefix(out, "<repocache-session-context>") || !strings.HasSuffix(out, "</repocache-session-context>") {
-				t.Fatalf("output should be wrapped in <repocache-session-context> tags:\n%s", buf.String())
+			out := strings.TrimSpace(buf.String())
+			if strings.HasPrefix(out, "<repocache-session-context>") {
+				t.Fatalf("antigravity output must be pure JSON, not tag-wrapped:\n%s", out)
 			}
-			inner := strings.TrimSuffix(strings.TrimPrefix(out, "<repocache-session-context>"), "</repocache-session-context>")
-
-			// The wrapped content must be the valid JSON envelope these agents accept.
-			var env struct {
-				HookSpecificOutput struct {
-					HookEventName     string `json:"hookEventName"`
-					AdditionalContext string `json:"additionalContext"`
-				} `json:"hookSpecificOutput"`
+			var got injectOut
+			if err := json.Unmarshal([]byte(out), &got); err != nil {
+				t.Fatalf("output is not valid JSON: %v\n%s", err, out)
 			}
-			if err := json.Unmarshal([]byte(inner), &env); err != nil {
-				t.Fatalf("wrapped output is not valid JSON: %v\n%s", err, inner)
+			if len(got.InjectSteps) != 1 {
+				t.Fatalf("want 1 injected step, got %d:\n%s", len(got.InjectSteps), out)
 			}
-			if env.HookSpecificOutput.HookEventName != "SessionStart" {
-				t.Errorf("hookEventName = %q, want SessionStart", env.HookSpecificOutput.HookEventName)
+			msg := got.InjectSteps[0]["userMessage"]
+			if !strings.Contains(msg, string(agents.DocContent)) {
+				t.Errorf("injected userMessage should contain the embedded guide:\n%s", msg)
 			}
-			// The body leads with the embedded guide, then appends a live
-			// library snapshot (which may be empty in a clean test environment).
-			if !strings.HasPrefix(env.HookSpecificOutput.AdditionalContext, string(agents.DocContent)) {
-				t.Errorf("additionalContext should start with the embedded guide")
-			}
-			if !strings.HasSuffix(buf.String(), "\n") {
-				t.Errorf("output should be newline-terminated")
+			if !strings.Contains(msg, "<repocache-session-context>") {
+				t.Errorf("injected userMessage should delimit the guide with tags:\n%s", msg)
 			}
 		})
 	}
+
+	// Later invocations must not re-inject: emit an empty result.
+	t.Run("invocationNum>0", func(t *testing.T) {
+		var buf bytes.Buffer
+		if err := printSessionContext(&buf, strings.NewReader(`{"invocationNum":3}`), "antigravity"); err != nil {
+			t.Fatalf("printSessionContext: %v", err)
+		}
+		if got := strings.TrimSpace(buf.String()); got != "{}" {
+			t.Errorf("later invocations should emit {}, got:\n%s", got)
+		}
+	})
 }
 
 // The plain-text agents (codex, opencode) get the raw Markdown body — no
@@ -66,7 +113,7 @@ func TestPrintSessionContextPlainTextAgents(t *testing.T) {
 			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 			var buf bytes.Buffer
-			if err := printSessionContext(&buf, agent); err != nil {
+			if err := printSessionContext(&buf, nil, agent); err != nil {
 				t.Fatalf("printSessionContext: %v", err)
 			}
 			out := buf.String()
@@ -87,7 +134,7 @@ func TestPrintSessionContextPlainTextAgents(t *testing.T) {
 func TestPrintSessionContextUnknownAgent(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	var buf bytes.Buffer
-	if err := printSessionContext(&buf, "nope"); err == nil {
+	if err := printSessionContext(&buf, nil, "nope"); err == nil {
 		t.Errorf("expected error for unknown agent, got output:\n%s", buf.String())
 	}
 }

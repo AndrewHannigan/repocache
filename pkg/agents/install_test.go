@@ -70,7 +70,10 @@ func TestClaudeInstallNoBgSync(t *testing.T) {
 	}
 }
 
-func TestAntigravityInstallUsesGoogleSettings(t *testing.T) {
+// Antigravity installs PreInvocation hooks into ~/.gemini/config/hooks.json
+// (its dedicated hooks file — it has no SessionStart event) and makes no
+// settings.json / includeDirectories edits (it has no such key).
+func TestAntigravityInstallUsesHooksJSON(t *testing.T) {
 	home := withHome(t)
 
 	got, err := NewAntigravity().Install(InstallOptions{})
@@ -78,19 +81,95 @@ func TestAntigravityInstallUsesGoogleSettings(t *testing.T) {
 		t.Fatalf("Install: %v", err)
 	}
 
-	if !sliceHas(got.AddedPaths, filepath.Join(home, ".repocache", "repos")) ||
-		!sliceHas(got.AddedPaths, filepath.Join(home, ".repocache", "workspaces")) {
-		t.Errorf("AddedPaths = %v, want repocache repos and workspaces", got.AddedPaths)
+	if len(got.AddedPaths) != 0 {
+		t.Errorf("antigravity should register no paths (no includeDirectories); got %v", got.AddedPaths)
 	}
-	if !sliceHas(got.AddedHooks, sessionContextCommand("antigravity")) || !sliceHas(got.AddedHooks, BgSyncCommand) {
-		t.Errorf("AddedHooks = %v, want both session-context and bg-sync", got.AddedHooks)
+	if !sliceHas(got.AddedHooks, sessionContextCommand("antigravity")) || !sliceHas(got.AddedHooks, bgSyncCommand("antigravity")) {
+		t.Errorf("AddedHooks = %v, want session-context and antigravity bg-sync", got.AddedHooks)
 	}
 
-	data, _ := os.ReadFile(filepath.Join(home, ".antigravity", "settings.json"))
-	for _, want := range []string{"includeDirectories", sessionContextCommand("antigravity"), BgSyncCommand} {
+	hooks := filepath.Join(home, ".gemini", "config", "hooks.json")
+	data, err := os.ReadFile(hooks)
+	if err != nil {
+		t.Fatalf("reading hooks.json: %v", err)
+	}
+	for _, want := range []string{
+		"repocache-session-context", "PreInvocation",
+		sessionContextCommand("antigravity"),
+		"repocache-bg-sync", bgSyncCommand("antigravity"),
+	} {
 		if !strings.Contains(string(data), want) {
-			t.Errorf("settings.json missing %q\n%s", want, data)
+			t.Errorf("hooks.json missing %q\n%s", want, data)
 		}
+	}
+	// No settings.json should be written for the integration.
+	if _, err := os.Stat(filepath.Join(home, ".gemini", "settings.json")); err == nil {
+		t.Errorf("antigravity install should not write ~/.gemini/settings.json")
+	}
+
+	// Idempotent: a second install adds nothing new.
+	again, err := NewAntigravity().Install(InstallOptions{})
+	if err != nil {
+		t.Fatalf("second Install: %v", err)
+	}
+	if len(again.AddedHooks) != 0 {
+		t.Errorf("second Install should be a no-op; got AddedHooks=%v", again.AddedHooks)
+	}
+}
+
+// Install strips repocache's dead entries from the legacy ~/.gemini/settings.json
+// left by the removed Gemini CLI agent (the Antigravity CLI doesn't read it).
+func TestAntigravityInstallCleansLegacyGeminiSettings(t *testing.T) {
+	home := withHome(t)
+	settings := filepath.Join(home, ".gemini", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settings), 0755); err != nil {
+		t.Fatal(err)
+	}
+	// A legacy file: repocache's old includeDirectories + bare session-context
+	// hook, plus unrelated user content that must be preserved.
+	os.WriteFile(settings, []byte(`{`+
+		`"includeDirectories":["`+filepath.Join(home, ".repocache", "repos")+`","keep/me"],`+
+		`"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"`+SessionContextCommand+`"}]}]},`+
+		`"security":{"auth":{"selectedType":"oauth-personal"}}}`), 0644)
+
+	if _, err := NewAntigravity().Install(InstallOptions{}); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	data, _ := os.ReadFile(settings)
+	s := string(data)
+	if strings.Contains(s, filepath.Join(home, ".repocache", "repos")) {
+		t.Errorf("legacy repocache includeDirectories entry should be stripped:\n%s", s)
+	}
+	if strings.Contains(s, `"command":"`+SessionContextCommand+`"`) {
+		t.Errorf("legacy session-context hook should be stripped:\n%s", s)
+	}
+	if !strings.Contains(s, "keep/me") || !strings.Contains(s, "oauth-personal") {
+		t.Errorf("unrelated user content must be preserved:\n%s", s)
+	}
+}
+
+// Antigravity shares ~/.gemini with the standalone Gemini CLI, so it is
+// detected by its own app-data subdir, not by ~/.gemini alone.
+func TestAntigravityDetectsViaAppDataSubdir(t *testing.T) {
+	home := withHome(t)
+	a := NewAntigravity()
+
+	if a.Detected() {
+		t.Fatal("Detected() = true with no ~/.gemini")
+	}
+	// ~/.gemini alone (e.g. only the standalone Gemini CLI) must not count.
+	if err := os.MkdirAll(filepath.Join(home, ".gemini"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if a.Detected() {
+		t.Error("Detected() = true with ~/.gemini but no antigravity-cli subdir")
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".gemini", "antigravity-cli"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if !a.Detected() {
+		t.Error("Detected() = false with ~/.gemini/antigravity-cli present")
 	}
 }
 
@@ -232,6 +311,27 @@ func TestClaudeUninstallReverses(t *testing.T) {
 	for _, gone := range []string{SessionContextCommand, BgSyncCommand} {
 		if strings.Contains(string(data), gone) {
 			t.Errorf("uninstall left hook %q behind\n%s", gone, data)
+		}
+	}
+}
+
+// Uninstall removes the named hooks it recorded from hooks.json.
+func TestAntigravityUninstallReverses(t *testing.T) {
+	home := withHome(t)
+	a := NewAntigravity()
+
+	installed, err := a.Install(InstallOptions{})
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if err := a.Uninstall(installed); err != nil {
+		t.Fatalf("Uninstall: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(home, ".gemini", "config", "hooks.json"))
+	for _, gone := range []string{"repocache-session-context", "repocache-bg-sync", SessionContextCommand, BgSyncCommand} {
+		if strings.Contains(string(data), gone) {
+			t.Errorf("uninstall left %q behind\n%s", gone, data)
 		}
 	}
 }

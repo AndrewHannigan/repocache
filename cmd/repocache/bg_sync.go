@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"syscall"
@@ -17,33 +18,45 @@ import (
 
 const bgSyncWorkerEnv = "REPOCACHE_BG_SYNC_WORKER"
 
+// cacheEmptyHint nudges the user to populate an empty cache. It is printed to
+// stdout for the plain-stdout agents and injected as a message for antigravity.
+const cacheEmptyHint = "repocache: cache is empty. Run `repocache sync` to fetch your tracked repos."
+
 func newBgSyncCmd() *cobra.Command {
-	return &cobra.Command{
+	var agentKey string
+	cmd := &cobra.Command{
 		Use:    "__bg-sync",
-		Short:  "(internal) Background sync invoked by SessionStart hooks",
+		Short:  "(internal) Background sync invoked by session-start hooks",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if os.Getenv(bgSyncWorkerEnv) == "1" {
 				return bgSyncWorker()
 			}
-			return bgSyncEntry()
+			if agentKey == "antigravity" {
+				return bgSyncAntigravity(os.Stdout, hookStdin())
+			}
+			if bgSyncStart() {
+				fmt.Println(cacheEmptyHint)
+			}
+			return nil
 		},
 	}
+	cmd.Flags().StringVar(&agentKey, "agent", "", "agent whose hook output shape to emit (only antigravity needs this)")
+	return cmd
 }
 
-// bgSyncEntry runs in the SessionStart hook's process: a quick check,
-// then either print a hint (first-run) or spawn a detached worker.
-// Always exits 0 — the SessionStart hook must not break the agent.
-func bgSyncEntry() error {
+// bgSyncStart runs the session-start bg-sync action in the hook's process: it
+// does nothing if no repos are tracked, returns true on first run (nothing ever
+// synced) so the caller can surface cacheEmptyHint, and otherwise spawns the
+// detached worker. It never fails — the hook must not break the agent.
+func bgSyncStart() (showEmptyHint bool) {
 	c, err := config.Load()
 	if err != nil || (len(c.Repos) == 0 && len(c.Owners) == 0) {
-		return nil
+		return false
 	}
 	if !everSynced(c) {
-		fmt.Println("repocache: cache is empty. Run `repocache sync` to fetch your tracked repos.")
-		return nil
+		return true
 	}
-	// Spawn detached worker.
 	self, err := os.Executable()
 	if err != nil {
 		self = os.Args[0]
@@ -57,7 +70,22 @@ func bgSyncEntry() error {
 	}
 	cmd.Stdin = nil
 	_ = cmd.Start()
-	return nil
+	return false
+}
+
+// bgSyncAntigravity runs bg-sync as an antigravity PreInvocation hook: it acts
+// only on the first model call of the conversation (invocationNum==0) and always
+// emits a JSON result — the cache-empty hint as an injected message, or "{}".
+func bgSyncAntigravity(w io.Writer, stdin io.Reader) error {
+	if !antigravityFirstInvocation(stdin) {
+		_, err := fmt.Fprintln(w, "{}")
+		return err
+	}
+	if bgSyncStart() {
+		return printInjectMessage(w, cacheEmptyHint)
+	}
+	_, err := fmt.Fprintln(w, "{}")
+	return err
 }
 
 // bgSyncWorker runs as the detached child. Acquires the global lock
