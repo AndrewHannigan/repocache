@@ -51,7 +51,7 @@ func topicList() []string {
 
 var helpTopics = map[string]string{
 
-	"overview": `repocache — git repos and workspaces for terminal coding agents
+	"overview": `repocache — git repo management for terminal coding agents
 
 The whole loop:
 
