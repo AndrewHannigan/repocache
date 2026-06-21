@@ -1,7 +1,7 @@
 // repocache:managed — installed by `repocache init`. Safe to delete; repocache
 // will reinstall it on the next `init`, or run `repocache uninstall` to remove.
 //
-// opencode has no SessionStart shell-command hook like Claude/Codex/Google CLIs and
+// opencode has no SessionStart shell-command hook like Claude/Codex and
 // no per-directory access allowlist, so repocache integrates as a plugin that
 // shells back to the `repocache` binary. The plugin module body runs once when
 // opencode loads it at startup — that is our "session start":

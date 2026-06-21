@@ -34,13 +34,6 @@ surrounding hook output:
 
     <repocache-session-context>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</repocache-session-context>
 
-antigravity gets a PreInvocation injectSteps envelope instead (it has no
-SessionStart event): the guide is injected as a userMessage, gated by a
-conversationId-scoped sentinel so it is injected once per conversation.
-The hook payload arrives on stdin; the sentinel is an atomic mkdir in
-~/.repocache/hook_state/ so the guide is never re-injected on later
-turns or model calls.
-
 codex and opencode instead get the raw Markdown body, with no envelope or
 delimiters: Codex accepts plain stdout as developer context, and
 opencode's plugin pushes the text into the model's system prompt itself.
@@ -57,30 +50,21 @@ repos are available without having to run it.`,
 			if text {
 				agentKey = "opencode"
 			}
-			return printSessionContext(os.Stdout, hookStdin(), agentKey)
+			return printSessionContext(os.Stdout, agentKey)
 		},
 	}
 	// Default to claude so a bare `repocache __session-context` (the hook
-	// command installed before --agent existed) still emits the envelope all
-	// three hook-based agents accept.
-	cmd.Flags().StringVar(&agentKey, "agent", "claude", "agent whose session-context output shape to emit (claude, codex, antigravity, opencode)")
+	// command installed before --agent existed) still emits the envelope the
+	// hook-based agents accept.
+	cmd.Flags().StringVar(&agentKey, "agent", "claude", "agent whose session-context output shape to emit (claude, codex, opencode)")
 	cmd.Flags().BoolVar(&text, "text", false, "deprecated alias for --agent opencode (raw guide body)")
 	_ = cmd.Flags().MarkHidden("text")
 	return cmd
 }
 
 // printSessionContext renders the guide body in the shape agentKey expects
-// (see pkg/agents) and writes it, newline-terminated, to w. stdin carries the
-// agent's hook payload (nil if none); it is read only for antigravity, whose
-// PreInvocation hook must inject the guide once per conversation.
-func printSessionContext(w io.Writer, stdin io.Reader, agentKey string) error {
-	// Antigravity's PreInvocation hook fires before every model call. Inject
-	// the guide only once per conversation using a conversationId-scoped
-	// sentinel; otherwise emit an empty result so it isn't re-injected.
-	if agentKey == "antigravity" && !antigravityShouldAct(stdin) {
-		_, err := fmt.Fprintln(w, "{}")
-		return err
-	}
+// (see pkg/agents) and writes it, newline-terminated, to w.
+func printSessionContext(w io.Writer, agentKey string) error {
 	out, err := agents.SessionContextOutputFor(agentKey, sessionContextBody())
 	if err != nil {
 		return err

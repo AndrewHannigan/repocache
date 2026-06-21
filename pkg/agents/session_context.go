@@ -49,31 +49,6 @@ func renderHookEnvelope(body string) (string, error) {
 	return sessionContextOpenTag + string(data) + sessionContextCloseTag, nil
 }
 
-// injectStepsOutput is the PreInvocation hook JSON the Antigravity CLI reads.
-// A userMessage step injects the guide into the conversation trajectory before
-// the first model call, where it persists for the rest of the session. The
-// guide is wrapped in <repocache-session-context> tags so the model can see it
-// as one delimited block. See https://antigravity.google/docs/hooks.
-type injectStepsOutput struct {
-	InjectSteps []map[string]string `json:"injectSteps"`
-}
-
-// renderInjectSteps marshals body into the PreInvocation injectSteps envelope.
-// Unlike the Claude envelope it carries no delimiter tags around the JSON —
-// Antigravity parses the hook's stdout as a JSON document directly.
-func renderInjectSteps(body string) (string, error) {
-	out := injectStepsOutput{
-		InjectSteps: []map[string]string{
-			{"userMessage": sessionContextOpenTag + "\n" + body + "\n" + sessionContextCloseTag},
-		},
-	}
-	data, err := json.Marshal(out)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
 // Claude Code reads the hookSpecificOutput envelope from its SessionStart
 // hook stdout. (It also accepts plain stdout, but the envelope is its native,
 // documented shape.)
@@ -89,15 +64,6 @@ func (c *Codex) SessionContextOutput(body string) (string, error) {
 	return body, nil
 }
 
-// Antigravity CLI injects the guide via a PreInvocation hook (it has no
-// SessionStart event), so it gets the injectSteps envelope rather than Claude's
-// hookSpecificOutput one. The command layer emits this only on the first
-// invocation (invocationNum==0); on later invocations it prints "{}" so the
-// guide is injected once per conversation, not before every model call.
-func (a *Antigravity) SessionContextOutput(body string) (string, error) {
-	return renderInjectSteps(body)
-}
-
 // opencode injects the guide itself via its plugin (experimental.chat.system
 // .transform), so it wants the raw Markdown body with no hook envelope or
 // delimiters — it is not handing the output to any hook plumbing.
@@ -110,16 +76,6 @@ func (o *Opencode) SessionContextOutput(body string) (string, error) {
 // the subcommand renders the output shape that agent expects.
 func sessionContextCommand(agentKey string) string {
 	return SessionContextCommand + " --agent " + agentKey
-}
-
-// bgSyncCommand is the bg-sync hook command installed for a given agent. Most
-// agents use the bare command; antigravity needs --agent so the command emits
-// a JSON result for its PreInvocation hook instead of a plain-text hint.
-func bgSyncCommand(agentKey string) string {
-	if agentKey == "antigravity" {
-		return BgSyncCommand + " --agent " + agentKey
-	}
-	return BgSyncCommand
 }
 
 // legacySessionContextCommands are session-context hook commands that earlier
