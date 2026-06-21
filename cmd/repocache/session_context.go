@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -17,61 +16,63 @@ import (
 )
 
 func newSessionContextCmd() *cobra.Command {
+	var agentKey string
 	var text bool
 	cmd := &cobra.Command{
 		Use:    "__session-context",
-		Short:  "(internal) Emit the repocache guide as SessionStart hook context (JSON)",
+		Short:  "(internal) Emit the repocache guide in an agent's session-context shape",
 		Hidden: true,
-		Long: `session-context prints a JSON object that terminal coding agents read
-from their SessionStart hook and inject into the model's context,
-delimited by <repocache-session-context>...</repocache-session-context>
-tags so it can be extracted unambiguously from surrounding hook output:
+		Long: `__session-context prints the repocache guide in the shape the selected
+agent's session-context integration expects, chosen with --agent <key>.
+The content is identical across agents; only the surrounding shape differs,
+so each agent gets what makes sense for it rather than one agent's
+convention reused everywhere.
+
+claude and antigravity get a JSON envelope they read from their
+SessionStart hook and inject into the model's context, delimited so it
+can be extracted from surrounding hook output:
 
     <repocache-session-context>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</repocache-session-context>
 
-Claude Code, Codex CLI, and Antigravity CLI all accept this shape
-(Antigravity requires it — it rejects plain stdout). The text is generated from the
-running binary, so it is always current: there is no on-disk doc to
-drift after an upgrade. It also appends a live snapshot of the library
-(the "ls" table) so the agent knows which repos are available
-without having to run it.
+The hookSpecificOutput key originated in Claude Code; Antigravity adopted
+the identical SessionStart output schema and requires it (it rejects
+plain stdout). codex and opencode instead get the raw Markdown body, with
+no envelope or delimiters: Codex accepts plain stdout as developer
+context, and opencode's plugin pushes the text into the model's system
+prompt itself.
 
---text prints just the Markdown guide body, with no JSON envelope or
-delimiters. opencode's plugin consumes this and pushes it into the
-model's system prompt itself, so it needs the raw text, not the hook
-envelope.`,
+The guide is generated from the running binary, so it is always current —
+there is no on-disk doc to drift after an upgrade. It also appends a live
+snapshot of the library (the "ls" table) so the agent knows which
+repos are available without having to run it.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// --text is the deprecated alias for --agent opencode (the raw
+			// body), kept so opencode plugins installed before --agent existed
+			// keep working until the next `repocache init`.
 			if text {
-				_, err := fmt.Fprintln(os.Stdout, sessionContextBody())
-				return err
+				agentKey = "opencode"
 			}
-			return printSessionContext(os.Stdout)
+			return printSessionContext(os.Stdout, agentKey)
 		},
 	}
-	cmd.Flags().BoolVar(&text, "text", false, "print the raw guide body (no JSON envelope); for opencode's plugin")
+	// Default to claude so a bare `repocache __session-context` (the hook
+	// command installed before --agent existed) still emits the envelope all
+	// three hook-based agents accept.
+	cmd.Flags().StringVar(&agentKey, "agent", "claude", "agent whose session-context output shape to emit (claude, codex, antigravity, opencode)")
+	cmd.Flags().BoolVar(&text, "text", false, "deprecated alias for --agent opencode (raw guide body)")
+	_ = cmd.Flags().MarkHidden("text")
 	return cmd
 }
 
-// sessionContextEnvelope is the JSON shape all hook-based agents accept for
-// SessionStart context injection. additionalContext is a single string,
-// so the guide is JSON-escaped into it by the encoder.
-type sessionContextEnvelope struct {
-	HookSpecificOutput struct {
-		HookEventName     string `json:"hookEventName"`
-		AdditionalContext string `json:"additionalContext"`
-	} `json:"hookSpecificOutput"`
-}
-
-func printSessionContext(w io.Writer) error {
-	var env sessionContextEnvelope
-	env.HookSpecificOutput.HookEventName = "SessionStart"
-	env.HookSpecificOutput.AdditionalContext = sessionContextBody()
-	data, err := json.Marshal(env)
+// printSessionContext renders the guide body in the shape agentKey expects
+// (see pkg/agents) and writes it, newline-terminated, to w.
+func printSessionContext(w io.Writer, agentKey string) error {
+	out, err := agents.SessionContextOutputFor(agentKey, sessionContextBody())
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(w, "<repocache-session-context>%s</repocache-session-context>\n", string(data))
+	_, err = fmt.Fprintln(w, out)
 	return err
 }
 

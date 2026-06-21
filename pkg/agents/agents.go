@@ -36,6 +36,12 @@ type Agent interface {
 	Detected() bool // is the agent installed (config dir present)?
 	Install(opts InstallOptions) (Installed, error)
 	Uninstall(prev Installed) error
+	// SessionContextOutput renders the repocache guide body into the exact
+	// shape this agent's session-context integration expects (e.g. the
+	// hookSpecificOutput JSON envelope for the hook-based agents, or the raw
+	// Markdown body for opencode's plugin). The content is identical across
+	// agents; only the surrounding shape differs. See session_context.go.
+	SessionContextOutput(body string) (string, error)
 }
 
 // Installed records what an agent's Install did, so Uninstall can
@@ -118,12 +124,14 @@ func PathsToRegister() []string {
 
 // installHooks installs the SessionStart hook commands every agent gets:
 // session-context (always — it replaces the old @import as how the agent
-// learns about repocache) and bg-sync (unless --no-bg-sync). ensure is
-// an agent-specific closure that adds one hook entry for a command and
-// reports whether it was newly added. Returns the commands added this
-// call, for the install state.
-func installHooks(opts InstallOptions, ensure func(command string) (bool, error)) ([]string, error) {
-	commands := []string{SessionContextCommand}
+// learns about repocache) and bg-sync (unless --no-bg-sync). sessionContextCmd
+// is the agent-specific session-context command (it carries --agent <key> so
+// the subcommand renders the shape that agent expects). ensure is an
+// agent-specific closure that adds one hook entry for a command and reports
+// whether it was newly added. Returns the commands added this call, for the
+// install state.
+func installHooks(opts InstallOptions, sessionContextCmd string, ensure func(command string) (bool, error)) ([]string, error) {
+	commands := []string{sessionContextCmd}
 	if !opts.NoBgSync {
 		commands = append(commands, BgSyncCommand)
 	}
@@ -141,12 +149,14 @@ func installHooks(opts InstallOptions, ensure func(command string) (bool, error)
 }
 
 // hookLabel is the short human label for a hook command, used for the
-// Codex statusMessage and (dashed) the Google CLI hook name.
+// Codex statusMessage and (dashed) the Google CLI hook name. The
+// session-context command carries a trailing --agent <key>, so it is
+// matched by prefix rather than exact equality.
 func hookLabel(command string) string {
-	switch command {
-	case BgSyncCommand:
+	switch {
+	case command == BgSyncCommand:
 		return "repocache bg-sync"
-	case SessionContextCommand:
+	case strings.HasPrefix(command, SessionContextCommand):
 		return "repocache session-context"
 	default:
 		return "repocache"

@@ -41,12 +41,12 @@ func TestClaudeInstallUsesHooksNotImport(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, ".claude", "CLAUDE.md")); !os.IsNotExist(err) {
 		t.Errorf("CLAUDE.md should not be created for an @import")
 	}
-	if !sliceHas(got.AddedHooks, SessionContextCommand) || !sliceHas(got.AddedHooks, BgSyncCommand) {
+	if !sliceHas(got.AddedHooks, sessionContextCommand("claude")) || !sliceHas(got.AddedHooks, BgSyncCommand) {
 		t.Errorf("AddedHooks = %v, want both session-context and bg-sync", got.AddedHooks)
 	}
 
 	data, _ := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
-	for _, want := range []string{SessionContextCommand, BgSyncCommand} {
+	for _, want := range []string{sessionContextCommand("claude"), BgSyncCommand} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("settings.json missing hook %q\n%s", want, data)
 		}
@@ -65,7 +65,7 @@ func TestClaudeInstallNoBgSync(t *testing.T) {
 	if sliceHas(got.AddedHooks, BgSyncCommand) {
 		t.Errorf("NoBgSync should skip bg-sync; got %v", got.AddedHooks)
 	}
-	if !sliceHas(got.AddedHooks, SessionContextCommand) {
+	if !sliceHas(got.AddedHooks, sessionContextCommand("claude")) {
 		t.Errorf("session-context must install even with NoBgSync; got %v", got.AddedHooks)
 	}
 }
@@ -82,12 +82,12 @@ func TestAntigravityInstallUsesGoogleSettings(t *testing.T) {
 		!sliceHas(got.AddedPaths, filepath.Join(home, ".repocache", "workspaces")) {
 		t.Errorf("AddedPaths = %v, want repocache repos and workspaces", got.AddedPaths)
 	}
-	if !sliceHas(got.AddedHooks, SessionContextCommand) || !sliceHas(got.AddedHooks, BgSyncCommand) {
+	if !sliceHas(got.AddedHooks, sessionContextCommand("antigravity")) || !sliceHas(got.AddedHooks, BgSyncCommand) {
 		t.Errorf("AddedHooks = %v, want both session-context and bg-sync", got.AddedHooks)
 	}
 
 	data, _ := os.ReadFile(filepath.Join(home, ".antigravity", "settings.json"))
-	for _, want := range []string{"includeDirectories", SessionContextCommand, BgSyncCommand} {
+	for _, want := range []string{"includeDirectories", sessionContextCommand("antigravity"), BgSyncCommand} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("settings.json missing %q\n%s", want, data)
 		}
@@ -123,30 +123,39 @@ func TestClaudeInstallMigratesLegacy(t *testing.T) {
 	}
 }
 
-// Install migrates the renamed session-context hook: an older install
-// wrote the public `repocache session-context` command into SessionStart;
-// it must be stripped (the subcommand no longer exists) and replaced with
-// the internal `repocache __session-context`.
-func TestClaudeInstallMigratesRenamedHook(t *testing.T) {
-	home := withHome(t)
-	dir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	settings := filepath.Join(dir, "settings.json")
-	os.WriteFile(settings, []byte(`{"hooks":{"SessionStart":[`+
-		`{"hooks":[{"type":"command","command":"`+legacySessionContextCommand+`"}]}]}}`), 0644)
+// Install migrates superseded session-context hooks to the per-agent form.
+// An older install wrote either the public `repocache session-context`
+// subcommand (since renamed, now removed) or the bare `repocache
+// __session-context` (before --agent <key> selected the per-agent shape).
+// Both must be stripped and replaced with `repocache __session-context
+// --agent claude`.
+func TestClaudeInstallMigratesLegacyHooks(t *testing.T) {
+	for _, legacy := range legacySessionContextCommands {
+		t.Run(legacy, func(t *testing.T) {
+			home := withHome(t)
+			dir := filepath.Join(home, ".claude")
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			settings := filepath.Join(dir, "settings.json")
+			os.WriteFile(settings, []byte(`{"hooks":{"SessionStart":[`+
+				`{"hooks":[{"type":"command","command":"`+legacy+`"}]}]}}`), 0644)
 
-	if _, err := NewClaude().Install(InstallOptions{}); err != nil {
-		t.Fatalf("Install: %v", err)
-	}
+			if _, err := NewClaude().Install(InstallOptions{}); err != nil {
+				t.Fatalf("Install: %v", err)
+			}
 
-	data, _ := os.ReadFile(settings)
-	if strings.Contains(string(data), legacySessionContextCommand) {
-		t.Errorf("legacy session-context hook should be stripped:\n%s", data)
-	}
-	if !strings.Contains(string(data), SessionContextCommand) {
-		t.Errorf("renamed __session-context hook should be present:\n%s", data)
+			data, _ := os.ReadFile(settings)
+			if want := sessionContextCommand("claude"); !strings.Contains(string(data), want) {
+				t.Errorf("per-agent hook %q should be present:\n%s", want, data)
+			}
+			// The bare legacy command must not survive as its own entry. It is
+			// a substring of the per-agent command, so match the exact JSON
+			// command string rather than a loose substring.
+			if exact := `"command":"` + legacy + `"`; strings.Contains(string(data), exact) {
+				t.Errorf("legacy hook %q should be stripped:\n%s", legacy, data)
+			}
+		})
 	}
 }
 
@@ -172,7 +181,7 @@ func TestOpencodeInstallWritesPlugin(t *testing.T) {
 	}
 
 	data, _ := os.ReadFile(plugin)
-	if !strings.Contains(string(data), "__session-context --text") {
+	if !strings.Contains(string(data), "__session-context --agent opencode") {
 		t.Errorf("plugin missing session-context call:\n%s", data)
 	}
 
