@@ -20,10 +20,6 @@ import (
 //go:embed embed/guide.md
 var DocContent []byte
 
-// Marker is the string used in inline comments and sidecar state to
-// identify entries repocache added. See SPEC §8.5.
-const Marker = "repocache:managed"
-
 // InstallOptions tunes a per-agent install. Most agents ignore most options.
 type InstallOptions struct {
 	NoBgSync bool // Claude only: skip the SessionStart hook.

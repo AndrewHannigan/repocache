@@ -57,8 +57,3 @@ creates writable workspaces from it via 'git clone --reference'.
 
 Designed for terminal coding agents (Claude Code, Codex CLI, opencode) to
 search across many repos and edit a few.`
-
-// notImplemented is a placeholder for command stubs not yet wired up.
-func notImplemented(name string) error {
-	return &errs.Coded{Code: 1, Err: fmt.Errorf("%s: not implemented yet", name)}
-}
