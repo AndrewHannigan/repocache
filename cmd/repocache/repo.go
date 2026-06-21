@@ -196,7 +196,7 @@ func runRepoRmOne(r *config.Repo, force bool) error {
 		return errs.Wrap(errs.Config, err)
 	}
 	if !force {
-		if blocked := blockedWorkspaces(resolved, workspaces); len(blocked) > 0 {
+		if blocked := blockedWorkspaces(workspaces); len(blocked) > 0 {
 			return errs.New(errs.Dirty,
 				"refusing to remove %s; these workspaces have unsaved work:\n%s\ncommit and push, or pass --force to discard",
 				resolved, strings.Join(blocked, "\n"))
@@ -300,7 +300,7 @@ func runOwnerRm(o *config.Owner, force bool) error {
 		return errs.Wrap(errs.Config, err)
 	}
 	if !force {
-		if blocked := blockedWorkspaces("", workspaces); len(blocked) > 0 {
+		if blocked := blockedWorkspaces(workspaces); len(blocked) > 0 {
 			return errs.New(errs.Dirty,
 				"refusing to remove owner %s; these workspaces have unsaved work:\n%s\ncommit and push, or pass --force to discard",
 				ownerName, strings.Join(blocked, "\n"))
@@ -335,7 +335,7 @@ func runOwnerRm(o *config.Owner, force bool) error {
 
 // blockedWorkspaces returns one "  <branch>: <reasons>" line per workspace
 // that has uncommitted or unpushed work (the reason --force exists).
-func blockedWorkspaces(_ string, workspaces []workspace.Info) []string {
+func blockedWorkspaces(workspaces []workspace.Info) []string {
 	var blocked []string
 	for _, ws := range workspaces {
 		parts := []string{}
