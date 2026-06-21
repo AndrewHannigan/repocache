@@ -24,60 +24,56 @@ func (c *Codex) Detected() bool {
 	return err == nil && s.IsDir()
 }
 
-func (c *Codex) docFile() string      { return filepath.Join(c.dir, "REPOCACHE.md") }
-func (c *Codex) DocPath() string      { return c.docFile() }
-func (c *Codex) memoryFile() string   { return filepath.Join(c.dir, "AGENTS.md") }
-func (c *Codex) settingsFile() string { return filepath.Join(c.dir, "config.toml") }
+func (c *Codex) legacyDocFile() string { return filepath.Join(c.dir, "REPOCACHE.md") }
+func (c *Codex) memoryFile() string    { return filepath.Join(c.dir, "AGENTS.md") }
+func (c *Codex) settingsFile() string  { return filepath.Join(c.dir, "config.toml") }
+
+func codexHookEntry(command string) map[string]any {
+	return map[string]any{
+		"matcher": "startup|resume",
+		"hooks": []any{
+			map[string]any{
+				"type":          "command",
+				"command":       command,
+				"statusMessage": hookLabel(command),
+			},
+		},
+	}
+}
 
 func (c *Codex) Install(opts InstallOptions) (Installed, error) {
 	if err := os.MkdirAll(c.dir, 0755); err != nil {
 		return Installed{}, err
 	}
-	if err := os.WriteFile(c.docFile(), DocContent, 0644); err != nil {
-		return Installed{}, fmt.Errorf("write %s: %w", c.docFile(), err)
-	}
-	addedImport, err := ensureImportLine(c.memoryFile(), "REPOCACHE.md")
-	if err != nil {
-		return Installed{}, err
-	}
+	// Migrate off the legacy @REPOCACHE.md import + on-disk doc. Best-effort.
+	_ = removeImportLine(c.memoryFile(), "REPOCACHE.md")
+	_ = os.Remove(c.legacyDocFile())
+
 	paths, err := ensureArrayEntries(loadTOML, saveTOML, c.settingsFile(),
 		[]string{"sandbox_workspace_write", "writable_roots"}, PathsToRegister())
 	if err != nil {
 		return Installed{}, err
 	}
-	var hooks []string
-	if !opts.NoBgSync {
-		entry := map[string]any{
-			"matcher": "startup|resume",
-			"hooks": []any{
-				map[string]any{
-					"type":          "command",
-					"command":       BgSyncCommand,
-					"statusMessage": "repocache bg-sync",
-				},
-			},
-		}
-		addedHook, err := ensureSessionStartHook(loadTOML, saveTOML, c.settingsFile(), entry, BgSyncCommand)
-		if err != nil {
-			return Installed{}, err
-		}
-		if addedHook {
-			hooks = []string{BgSyncCommand}
-			fmt.Fprintln(os.Stderr, "  note: Codex requires you to trust new hooks before they run.")
-			fmt.Fprintln(os.Stderr, "        Open Codex CLI and run `/hooks` once to trust this hook.")
-		}
+	hooks, err := installHooks(opts, func(command string) (bool, error) {
+		return ensureSessionStartHook(loadTOML, saveTOML, c.settingsFile(),
+			codexHookEntry(command), command)
+	})
+	if err != nil {
+		return Installed{}, err
 	}
-	return Installed{
-		AddedPaths:   paths,
-		AddedImports: importLineRecord(addedImport, "REPOCACHE.md"),
-		AddedHooks:   hooks,
-	}, nil
+	if len(hooks) > 0 {
+		fmt.Fprintln(os.Stderr, "  note: Codex requires you to trust new hooks before they run.")
+		fmt.Fprintln(os.Stderr, "        Open Codex CLI and run `/hooks` once to trust them.")
+	}
+	return Installed{AddedPaths: paths, AddedHooks: hooks}, nil
 }
 
 func (c *Codex) Uninstall(prev Installed) error {
+	// Legacy cleanup: older versions added an @import + on-disk doc.
 	if err := removeImportLine(c.memoryFile(), "REPOCACHE.md"); err != nil {
 		return err
 	}
+	_ = os.Remove(c.legacyDocFile())
 	if len(prev.AddedPaths) > 0 {
 		if err := removeArrayEntries(loadTOML, saveTOML, c.settingsFile(),
 			[]string{"sandbox_workspace_write", "writable_roots"}, prev.AddedPaths); err != nil {
@@ -89,6 +85,5 @@ func (c *Codex) Uninstall(prev Installed) error {
 			return err
 		}
 	}
-	_ = os.Remove(c.docFile())
 	return nil
 }

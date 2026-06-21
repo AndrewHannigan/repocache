@@ -22,9 +22,10 @@ func newUninstallCmd() *cobra.Command {
 		Use:   "uninstall",
 		Short: "Reverse agent integration (leaves repocache data and config in place)",
 		Long: `uninstall removes the entries repocache previously added to each
-agent's config (REPOCACHE.md, the @import line, allowed-directory
-entries, SessionStart hook). Uses a sidecar state file to know which
-entries are repocache's; other entries are preserved.
+agent's config: the allowed-directory entries and SessionStart hooks.
+Uses a sidecar state file to know which entries are repocache's; other
+entries are preserved. Also cleans up the legacy @REPOCACHE.md import
+and doc file that older repocache versions installed.
 
 By default this does NOT delete ~/.config/repocache/ or
 ~/.local/share/repocache/. Pass --purge to also remove those, deleting
@@ -64,7 +65,7 @@ func runUninstall(flag string, purge bool) error {
 			continue
 		}
 		delete(state.Agents, a.Key())
-		fmt.Printf("  removed @REPOCACHE.md, %d directories, %d hooks\n",
+		fmt.Printf("  removed %d directories, %d hooks\n",
 			len(prev.AddedPaths), len(prev.AddedHooks))
 	}
 	if err := agents.SaveState(state); err != nil {
