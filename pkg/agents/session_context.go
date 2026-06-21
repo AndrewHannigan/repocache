@@ -21,14 +21,15 @@ const (
 	sessionContextCloseTag = "</repocache-session-context>"
 )
 
-// hookEnvelope is the SessionStart hook JSON the hook-based agents read to
+// hookEnvelope is the SessionStart hook JSON Claude and Antigravity read to
 // inject context. additionalContext is a single string, so the guide body is
 // JSON-escaped into it by the encoder.
 //
-// The wrapper key `hookSpecificOutput` originated in Claude Code; Codex and
-// Antigravity adopted the identical SessionStart output schema, so all three
-// share renderHookEnvelope today. Each still owns its SessionContextOutput
-// method, so a future divergence in any one of them is a localized change.
+// The wrapper key `hookSpecificOutput` originated in Claude Code; Antigravity
+// adopted the identical SessionStart output schema and *requires* it. Codex
+// accepts the same envelope too, but also accepts plain stdout, so it takes
+// the raw body instead (below). Each agent owns its SessionContextOutput
+// method, so these choices are independent.
 type hookEnvelope struct {
 	HookSpecificOutput struct {
 		HookEventName     string `json:"hookEventName"`
@@ -56,10 +57,12 @@ func (c *Claude) SessionContextOutput(body string) (string, error) {
 	return renderHookEnvelope(body)
 }
 
-// Codex CLI adopted Claude Code's SessionStart output schema verbatim, so it
-// reads the same hookSpecificOutput envelope.
+// Codex CLI accepts plain stdout from a hook as developer context, so it gets
+// the raw Markdown body — no JSON envelope, no delimiter tags. (Codex also
+// accepts the hookSpecificOutput envelope, but plain text renders more cleanly
+// as the injected developer message.)
 func (c *Codex) SessionContextOutput(body string) (string, error) {
-	return renderHookEnvelope(body)
+	return body, nil
 }
 
 // Antigravity CLI uses the same hookSpecificOutput envelope and, unlike Claude

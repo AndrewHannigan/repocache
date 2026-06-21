@@ -451,25 +451,25 @@ expects; the guide **content** is identical across agents. Each agent owns
 its shape rather than reusing one agent's convention everywhere, so a
 future divergence is a localized change.
 
-The hook-based agents (claude, codex, antigravity) get a JSON envelope,
-wrapped in `<repocache-session-context>…</repocache-session-context>`
-tags, which the agent injects as session context:
+claude and antigravity get a JSON envelope, wrapped in
+`<repocache-session-context>…</repocache-session-context>` tags, which the
+agent injects as session context:
 
 ```json
 {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"<guide>"}}
 ```
 
-The `hookSpecificOutput` key originated in Claude Code; Codex and
-Antigravity adopted the identical SessionStart output schema, so today all
-three render byte-identical output via one shared helper. Format
-requirements still differ: Claude Code and Codex CLI also accept plain
-stdout as context, but Antigravity rejects plain stdout and accepts
-**only** this JSON envelope — so the envelope is what all three emit.
+The `hookSpecificOutput` key originated in Claude Code; Antigravity adopted
+the identical SessionStart output schema and **requires** it — it rejects
+plain stdout. Claude Code accepts plain stdout too but emits the envelope
+as its native shape.
 
-opencode (§8.9) is the outlier: its shape is the raw Markdown body with no
-envelope or delimiters, because its plugin pushes the text into the
-model's system prompt itself rather than handing it to hook plumbing
-(`--agent opencode`).
+codex and opencode get the raw Markdown body, with no envelope or
+delimiters. Codex accepts plain stdout from a hook as developer context,
+and plain text renders more cleanly as the injected developer message than
+the JSON envelope does. opencode (§8.9) is plugin-based: it pushes the text
+into the model's system prompt itself rather than handing it to hook
+plumbing (`--agent opencode`).
 
 Back-compat: a bare `repocache __session-context` (no `--agent`, the hook
 command earlier versions installed) defaults to the claude shape — the

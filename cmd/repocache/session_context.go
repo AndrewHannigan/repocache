@@ -28,18 +28,18 @@ The content is identical across agents; only the surrounding shape differs,
 so each agent gets what makes sense for it rather than one agent's
 convention reused everywhere.
 
-The hook-based agents (claude, codex, antigravity) get a JSON envelope
-they read from their SessionStart hook and inject into the model's
-context, delimited so it can be extracted from surrounding hook output:
+claude and antigravity get a JSON envelope they read from their
+SessionStart hook and inject into the model's context, delimited so it
+can be extracted from surrounding hook output:
 
     <repocache-session-context>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</repocache-session-context>
 
-The hookSpecificOutput key originated in Claude Code; Codex and
-Antigravity adopted the identical SessionStart output schema, so all
-three share this envelope (Antigravity requires it — it rejects plain
-stdout). opencode instead gets the raw Markdown body, with no envelope
-or delimiters: its plugin pushes the text into the model's system prompt
-itself.
+The hookSpecificOutput key originated in Claude Code; Antigravity adopted
+the identical SessionStart output schema and requires it (it rejects
+plain stdout). codex and opencode instead get the raw Markdown body, with
+no envelope or delimiters: Codex accepts plain stdout as developer
+context, and opencode's plugin pushes the text into the model's system
+prompt itself.
 
 The guide is generated from the running binary, so it is always current —
 there is no on-disk doc to drift after an upgrade. It also appends a live
