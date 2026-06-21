@@ -1,0 +1,265 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"sync"
+	"time"
+
+	"github.com/spf13/cobra"
+
+	"github.com/AndrewHannigan/repocache/pkg/cache"
+	"github.com/AndrewHannigan/repocache/pkg/config"
+	"github.com/AndrewHannigan/repocache/pkg/errs"
+)
+
+const syncLockTimeout = 5 * time.Minute
+
+func newSyncCmd() *cobra.Command {
+	var (
+		jobs        int
+		ifOlderThan time.Duration
+		jsonOut     bool
+	)
+	cmd := &cobra.Command{
+		Use:   "sync [<name>...]",
+		Short: "Fetch tracked repos and refresh their cache working trees",
+		Long: `sync fetches each tracked repo (or the named subset), checks out
+origin/HEAD detached, and re-applies chmod -R a-w on the working tree
+so the cache stays read-only.
+
+With --if-older-than, skip repos synced within the given duration.
+Runs in parallel up to --jobs.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSync(args, jobs, ifOlderThan, jsonOut)
+		},
+	}
+	cmd.Flags().IntVarP(&jobs, "jobs", "j", 4, "max concurrent fetches")
+	cmd.Flags().DurationVar(&ifOlderThan, "if-older-than", 0, "skip repos synced within this duration (e.g. 1h)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit NDJSON results")
+	return cmd
+}
+
+type syncResult struct {
+	Name       string `json:"name"`
+	Status     string `json:"status"` // "ok" | "skipped" | "error"
+	DurationMs int64  `json:"duration_ms"`
+	Error      string `json:"error,omitempty"`
+	Note       string `json:"note,omitempty"`
+	SizeBytes  int64  `json:"size_bytes,omitempty"`
+}
+
+type syncTarget struct{ name, url string }
+
+func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) error {
+	if jobs < 1 {
+		jobs = 1
+	}
+
+	c, err := config.Load()
+	if err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	if len(c.Repos) == 0 {
+		if !jsonOut {
+			fmt.Fprintln(os.Stderr, "no repos in config; add with `repocache repo add <url>`")
+		}
+		return nil
+	}
+
+	targets, err := resolveSyncTargets(c, names)
+	if err != nil {
+		return err
+	}
+
+	if !jsonOut {
+		fmt.Printf("syncing %d repos (jobs=%d)\n", len(targets), jobs)
+	}
+
+	sem := make(chan struct{}, jobs)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var enc *json.Encoder
+	if jsonOut {
+		enc = json.NewEncoder(os.Stdout)
+	}
+	results := make([]syncResult, 0, len(targets))
+
+	for _, t := range targets {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(t syncTarget) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			r := syncOne(t.name, t.url, ifOlderThan)
+			mu.Lock()
+			results = append(results, r)
+			if jsonOut {
+				_ = enc.Encode(r)
+			} else {
+				printSyncLine(r)
+			}
+			mu.Unlock()
+		}(t)
+	}
+	wg.Wait()
+
+	return summarizeSync(results, len(targets), jsonOut)
+}
+
+func resolveSyncTargets(c *config.Config, names []string) ([]syncTarget, error) {
+	if len(names) == 0 {
+		out := make([]syncTarget, 0, len(c.Repos))
+		for _, r := range c.Repos {
+			n, err := r.ResolvedName()
+			if err != nil {
+				return nil, errs.Wrap(errs.Config, err)
+			}
+			out = append(out, syncTarget{n, r.URL})
+		}
+		return out, nil
+	}
+	out := make([]syncTarget, 0, len(names))
+	for _, name := range names {
+		r, err := c.Resolve(name)
+		if err != nil {
+			return nil, err
+		}
+		n, err := r.ResolvedName()
+		if err != nil {
+			return nil, errs.Wrap(errs.Config, err)
+		}
+		out = append(out, syncTarget{n, r.URL})
+	}
+	return out, nil
+}
+
+func syncOne(name, url string, ifOlderThan time.Duration) syncResult {
+	start := time.Now()
+	r := syncResult{Name: name}
+
+	if !cache.Exists(name) {
+		if err := cache.Clone(url, name); err != nil {
+			return finishErr(r, start, err)
+		}
+	}
+
+	lock, err := cache.AcquireLock(name, true, syncLockTimeout)
+	if err != nil {
+		if errors.Is(err, cache.ErrLocked) {
+			r.Status = "error"
+			r.Error = "locked"
+		} else {
+			r.Status = "error"
+			r.Error = err.Error()
+		}
+		r.DurationMs = time.Since(start).Milliseconds()
+		return r
+	}
+	defer lock.Unlock()
+
+	if ifOlderThan > 0 {
+		if meta, err := cache.LoadMeta(name); err == nil && meta != nil {
+			if d := time.Since(meta.LastSyncAt); d < ifOlderThan {
+				r.Status = "skipped"
+				r.Note = fmt.Sprintf("synced %s ago", relDuration(d))
+				r.DurationMs = time.Since(start).Milliseconds()
+				return r
+			}
+		}
+	}
+
+	// Re-enable write before fetch + checkout (prior sync left the tree chmod a-w).
+	// Empty tree (first sync) is fine; UnlockTree is a no-op then.
+	if err := cache.UnlockTree(name); err != nil {
+		return finishErr(r, start, fmt.Errorf("chmod u+w: %w", err))
+	}
+	if err := cache.Fetch(name); err != nil {
+		return finishErr(r, start, err)
+	}
+	if err := cache.CheckoutDetachedHEAD(name); err != nil {
+		return finishErr(r, start, err)
+	}
+	if err := cache.LockTree(name); err != nil {
+		return finishErr(r, start, fmt.Errorf("chmod a-w: %w", err))
+	}
+	if err := cache.SaveMeta(name, &cache.Meta{LastSyncAt: time.Now().UTC()}); err != nil {
+		return finishErr(r, start, fmt.Errorf("write meta: %w", err))
+	}
+
+	r.Status = "ok"
+	if size, err := cache.Size(name); err == nil {
+		r.SizeBytes = size
+	}
+	r.DurationMs = time.Since(start).Milliseconds()
+	return r
+}
+
+func finishErr(r syncResult, start time.Time, err error) syncResult {
+	r.Status = "error"
+	r.Error = err.Error()
+	r.DurationMs = time.Since(start).Milliseconds()
+	return r
+}
+
+func printSyncLine(r syncResult) {
+	switch r.Status {
+	case "ok":
+		fmt.Printf("  %s  ✓  %s  (%s)\n", r.Name, humanSize(r.SizeBytes), formatMs(r.DurationMs))
+	case "skipped":
+		fmt.Printf("  %s  -  skipped (%s)\n", r.Name, r.Note)
+	case "error":
+		fmt.Printf("  %s  ✗  %s\n", r.Name, r.Error)
+	}
+}
+
+func summarizeSync(results []syncResult, total int, jsonOut bool) error {
+	var ok, skip, errCnt, lockCnt, netCnt int
+	for _, r := range results {
+		switch r.Status {
+		case "ok":
+			ok++
+		case "skipped":
+			skip++
+		case "error":
+			errCnt++
+			if r.Error == "locked" {
+				lockCnt++
+			} else {
+				netCnt++
+			}
+		}
+	}
+	if !jsonOut {
+		fmt.Printf("%d of %d ok; %d failed; %d skipped\n", ok, total, errCnt, skip)
+	}
+	if lockCnt > 0 {
+		return errs.New(errs.Locked, "%d repos failed to acquire lock", lockCnt)
+	}
+	if netCnt > 0 {
+		return errs.New(errs.Network, "%d repos failed", netCnt)
+	}
+	return nil
+}
+
+func formatMs(ms int64) string {
+	if ms < 1000 {
+		return fmt.Sprintf("%dms", ms)
+	}
+	return fmt.Sprintf("%.1fs", float64(ms)/1000)
+}
+
+func relDuration(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%d min", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d hr", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%d days", int(d.Hours()/24))
+	}
+}
