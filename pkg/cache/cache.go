@@ -209,16 +209,47 @@ func Fetch(name string) error {
 	return nil
 }
 
-// CheckoutDetachedHEAD runs `git checkout --detach origin/HEAD` so the
-// cache tree always reflects the default branch's tip without owning a
+// CheckoutDetachedHEAD runs `git checkout --detach --force origin/HEAD` so
+// the cache tree always reflects the default branch's tip without owning a
 // local branch.
+//
+// --force makes the checkout self-healing: the cache is a read-only mirror
+// the user never edits, so there are no local changes worth preserving.
+// Without it, a tree left in a dirty state by an interrupted prior sync
+// (stale index entries, untracked files in the way) would wedge every
+// subsequent sync; --force discards that and resets to origin/HEAD.
+//
+// GIT_LFS_SKIP_SMUDGE=1 keeps the read-only mirror from invoking the LFS
+// smudge filter: a cache only needs the committed pointer files, not the
+// resolved blobs. Without it, checkout would fetch every LFS object on
+// each sync, and a single missing object (e.g. pruned from the server)
+// would fail the whole sync.
 func CheckoutDetachedHEAD(name string) error {
-	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name), "checkout", "--detach", "origin/HEAD")
+	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name), "checkout", "--detach", "--force", "origin/HEAD")
+	cmd.Env = append(os.Environ(), "GIT_LFS_SKIP_SMUDGE=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git checkout: %w (output: %s)", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// RemoteHEADResolves reports whether refs/remotes/origin/HEAD points at a
+// real commit. It is false for an empty remote (no commits pushed), where
+// `git checkout --detach origin/HEAD` would fail because origin/HEAD does
+// not resolve to a commit-ish.
+func RemoteHEADResolves(name string) (bool, error) {
+	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name),
+		"rev-parse", "--verify", "--quiet", "origin/HEAD")
+	err := cmd.Run()
+	if err == nil {
+		return true, nil
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return false, nil // ref doesn't resolve → empty remote, not a failure
+	}
+	return false, err // real exec error (git missing, etc.)
 }
 
 // BranchCount returns the number of remote-tracking branches under
