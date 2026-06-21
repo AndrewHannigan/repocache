@@ -145,10 +145,13 @@ func collisionWarning(cwd, origin string, repos []config.Repo) string {
 		return fmt.Sprintf("> ⚠️ HEADS UP — local checkout collision\n"+
 			">\n"+
 			"> Your current working directory `%s` is also library repo `%s`.\n"+
-			"> They are two independent clones. Before editing anything here, STOP\n"+
-			"> and ask the user which to use:\n"+
-			">   - edit this checkout in place, or\n"+
-			">   - create an isolated workspace: `repocache workspace new %s <branch>`\n"+
+			"> They are two independent clones, and a `repocache workspace` is kept\n"+
+			"> up to date automatically, so it is the fresher copy. This cwd is the\n"+
+			"> one genuinely ambiguous case, though — you may have been launched here\n"+
+			"> on purpose to edit in place. Before editing anything here, STOP and ask\n"+
+			"> the user which to use:\n"+
+			">   - edit this checkout in place (it may be behind upstream), or\n"+
+			">   - create an isolated, always-fresh workspace: `repocache workspace new %s <branch>`\n"+
 			">\n"+
 			"> Do not assume — the choice decides where your commits land.\n",
 			paths.Display(cwd), name, name)
