@@ -9,15 +9,15 @@ func TestNormalizeURL(t *testing.T) {
 		want  string
 	}{
 		{"bare owner is github shorthand", "octocat", "https://github.com/octocat"},
-		{"owner/repo shorthand", "anthropics/anthropic-sdk-python", "https://github.com/anthropics/anthropic-sdk-python"},
-		{"leading slash is trimmed", "/anthropics/sdk", "https://github.com/anthropics/sdk"},
-		{"trailing slash is trimmed", "anthropics/", "https://github.com/anthropics"},
+		{"owner/repo shorthand", "octocat/Hello-World", "https://github.com/octocat/Hello-World"},
+		{"leading slash is trimmed", "/octocat/Hello-World", "https://github.com/octocat/Hello-World"},
+		{"trailing slash is trimmed", "octocat/", "https://github.com/octocat"},
 		{"surrounding whitespace is trimmed", "  octocat  ", "https://github.com/octocat"},
-		{"host without scheme gets https", "github.com/anthropics", "https://github.com/anthropics"},
+		{"host without scheme gets https", "github.com/octocat", "https://github.com/octocat"},
 		{"non-github host without scheme", "gitlab.com/foo/bar", "https://gitlab.com/foo/bar"},
 		{"host:port without scheme", "localhost:8080/foo/bar", "https://localhost:8080/foo/bar"},
-		{"https URL is unchanged", "https://github.com/anthropics/sdk", "https://github.com/anthropics/sdk"},
-		{"https owner URL is unchanged", "https://github.com/anthropics", "https://github.com/anthropics"},
+		{"https URL is unchanged", "https://github.com/octocat/Hello-World", "https://github.com/octocat/Hello-World"},
+		{"https owner URL is unchanged", "https://github.com/octocat", "https://github.com/octocat"},
 		{"ssh URL is unchanged", "ssh://git@github.com/foo/bar.git", "ssh://git@github.com/foo/bar.git"},
 		{"git scheme is unchanged", "git://github.com/foo/bar.git", "git://github.com/foo/bar.git"},
 		{"scp-style remote is unchanged", "git@github.com:foo/bar.git", "git@github.com:foo/bar.git"},
@@ -47,7 +47,7 @@ func TestNormalizeURLClassification(t *testing.T) {
 		t.Errorf("DefaultOwnerName(%q) = %q, %v; want github.com/octocat", owner, got, err)
 	}
 
-	repo := NormalizeURL("anthropics/anthropic-sdk-python")
+	repo := NormalizeURL("octocat/Hello-World")
 	isOwner, err = IsOwnerURL(repo)
 	if err != nil {
 		t.Fatalf("IsOwnerURL(%q) returned error: %v", repo, err)
@@ -55,7 +55,7 @@ func TestNormalizeURLClassification(t *testing.T) {
 	if isOwner {
 		t.Errorf("expanded owner/repo %q should classify as a repo", repo)
 	}
-	if got, err := DefaultName(repo); err != nil || got != "github.com/anthropics/anthropic-sdk-python" {
-		t.Errorf("DefaultName(%q) = %q, %v; want github.com/anthropics/anthropic-sdk-python", repo, got, err)
+	if got, err := DefaultName(repo); err != nil || got != "github.com/octocat/Hello-World" {
+		t.Errorf("DefaultName(%q) = %q, %v; want github.com/octocat/Hello-World", repo, got, err)
 	}
 }
