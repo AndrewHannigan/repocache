@@ -12,8 +12,6 @@ git repo management for terminal coding agents
 - 🧰 **Natively searchable** — `rg`, `grep`, `git`, and `gh` work directly; no wrappers.
 - 🌐 **Simpler multi-repo PRs** — spin up writable workspaces on demand from the read-only repos.
 
-Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](https://developers.openai.com/codex/), and [opencode](https://opencode.ai).
-
 ---
 
 ## Install
@@ -40,15 +38,7 @@ repocache add https://github.com/octocat/Hello-World
 # GitHub shorthand works too — "owner/repo" is expanded against github.com
 repocache add octocat/Hello-World
 
-# ...or track a whole user/org: add discovers its repos and fetches them;
-# later syncs keep pulling any new ones
-repocache add octocat   # bare "owner" shorthand; needs gh
-
-# re-fetch tracked repos any time
-repocache sync
-
-# your agent can now search it; when it wants to edit, this prints a writable path:
-repocache workspace new octocat/Hello-World fix-typo
+# now run claude, cursor-agent, codex, or opencode — your agent knows how to use it
 ```
 
 That's the whole loop. Repocache adds exactly two things to your agent's world:
@@ -112,25 +102,6 @@ url = "https://github.com/octocat"
 
 ---
 
-## Commands
-
-```
-repocache init [--agents=auto|all|none|<list>] [--no-bg-sync]
-repocache uninstall [--agents=...] [--purge]
-repocache add <repo> [--owner|--repo] [--name <n>]
-repocache rm <name> [--force]
-repocache ls [--json]
-repocache sync [<name>...] [--if-older-than <dur>] [--jobs N] [--json]
-repocache workspace {new,list [--json],path,rm [--force]}
-repocache __session-context --agent <key>
-repocache help [<topic>]
-repocache --version
-```
-
-See [SPEC.md §5](./SPEC.md#5-commands) for exact behavior and the full table of stable exit codes.
-
----
-
 ## Why `git clone --reference`, not `git worktree`
 
 Both share an underlying object store, but they are not interchangeable. A worktree of the cache *is* the cache: committing in it mutates `<cache>/.git/refs/...`, breaking the read-only invariant, and worktrees forbid checking out the same branch twice. `--reference` clones keep independent refs, allow two agents on the same branch, and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Repocache sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race. Full comparison in [SPEC.md](./SPEC.md).
@@ -140,14 +111,6 @@ Both share an underlying object store, but they are not interchangeable. A workt
 ## Authentication
 
 Repocache does not manage credentials. Every git operation defers to whatever `git clone <url>` already works with in your shell — HTTPS credential helpers or `ssh-agent`. If `git clone <url>` works, repocache works.
-
----
-
-## Limitations & gotchas
-
-- **Requires `git`.** It's the one hard dependency — every cache and workspace operation shells out to it. Commands that need git (`sync`, `add`, `workspace new`) check for it up front and exit 8 with an "install git" message if it's missing, instead of a cryptic exec error.
-- **Large repos.** Full clones only — no sparse-checkout or partial-clone yet. Chromium/llvm-sized repos will feel it.
-- **Owner tracking needs `gh`.** Discovering a user/org's repos shells out to the [`gh` CLI](https://cli.github.com/) (GitHub / GHE only). It's the one dependency beyond `git`, and only for discovery — if `gh` is missing or unauthenticated, repocache warns and skips discovery while already-known repos keep syncing. Owner reconciliation is additive: repos deleted upstream stay until you `repocache rm` them.
 
 ---
 
