@@ -155,12 +155,12 @@ Behavior:
 2. Parse URL; derive default name (`host/owner/repo` for a repo, `host/owner` for an owner). If `--name` given, use it.
 3. Reject if the name already exists as a repo or an owner → exit 3.
 4. Acquire exclusive lock on config; append the `[[repo]]` or `[[owner]]`; release.
-5. Do not fetch/discover. Print a hint to run `repocache sync`.
+5. Immediately run a `sync` scoped to the just-added entry: a repo is fetched into the cache; an owner is discovered (its repos added as `source`-tagged entries) and fetched. The sync's own output follows the `added` line.
 6. For an owner, additionally check `gh` is installed and authenticated; if not, print a non-fatal warning (the entry is saved and will expand once `gh` is available).
 
-Output (repo): `added <name> (run \`repocache sync\` to fetch)`
-Output (owner): `added owner <name> (run \`repocache sync\` to discover and fetch its repos)`
-Exit codes: 0; 3 (name exists); 7 (config error or both `--owner` and `--repo`).
+Output (repo): `added <name>` followed by the scoped `sync` output.
+Output (owner): `added owner <name>` followed by the scoped `sync` output.
+Exit codes: 0; 3 (name exists); 7 (config error or both `--owner` and `--repo`); plus the `sync` exit codes (5 lock, 6 network) if the implicit sync fails.
 
 ### 5.4 `repocache repo rm <name> [--force]`
 
@@ -178,18 +178,16 @@ Exit codes: 0; 2; 4 (workspace has unsaved work, no `--force`); 5 (cache lock co
 
 ### 5.5 `repocache repo list [--json]`
 
-Lists tracked owners, then repos with last sync time, on-disk size, branch count, and the owner (if any) that auto-added each.
+Lists tracked owners, then repos with last sync time and the owner (if any) that auto-added each. The probes are deliberately cheap (a stat and a small metadata read — no recursive size walk or `git` subprocess) so the output can be embedded verbatim in `session-context` (§8.2), which runs on every session start.
 
 Behavior:
 1. Read config.
 2. For each entry, stat `~/.local/share/repocache/repos/<name>/`:
    - Path (or `null` if never synced)
    - `last_sync_at` from `.git/repocache.meta` (or `null`)
-   - `size_bytes` = recursive size of the cache dir (best-effort)
-   - `branch_count` = count of `refs/remotes/origin/*` (or `0` if never synced)
 3. Output table (human) or a JSON object (JSON).
 
-Human output: when any owners are tracked, an `OWNER / REPOS` table first (each owner and its count of auto-added repos), then the repo table with columns NAME, LAST SYNC (relative), SIZE, BRANCHES, SOURCE (the owner that added the repo, or `—`).
+Human output: when any owners are tracked, an `OWNER / REPOS` table first (each owner and its count of auto-added repos), then the repo table with columns NAME, LAST SYNC (relative), SOURCE (the owner that added the repo, or `—`).
 
 JSON is an object with `repos` and `owners` arrays:
 ```json
@@ -200,9 +198,7 @@ JSON is an object with `repos` and `owners` arrays:
       "url": "...",
       "source": "github.com/owner",  // omitted for user-added repos
       "path": "...|null",
-      "last_sync_at": "ISO8601|null",
-      "size_bytes": 0,
-      "branch_count": 0
+      "last_sync_at": "ISO8601|null"
     }
   ],
   "owners": [
@@ -424,6 +420,13 @@ to drift after an upgrade. Target: ≤ 20 lines. The guide tells the agent:
 - To add a new repo to the library: ask the user to run `repocache repo add <url>`.
 - For more detail: `repocache help <topic>` or `repocache <cmd> --help`.
 - Branch listing and full-text search are done with native git/`rg` — not wrapped.
+
+After the bundled guide, `session-context` appends a live snapshot of the
+library — the `repo list` table — so the agent starts each session knowing
+which repos exist without having to run it. The snapshot is generated at hook
+time (so it reflects the current cache) and is best-effort: if the library
+can't be read, or nothing is tracked yet, it is omitted and only the guide is
+emitted.
 
 ### 8.3 Guide injection via the `session-context` hook
 

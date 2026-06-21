@@ -19,6 +19,10 @@ import (
 
 const syncLockTimeout = 5 * time.Minute
 
+// syncDefaultJobs is the default concurrency for `sync`, also used when an
+// `repo add` triggers an implicit sync of the just-added entry.
+const syncDefaultJobs = 4
+
 func newSyncCmd() *cobra.Command {
 	var (
 		jobs        int
@@ -38,7 +42,7 @@ Runs in parallel up to --jobs.`,
 			return runSync(args, jobs, ifOlderThan, jsonOut)
 		},
 	}
-	cmd.Flags().IntVarP(&jobs, "jobs", "j", 4, "max concurrent fetches")
+	cmd.Flags().IntVarP(&jobs, "jobs", "j", syncDefaultJobs, "max concurrent fetches")
 	cmd.Flags().DurationVar(&ifOlderThan, "if-older-than", 0, "skip repos synced within this duration (e.g. 1h)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit NDJSON results")
 	return cmd

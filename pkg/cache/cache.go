@@ -1,9 +1,8 @@
 // Package cache inspects on-disk state of cache repos: existence, size,
-// branch count, and the .git/repocache.meta sidecar.
+// and the .git/repocache.meta sidecar.
 package cache
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -250,27 +249,4 @@ func RemoteHEADResolves(name string) (bool, error) {
 		return false, nil // ref doesn't resolve → empty remote, not a failure
 	}
 	return false, err // real exec error (git missing, etc.)
-}
-
-// BranchCount returns the number of remote-tracking branches under
-// refs/remotes/origin (excluding the symbolic HEAD). Returns 0 if the
-// cache does not exist.
-func BranchCount(name string) (int, error) {
-	if !Exists(name) {
-		return 0, nil
-	}
-	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name),
-		"for-each-ref", "--format=%(refname)", "refs/remotes/origin")
-	out, err := cmd.Output()
-	if err != nil {
-		return 0, err
-	}
-	count := 0
-	for _, line := range bytes.Split(bytes.TrimSpace(out), []byte{'\n'}) {
-		if len(line) == 0 || bytes.HasSuffix(line, []byte("/HEAD")) {
-			continue
-		}
-		count++
-	}
-	return count, nil
 }

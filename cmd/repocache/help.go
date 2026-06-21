@@ -154,8 +154,8 @@ confirmation before deleting (and refuses when stdin is not a TTY).
 
   repocache repo add <url> [--name <n>] [--owner|--repo]
     Add a repo to the library. Name defaults to <host>/<owner>/<repo>
-    derived from URL. --name overrides. Does not fetch — run 'sync'.
-    Exit 3 if the name already exists.
+    derived from URL. --name overrides. Fetches the new repo right away
+    (runs a scoped 'sync'). Exit 3 if the name already exists.
 
     If <url> is a bare user/org (one path segment, e.g.
     https://github.com/AndrewHannigan) it is tracked as an owner instead;
@@ -172,8 +172,8 @@ confirmation before deleting (and refuses when stdin is not a TTY).
     auto-added (with the same safety checks).
 
   repocache repo list [--json]
-    Show tracked owners, then repos with last sync, on-disk size, branch
-    count, and the owner that auto-added each (if any).
+    Show tracked owners, then repos with last sync and the owner that
+    auto-added each (if any).
 `,
 
 	"owner": `owner — track a whole user or org
