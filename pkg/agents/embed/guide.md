@@ -6,7 +6,7 @@ You have a local library of git repos managed by `repocache`.
   Search and read them with your usual tools. Do not modify files here.
 - **List the library**: `repocache repo list`
 - **Edit a repo**: `repocache workspace new <repo> <branch>` creates a writable workspace
-  and prints its path. Make changes there, then commit, push, open PR with `gh` as normal.
+  and prints its path. Make changes there, then commit, push, open PR as normal.
 - **Library repo also checked out locally?** If the same repo exists as a separate
   working-directory checkout (e.g. under `~/src`), don't assume — ask the user whether
   to edit that checkout in place or create a `repocache workspace`.
