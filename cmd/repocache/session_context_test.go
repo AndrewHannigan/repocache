@@ -23,10 +23,10 @@ func TestPrintSessionContext(t *testing.T) {
 	// Output is wrapped in <repocache>...</repocache> tags so it can be
 	// extracted unambiguously from surrounding hook output.
 	out := strings.TrimSuffix(buf.String(), "\n")
-	if !strings.HasPrefix(out, "<repocache>") || !strings.HasSuffix(out, "</repocache>") {
-		t.Fatalf("output should be wrapped in <repocache> tags:\n%s", buf.String())
+	if !strings.HasPrefix(out, "<repocache-session-context>") || !strings.HasSuffix(out, "</repocache-session-context>") {
+		t.Fatalf("output should be wrapped in <repocache-session-context> tags:\n%s", buf.String())
 	}
-	inner := strings.TrimSuffix(strings.TrimPrefix(out, "<repocache>"), "</repocache>")
+	inner := strings.TrimSuffix(strings.TrimPrefix(out, "<repocache-session-context>"), "</repocache-session-context>")
 
 	// The wrapped content must be valid JSON in the envelope all three agents accept.
 	var env sessionContextEnvelope

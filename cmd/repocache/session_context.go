@@ -27,10 +27,10 @@ func newSessionContextCmd() *cobra.Command {
 		Short: "Emit the repocache guide as SessionStart hook context (JSON)",
 		Long: `session-context prints a JSON object that terminal coding agents read
 from their SessionStart hook and inject into the model's context,
-delimited by <repocache>...</repocache> tags so it can be extracted
-unambiguously from surrounding hook output:
+delimited by <repocache-session-context>...</repocache-session-context>
+tags so it can be extracted unambiguously from surrounding hook output:
 
-    <repocache>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</repocache>
+    <repocache-session-context>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</repocache-session-context>
 
 Claude Code, Codex CLI, and Gemini CLI all accept this shape (Gemini
 requires it — it rejects plain stdout). The text is generated from the
@@ -63,7 +63,7 @@ func printSessionContext(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(w, "<repocache>%s</repocache>\n", string(data))
+	_, err = fmt.Fprintf(w, "<repocache-session-context>%s</repocache-session-context>\n", string(data))
 	return err
 }
 
