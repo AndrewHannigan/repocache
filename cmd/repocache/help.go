@@ -223,7 +223,8 @@ Behavior per repo:
   3. If --if-older-than D and last_sync_at is fresher than D, skip.
   4. chmod -R u+w on the working tree (excluding .git/) so checkout works.
   5. git fetch --all --prune --tags
-  6. git checkout --detach origin/HEAD
+  6. git checkout --detach --force origin/HEAD (skipped if the remote is
+     empty; GIT_LFS_SKIP_SMUDGE=1 keeps LFS blobs out of the mirror).
   7. chmod -R a-w on the working tree (excluding .git/) — read-only again.
   8. Write .git/repocache.meta with new last_sync_at.
 

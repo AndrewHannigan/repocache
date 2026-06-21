@@ -337,8 +337,17 @@ func syncOne(name, url string, ifOlderThan time.Duration) syncResult {
 	if err := cache.Fetch(name); err != nil {
 		return finishErr(r, start, err)
 	}
-	if err := cache.CheckoutDetachedHEAD(name); err != nil {
+	// An empty remote (no commits pushed) has no origin/HEAD to check out;
+	// leave the tree empty and record a successful, "empty" sync rather than
+	// failing every time. A later push makes origin/HEAD resolve normally.
+	hasHEAD, err := cache.RemoteHEADResolves(name)
+	if err != nil {
 		return finishErr(r, start, err)
+	}
+	if hasHEAD {
+		if err := cache.CheckoutDetachedHEAD(name); err != nil {
+			return finishErr(r, start, err)
+		}
 	}
 	if err := cache.LockTree(name); err != nil {
 		return finishErr(r, start, fmt.Errorf("chmod a-w: %w", err))
@@ -348,6 +357,9 @@ func syncOne(name, url string, ifOlderThan time.Duration) syncResult {
 	}
 
 	r.Status = "ok"
+	if !hasHEAD {
+		r.Note = "empty"
+	}
 	if size, err := cache.Size(name); err == nil {
 		r.SizeBytes = size
 	}
@@ -365,7 +377,11 @@ func finishErr(r syncResult, start time.Time, err error) syncResult {
 func printSyncLine(r syncResult) {
 	switch r.Status {
 	case "ok":
-		fmt.Printf("  %s  ✓  %s  (%s)\n", r.Name, humanSize(r.SizeBytes), formatMs(r.DurationMs))
+		if r.Note != "" {
+			fmt.Printf("  %s  ✓  %s — %s  (%s)\n", r.Name, humanSize(r.SizeBytes), r.Note, formatMs(r.DurationMs))
+		} else {
+			fmt.Printf("  %s  ✓  %s  (%s)\n", r.Name, humanSize(r.SizeBytes), formatMs(r.DurationMs))
+		}
 	case "skipped":
 		fmt.Printf("  %s  -  skipped (%s)\n", r.Name, r.Note)
 	case "error":
