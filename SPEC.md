@@ -495,6 +495,18 @@ the JSON envelope does. opencode (§8.8) is plugin-based: it pushes the text
 into the model's system prompt itself rather than handing it to hook
 plumbing (`--agent opencode`).
 
+Caveat — Codex does not conceal the guide from the user. Unlike Claude's
+`additionalContext` (which is injected silently), Codex's interactive TUI
+prints the hook's stdout as a visible "SessionStart hook (completed) / hook
+context: …" event on every session start. This holds regardless of output
+shape (plain stdout vs. the `hookSpecificOutput` envelope); the docs'
+"developer context" wording is about the model message role, not TUI
+visibility. The `suppressOutput` field is the intended fix but is currently
+a no-op in the TUI (honored only by the non-interactive `codex exec`
+renderer), so for now the guide is unavoidably visible in Codex. Track
+https://github.com/openai/codex/issues/15497; once it lands, switch the
+codex shape to the envelope with `suppressOutput:true` for silent injection.
+
 Back-compat: a bare `repocache __session-context` (no `--agent`, the hook
 command earlier versions installed) defaults to the claude shape — the
 envelope every hook agent accepts — so already-installed hooks keep
