@@ -86,11 +86,35 @@ func TestAntigravityInstallUsesGoogleSettings(t *testing.T) {
 		t.Errorf("AddedHooks = %v, want both session-context and bg-sync", got.AddedHooks)
 	}
 
-	data, _ := os.ReadFile(filepath.Join(home, ".antigravity", "settings.json"))
+	data, _ := os.ReadFile(filepath.Join(home, ".gemini", "settings.json"))
 	for _, want := range []string{"includeDirectories", sessionContextCommand("antigravity"), BgSyncCommand} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("settings.json missing %q\n%s", want, data)
 		}
+	}
+}
+
+// Antigravity shares ~/.gemini with the standalone Gemini CLI, so it is
+// detected by its own app-data subdir, not by ~/.gemini alone.
+func TestAntigravityDetectsViaAppDataSubdir(t *testing.T) {
+	home := withHome(t)
+	a := NewAntigravity()
+
+	if a.Detected() {
+		t.Fatal("Detected() = true with no ~/.gemini")
+	}
+	// ~/.gemini alone (e.g. only the standalone Gemini CLI) must not count.
+	if err := os.MkdirAll(filepath.Join(home, ".gemini"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if a.Detected() {
+		t.Error("Detected() = true with ~/.gemini but no antigravity-cli subdir")
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".gemini", "antigravity-cli"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if !a.Detected() {
+		t.Error("Detected() = false with ~/.gemini/antigravity-cli present")
 	}
 }
 

@@ -5,21 +5,28 @@ import (
 	"path/filepath"
 )
 
-// Antigravity implements Agent for Google's Antigravity CLI.
+// Antigravity implements Agent for Google's Antigravity CLI. Antigravity is a
+// Gemini-CLI fork and shares the Gemini config dir (~/.gemini): user settings —
+// includeDirectories and SessionStart hooks — live in ~/.gemini/settings.json,
+// the same file the standalone Gemini CLI reads.
 type Antigravity struct {
-	dir string
+	dir string // the Gemini config dir, ~/.gemini
 }
 
 func NewAntigravity() *Antigravity {
 	home, _ := os.UserHomeDir()
-	return &Antigravity{dir: filepath.Join(home, ".antigravity")}
+	return &Antigravity{dir: filepath.Join(home, ".gemini")}
 }
 
 func (a *Antigravity) Key() string  { return "antigravity" }
 func (a *Antigravity) Name() string { return "Antigravity CLI" }
 
+// Detected reports whether the Antigravity CLI is installed. Because ~/.gemini
+// is shared with the standalone Gemini CLI, its mere presence is ambiguous;
+// Antigravity is identified by its own app-data subdir, ~/.gemini/antigravity-cli,
+// which the CLI creates on first run.
 func (a *Antigravity) Detected() bool {
-	s, err := os.Stat(a.dir)
+	s, err := os.Stat(filepath.Join(a.dir, "antigravity-cli"))
 	return err == nil && s.IsDir()
 }
 

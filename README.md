@@ -68,7 +68,7 @@ Everything else — searching, branch listing, PR creation — uses tools the ag
 |-------|-----------|---------------------|--------------------|
 | Claude Code | `~/.claude/` | `settings.json` → `permissions.additionalDirectories` | session-context + bg-sync |
 | Codex CLI | `~/.codex/` | `config.toml` → `sandbox_workspace_write.writable_roots` | session-context + bg-sync (requires trust)¹ |
-| Antigravity CLI | `~/.antigravity/` | `settings.json` → `includeDirectories` | session-context + bg-sync |
+| Antigravity CLI | `~/.gemini/` | `settings.json` → `includeDirectories` | session-context + bg-sync |
 | opencode | `~/.config/opencode/` | n/a² | plugin (see below)² |
 
 ¹ Codex requires you to trust new hooks: after `repocache init`, open Codex CLI once and run `/hooks`.
