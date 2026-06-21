@@ -157,8 +157,13 @@ func TestPrintSessionContextAntigravityNoPayload(t *testing.T) {
 // The plain-text agents (codex, opencode) get the raw Markdown body — no
 // envelope, no delimiter tags. Codex injects plain stdout as developer
 // context; opencode's plugin pushes the text into the system prompt directly.
+// Codex additionally gets a leading newline so the body breaks off Codex's
+// "hook context: " label onto its own line.
 func TestPrintSessionContextPlainTextAgents(t *testing.T) {
-	for _, agent := range []string{"codex", "opencode"} {
+	for agent, wantPrefix := range map[string]string{
+		"codex":    "\n" + string(agents.DocContent),
+		"opencode": string(agents.DocContent),
+	} {
 		t.Run(agent, func(t *testing.T) {
 			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
@@ -170,8 +175,8 @@ func TestPrintSessionContextPlainTextAgents(t *testing.T) {
 			if strings.Contains(out, "<repocache-session-context>") || strings.Contains(out, "hookSpecificOutput") {
 				t.Errorf("%s output must be raw body, not the hook envelope:\n%s", agent, out)
 			}
-			if !strings.HasPrefix(out, string(agents.DocContent)) {
-				t.Errorf("%s output should start with the embedded guide:\n%s", agent, out)
+			if !strings.HasPrefix(out, wantPrefix) {
+				t.Errorf("%s output should start with %q:\n%s", agent, wantPrefix, out)
 			}
 			if !strings.HasSuffix(out, "\n") {
 				t.Errorf("output should be newline-terminated")

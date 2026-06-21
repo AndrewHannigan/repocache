@@ -85,8 +85,12 @@ func (c *Claude) SessionContextOutput(body string) (string, error) {
 // the raw Markdown body — no JSON envelope, no delimiter tags. (Codex also
 // accepts the hookSpecificOutput envelope, but plain text renders more cleanly
 // as the injected developer message.)
+//
+// A leading newline is prepended because Codex prints hook stdout right after
+// its "hook context: " label on the same line; the blank line breaks the body
+// onto its own line so the "# repocache" heading renders cleanly.
 func (c *Codex) SessionContextOutput(body string) (string, error) {
-	return body, nil
+	return "\n" + body, nil
 }
 
 // Antigravity CLI injects the guide via a PreInvocation hook (it has no
