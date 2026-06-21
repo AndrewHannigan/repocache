@@ -20,10 +20,18 @@ func TestPrintSessionContext(t *testing.T) {
 		t.Fatalf("printSessionContext: %v", err)
 	}
 
-	// Must be valid JSON in the envelope all three agents accept.
+	// Output is wrapped in <repocache>...</repocache> tags so it can be
+	// extracted unambiguously from surrounding hook output.
+	out := strings.TrimSuffix(buf.String(), "\n")
+	if !strings.HasPrefix(out, "<repocache>") || !strings.HasSuffix(out, "</repocache>") {
+		t.Fatalf("output should be wrapped in <repocache> tags:\n%s", buf.String())
+	}
+	inner := strings.TrimSuffix(strings.TrimPrefix(out, "<repocache>"), "</repocache>")
+
+	// The wrapped content must be valid JSON in the envelope all three agents accept.
 	var env sessionContextEnvelope
-	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
-		t.Fatalf("output is not valid JSON: %v\n%s", err, buf.String())
+	if err := json.Unmarshal([]byte(inner), &env); err != nil {
+		t.Fatalf("wrapped output is not valid JSON: %v\n%s", err, inner)
 	}
 	if env.HookSpecificOutput.HookEventName != "SessionStart" {
 		t.Errorf("hookEventName = %q, want SessionStart", env.HookSpecificOutput.HookEventName)
