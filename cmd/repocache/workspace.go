@@ -67,11 +67,22 @@ func runWorkspaceNew(name, branch, base string) error {
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
-	if !cache.Exists(name) {
-		return errs.New(errs.NotFound, "cache repo not present; run `repocache sync %s` first", name)
-	}
 	if workspace.Exists(name, branch) {
 		return errs.New(errs.Exists, "workspace already exists at %s", workspace.PathFor(name, branch))
+	}
+	// Refresh the cache first so the workspace forks from up-to-date code.
+	// syncOne clones the repo if it isn't cached yet. If the sync fails but a
+	// cache already exists, fall back to it (so `new` still works offline);
+	// only hard-fail when there is nothing cached to fork from.
+	fmt.Fprintf(os.Stderr, "syncing %s...\n", name)
+	if res := syncOne(name, repo.URL, 0); res.Status == "error" {
+		if !cache.Exists(name) {
+			if res.Error == "locked" {
+				return errs.New(errs.Locked, "could not sync %s: locked by another process", name)
+			}
+			return errs.New(errs.Network, "could not sync %s: %s", name, res.Error)
+		}
+		fmt.Fprintf(os.Stderr, "warning: could not refresh %s (%s); using existing cache\n", name, res.Error)
 	}
 	path, err := workspace.New(name, branch, base, repo.URL)
 	if err != nil {
@@ -82,6 +93,44 @@ func runWorkspaceNew(name, branch, base string) error {
 	}
 	fmt.Println(path)
 	return nil
+}
+
+// resolveWorkspaceName maps a possibly-shorthand repo name to the name a
+// workspace lives under on disk, so `path` and `rm` accept the same shorthand
+// as `new` (e.g. "repocache" → "github.com/AndrewHannigan/repocache").
+//
+// It prefers a workspace that already exists under the name as given — so
+// exact/full names, and workspaces whose repo is no longer in the config,
+// still resolve — and only falls back to config resolution otherwise. On any
+// failure it returns the name unchanged, letting the caller surface its normal
+// "no workspace at <path>" not-found error.
+func resolveWorkspaceName(name, branch string) string {
+	if workspace.Exists(name, branch) {
+		return name
+	}
+	c, err := config.Load()
+	if err != nil {
+		return name
+	}
+	if full, ok := resolveRepoName(c, name); ok {
+		return full
+	}
+	return name
+}
+
+// resolveRepoName resolves name to a repo's full canonical name via the
+// config, the same rule `new` uses. ok is false when name doesn't resolve to
+// exactly one repo. Pure (takes the config), so it is unit-testable.
+func resolveRepoName(c *config.Config, name string) (string, bool) {
+	repo, err := c.Resolve(name)
+	if err != nil {
+		return "", false
+	}
+	full, err := repo.ResolvedName()
+	if err != nil {
+		return "", false
+	}
+	return full, true
 }
 
 func newWorkspaceListCmd() *cobra.Command {
@@ -145,7 +194,8 @@ func newWorkspacePathCmd() *cobra.Command {
 		Short: "Print the absolute workspace path",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			name, branch := args[0], args[1]
+			branch := args[1]
+			name := resolveWorkspaceName(args[0], branch)
 			if !workspace.Exists(name, branch) {
 				return errs.New(errs.NotFound, "no workspace at %s", workspace.PathFor(name, branch))
 			}
@@ -170,6 +220,7 @@ func newWorkspaceRmCmd() *cobra.Command {
 }
 
 func runWorkspaceRm(name, branch string, force bool) error {
+	name = resolveWorkspaceName(name, branch)
 	if !workspace.Exists(name, branch) {
 		return errs.New(errs.NotFound, "no workspace at %s", workspace.PathFor(name, branch))
 	}

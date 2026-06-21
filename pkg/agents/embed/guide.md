@@ -27,5 +27,6 @@ You have a local library of git repos managed by `repocache`.
   and fetches new ones automatically. Needs `gh` installed and authenticated.
 - **More details**: `repocache help <topic>` or `repocache <cmd> --help`.
 
-If `workspace new` says "not in cache", run `repocache sync <repo>` first.
+`workspace new` syncs the repo first, so the workspace is always up to date
+(and an uncached repo is fetched on demand — no need to `sync` it yourself).
 Branch listing and full-text search use your standard tools — not wrapped.

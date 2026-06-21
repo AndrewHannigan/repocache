@@ -248,10 +248,13 @@ A workspace is a git clone created with --reference against the cache,
 sharing object storage but with independent refs. Edits happen here.
 
   repocache workspace new <repo> <branch> [--base <branch>]
-    Clone --reference into ~/.repocache/workspaces/.../<branch>/.
-    If <branch> exists on origin, check it out. Otherwise create it off
-    <base> (or origin/HEAD). Prints the absolute workspace path on stdout;
-    make changes there, then commit and push.
+    Syncs the repo first (cloning it into the cache if needed), so the
+    workspace forks from up-to-date code; if the sync fails but a cache
+    exists, it warns and uses that. Then clones --reference into
+    ~/.repocache/workspaces/.../<branch>/. If <branch> exists on origin,
+    check it out. Otherwise create it off <base> (or origin/HEAD). Prints
+    the absolute workspace path on stdout; make changes there, then commit
+    and push.
 
   repocache workspace list [--json]
     Every workspace with repo, branch, dirty state, unpushed-commit count,
