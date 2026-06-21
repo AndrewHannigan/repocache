@@ -73,7 +73,7 @@ func Available() error {
 }
 
 // ListOwnerRepos lists the repos under ownerURL (e.g.
-// "https://github.com/AndrewHannigan") subject to f. On success it returns one
+// "https://github.com/octocat") subject to f. On success it returns one
 // entry per repo with a clone URL matching ownerURL's protocol. It returns
 // ErrGhMissing / ErrGhUnauthed (wrapped) when gh can't be used, so the caller
 // can skip this owner and continue syncing already-known repos.

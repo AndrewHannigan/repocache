@@ -8,11 +8,11 @@ func TestNormalizeURL(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"bare owner is github shorthand", "AndrewHannigan", "https://github.com/AndrewHannigan"},
+		{"bare owner is github shorthand", "octocat", "https://github.com/octocat"},
 		{"owner/repo shorthand", "anthropics/anthropic-sdk-python", "https://github.com/anthropics/anthropic-sdk-python"},
 		{"leading slash is trimmed", "/anthropics/sdk", "https://github.com/anthropics/sdk"},
 		{"trailing slash is trimmed", "anthropics/", "https://github.com/anthropics"},
-		{"surrounding whitespace is trimmed", "  AndrewHannigan  ", "https://github.com/AndrewHannigan"},
+		{"surrounding whitespace is trimmed", "  octocat  ", "https://github.com/octocat"},
 		{"host without scheme gets https", "github.com/anthropics", "https://github.com/anthropics"},
 		{"non-github host without scheme", "gitlab.com/foo/bar", "https://gitlab.com/foo/bar"},
 		{"host:port without scheme", "localhost:8080/foo/bar", "https://localhost:8080/foo/bar"},
@@ -35,7 +35,7 @@ func TestNormalizeURL(t *testing.T) {
 // Shorthand must round-trip through the same parsing the add path uses: an
 // expanded bare owner classifies as an owner, an expanded owner/repo as a repo.
 func TestNormalizeURLClassification(t *testing.T) {
-	owner := NormalizeURL("AndrewHannigan")
+	owner := NormalizeURL("octocat")
 	isOwner, err := IsOwnerURL(owner)
 	if err != nil {
 		t.Fatalf("IsOwnerURL(%q) returned error: %v", owner, err)
@@ -43,8 +43,8 @@ func TestNormalizeURLClassification(t *testing.T) {
 	if !isOwner {
 		t.Errorf("expanded bare owner %q should classify as an owner", owner)
 	}
-	if got, err := DefaultOwnerName(owner); err != nil || got != "github.com/AndrewHannigan" {
-		t.Errorf("DefaultOwnerName(%q) = %q, %v; want github.com/AndrewHannigan", owner, got, err)
+	if got, err := DefaultOwnerName(owner); err != nil || got != "github.com/octocat" {
+		t.Errorf("DefaultOwnerName(%q) = %q, %v; want github.com/octocat", owner, got, err)
 	}
 
 	repo := NormalizeURL("anthropics/anthropic-sdk-python")

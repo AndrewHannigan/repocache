@@ -41,13 +41,13 @@ func newRepoAddCmd() *cobra.Command {
 		Long: `add appends a repo to the library. <repo> may be a full git URL
 (https://, ssh://, or scp-style git@host:owner/repo) or GitHub shorthand:
 a bare "owner/repo" or "owner" is expanded against github.com, so
-"repocache repo add AndrewHannigan/repocache" and "repocache repo add
-AndrewHannigan" both just work.
+"repocache repo add octocat/Hello-World" and "repocache repo add octocat"
+both just work.
 
 If <repo> points at a bare user or org (a single path segment, e.g.
-AndrewHannigan or https://github.com/AndrewHannigan), it is tracked as an
-owner instead: each sync discovers that owner's repos via gh and adds any
-new ones automatically.
+octocat or https://github.com/octocat), it is tracked as an owner instead:
+each sync discovers that owner's repos via gh and adds any new ones
+automatically.
 
 Detection is automatic from the shape; force it with --owner / --repo.`,
 		Args: cobra.ExactArgs(1),
@@ -65,7 +65,7 @@ func runRepoAdd(input, overrideName string, asOwner, asRepo bool) error {
 	if asOwner && asRepo {
 		return errs.New(errs.Config, "--owner and --repo are mutually exclusive")
 	}
-	// Expand shorthand (e.g. "AndrewHannigan" or "owner/repo") into a full
+	// Expand shorthand (e.g. "octocat" or "owner/repo") into a full
 	// URL up front so classification, naming, and the stored config entry all
 	// use the same canonical form.
 	url := paths.NormalizeURL(input)
