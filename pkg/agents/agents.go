@@ -43,6 +43,11 @@ type Agent interface {
 type Installed struct {
 	AddedPaths []string `json:"added_paths,omitempty"`
 	AddedHooks []string `json:"added_hooks,omitempty"`
+	// AddedFiles are whole files repocache materialized (not edits to an
+	// existing settings file). Used by agents like opencode whose
+	// integration is a dropped-in plugin file rather than config edits;
+	// uninstall deletes exactly these.
+	AddedFiles []string `json:"added_files,omitempty"`
 }
 
 // All returns the registered set of agents. New agents are added here.
@@ -51,6 +56,7 @@ func All() []Agent {
 		NewClaude(),
 		NewCodex(),
 		NewGemini(),
+		NewOpencode(),
 	}
 }
 

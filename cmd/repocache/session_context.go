@@ -22,7 +22,8 @@ import (
 const SessionContextCommand = "repocache session-context"
 
 func newSessionContextCmd() *cobra.Command {
-	return &cobra.Command{
+	var text bool
+	cmd := &cobra.Command{
 		Use:   "session-context",
 		Short: "Emit the repocache guide as SessionStart hook context (JSON)",
 		Long: `session-context prints a JSON object that terminal coding agents read
@@ -37,12 +38,23 @@ requires it — it rejects plain stdout). The text is generated from the
 running binary, so it is always current: there is no on-disk doc to
 drift after an upgrade. It also appends a live snapshot of the library
 (the "repo list" table) so the agent knows which repos are available
-without having to run it.`,
+without having to run it.
+
+--text prints just the Markdown guide body, with no JSON envelope or
+delimiters. opencode's plugin consumes this and pushes it into the
+model's system prompt itself, so it needs the raw text, not the hook
+envelope.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if text {
+				_, err := fmt.Fprintln(os.Stdout, sessionContextBody())
+				return err
+			}
 			return printSessionContext(os.Stdout)
 		},
 	}
+	cmd.Flags().BoolVar(&text, "text", false, "print the raw guide body (no JSON envelope); for opencode's plugin")
+	return cmd
 }
 
 // sessionContextEnvelope is the JSON shape all three agents accept for
@@ -164,10 +176,13 @@ func collisionWarning(cwd, origin string, repos []config.Repo) string {
 		return fmt.Sprintf("> ⚠️ HEADS UP — local checkout collision\n"+
 			">\n"+
 			"> Your current working directory `%s` is also library repo `%s`.\n"+
-			"> They are two independent clones. Before editing anything here, STOP\n"+
-			"> and ask the user which to use:\n"+
-			">   - edit this checkout in place, or\n"+
-			">   - create an isolated workspace: `repocache workspace new %s <branch>`\n"+
+			"> They are two independent clones, and a `repocache workspace` is kept\n"+
+			"> up to date automatically, so it is the fresher copy. This cwd is the\n"+
+			"> one genuinely ambiguous case, though — you may have been launched here\n"+
+			"> on purpose to edit in place. Before editing anything here, STOP and ask\n"+
+			"> the user which to use:\n"+
+			">   - edit this checkout in place (it may be behind upstream), or\n"+
+			">   - create an isolated, always-fresh workspace: `repocache workspace new %s <branch>`\n"+
 			">\n"+
 			"> Do not assume — the choice decides where your commits land.\n",
 			paths.Display(cwd), name, name)

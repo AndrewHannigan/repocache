@@ -14,6 +14,9 @@ const (
 	Locked   = 5
 	Network  = 6
 	Config   = 7
+
+	// MissingDep means a required external program (git) is not on PATH.
+	MissingDep = 8
 )
 
 // Coded wraps an error with a specific exit code. main.go inspects this

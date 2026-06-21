@@ -99,6 +99,62 @@ func TestClaudeInstallMigratesLegacy(t *testing.T) {
 	}
 }
 
+// opencode integrates via a dropped-in plugin file (no settings edits, no
+// path allowlist). Install writes the plugin and records it in AddedFiles.
+func TestOpencodeInstallWritesPlugin(t *testing.T) {
+	home := withHome(t)
+
+	got, err := NewOpencode().Install(InstallOptions{})
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	plugin := filepath.Join(home, ".config", "opencode", "plugin", "repocache.js")
+	if _, err := os.Stat(plugin); err != nil {
+		t.Errorf("plugin not written: %v", err)
+	}
+	if !sliceHas(got.AddedFiles, plugin) {
+		t.Errorf("AddedFiles = %v, want %q", got.AddedFiles, plugin)
+	}
+	if len(got.AddedHooks) != 0 || len(got.AddedPaths) != 0 {
+		t.Errorf("opencode should record no hooks/paths; got hooks=%v paths=%v", got.AddedHooks, got.AddedPaths)
+	}
+
+	data, _ := os.ReadFile(plugin)
+	if !strings.Contains(string(data), "session-context --text") {
+		t.Errorf("plugin missing session-context call:\n%s", data)
+	}
+
+	// Idempotent: a second install with the plugin already present and
+	// unchanged reports nothing newly added.
+	again, err := NewOpencode().Install(InstallOptions{})
+	if err != nil {
+		t.Fatalf("second Install: %v", err)
+	}
+	if len(again.AddedFiles) != 0 {
+		t.Errorf("second Install should be a no-op; got AddedFiles=%v", again.AddedFiles)
+	}
+}
+
+// Uninstall deletes exactly the plugin file it recorded.
+func TestOpencodeUninstallReverses(t *testing.T) {
+	home := withHome(t)
+	o := NewOpencode()
+
+	installed, err := o.Install(InstallOptions{})
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if err := o.Uninstall(installed); err != nil {
+		t.Fatalf("Uninstall: %v", err)
+	}
+
+	plugin := filepath.Join(home, ".config", "opencode", "plugin", "repocache.js")
+	if _, err := os.Stat(plugin); !os.IsNotExist(err) {
+		t.Errorf("plugin should be removed, stat err = %v", err)
+	}
+}
+
 // Uninstall removes the hooks it recorded.
 func TestClaudeUninstallReverses(t *testing.T) {
 	home := withHome(t)

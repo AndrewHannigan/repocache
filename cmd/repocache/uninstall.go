@@ -65,8 +65,13 @@ func runUninstall(flag string, purge bool) error {
 			continue
 		}
 		delete(state.Agents, a.Key())
-		fmt.Printf("  removed %d directories, %d hooks\n",
-			len(prev.AddedPaths), len(prev.AddedHooks))
+		if len(prev.AddedFiles) > 0 {
+			fmt.Printf("  removed %d directories, %d hooks, %d plugin file(s)\n",
+				len(prev.AddedPaths), len(prev.AddedHooks), len(prev.AddedFiles))
+		} else {
+			fmt.Printf("  removed %d directories, %d hooks\n",
+				len(prev.AddedPaths), len(prev.AddedHooks))
+		}
 	}
 	if err := agents.SaveState(state); err != nil {
 		return errs.Wrap(errs.Config, err)

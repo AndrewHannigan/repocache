@@ -2,14 +2,14 @@
 
 > Give your terminal coding agent a fast, **read-only library** of git repos to search across — and a one-command shortcut to spin up **writable workspaces** from any branch when it wants to edit.
 
-Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](https://developers.openai.com/codex/), and [Gemini CLI](https://github.com/google-gemini/gemini-cli).
+Built for [Claude Code](https://www.anthropic.com/claude-code), [Codex CLI](https://developers.openai.com/codex/), [Gemini CLI](https://github.com/google-gemini/gemini-cli), and [opencode](https://opencode.ai).
 
 ![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
 
 - 🔒 **OS-enforced read-only repos** — every repo is a pristine reference that is impossible to clobber.
 - ⚡ **Cheap workspaces** — `git clone --reference` shares the object store; no history re-download.
 - 🔄 **Repos never stale** — refreshed in the background at session start.
-- 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, and Gemini CLI.
+- 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, Gemini CLI, and opencode.
 - 📦 **Persistent shared library** — cached once and reused across sessions, never re-cloned to `/tmp`.
 - 🧰 **Natively searchable** — `rg`, `grep`, `git`, and `gh` work directly; no wrappers.
 - 🌐 **Simpler multi-repo PRs** — spin up writable workspaces on demand from the read-only repos.
@@ -69,8 +69,11 @@ Everything else — searching, branch listing, PR creation — uses tools the ag
 | Claude Code | `~/.claude/` | `settings.json` → `permissions.additionalDirectories` | session-context + bg-sync |
 | Codex CLI | `~/.codex/` | `config.toml` → `sandbox_workspace_write.writable_roots` | session-context + bg-sync (requires trust)¹ |
 | Gemini CLI | `~/.gemini/` | `settings.json` → `includeDirectories` | session-context + bg-sync |
+| opencode | `~/.config/opencode/` | n/a² | plugin (see below)² |
 
 ¹ Codex requires you to trust new hooks: after `repocache init`, open Codex CLI once and run `/hooks`.
+
+² opencode has no SessionStart shell hook and no path allowlist. Instead, `init` drops a plugin at `~/.config/opencode/plugin/repocache.js`, auto-loaded at startup; it runs `repocache __bg-sync` and injects the guide into the model's system prompt via opencode's `experimental.chat.system.transform` hook. `uninstall` deletes the file.
 
 All edits are idempotent and recorded in a sidecar state file, so `repocache uninstall` removes only what repocache added.
 
@@ -141,6 +144,7 @@ Repocache does not manage credentials. Every git operation defers to whatever `g
 
 ## Limitations & gotchas
 
+- **Requires `git`.** It's the one hard dependency — every cache and workspace operation shells out to it. Commands that need git (`sync`, `repo add`, `workspace new`) check for it up front and exit 8 with an "install git" message if it's missing, instead of a cryptic exec error.
 - **Large repos.** Full clones only — no sparse-checkout or partial-clone yet. Chromium/llvm-sized repos will feel it.
 - **Owner tracking needs `gh`.** Discovering a user/org's repos shells out to the [`gh` CLI](https://cli.github.com/) (GitHub / GHE only). It's the one dependency beyond `git`, and only for discovery — if `gh` is missing or unauthenticated, repocache warns and skips discovery while already-known repos keep syncing. Owner reconciliation is additive: repos deleted upstream stay until you `repocache repo rm` them.
 
