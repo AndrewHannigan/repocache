@@ -97,7 +97,7 @@ For each command: signature, behavior, output, exit codes used. All commands acc
 
 ### 5.0 Repo name resolution
 
-Commands that resolve a `<repo>`/`<name>` argument against the configured repos (`sync`, `repo rm`, `workspace new`, `workspace path`, `workspace rm`) use a single shared rule, in order:
+Commands that resolve a `<repo>`/`<name>` argument against the configured repos (`sync`, `rm`, `workspace new`, `workspace path`, `workspace rm`) use a single shared rule, in order:
 
 1. **Exact match** on a repo's resolved name (`<host>/<owner>/<repo>`, or the explicit `name` override). If one matches, use it.
 2. **Unambiguous suffix match.** Otherwise, match the argument against the trailing path segments of each resolved name, on segment (`/`) boundaries. `hello-world` matches `github.com/octocat/hello-world`; `octocat/hello-world` matches it too; `world` does not (not a segment boundary). If exactly one repo matches, use it.
@@ -109,7 +109,7 @@ Resolution outcomes:
 
 The rule is identical across all commands; no command resolves names differently. Exact match always wins over suffix match, so a short name can never shadow a repo whose full resolved name equals that string.
 
-The same rule applies to **owner** names (`<host>/<owner>`). `repo rm` and `sync` resolve an argument against both repos and owners; since names are unique across the two (§4), at most one kind matches. The rare case where an argument matches both a repo and an owner → exit 2 asking for the full name.
+The same rule applies to **owner** names (`<host>/<owner>`). `rm` and `sync` resolve an argument against both repos and owners; since names are unique across the two (§4), at most one kind matches. The rare case where an argument matches both a repo and an owner → exit 2 asking for the full name.
 
 ### 5.1 `repocache init [--agents=auto|all|none|<list>] [--no-bg-sync]`
 
@@ -146,7 +146,7 @@ Behavior:
 
 Exit codes: 0; 7 (file write error).
 
-### 5.3 `repocache repo add <url> [--name <n>] [--owner|--repo]`
+### 5.3 `repocache add <url> [--name <n>] [--owner|--repo]`
 
 Appends a `[[repo]]` or `[[owner]]` entry to `config.toml`.
 
@@ -163,7 +163,7 @@ Output (repo): `added <name>` followed by the scoped `sync` output.
 Output (owner): `added owner <name>` followed by the scoped `sync` output.
 Exit codes: 0; 3 (name exists); 7 (config error or both `--owner` and `--repo`); plus the `sync` exit codes (5 lock, 6 network, 8 `git` missing) if the implicit sync fails.
 
-### 5.4 `repocache repo rm <name> [--force]`
+### 5.4 `repocache rm <name> [--force]`
 
 Removes a repo completely: the config entry, the cache on disk, and every workspace derived from it. If `<name>` resolves to an owner, removes the owner entry and every repo it auto-added (Source == owner) in one cascade.
 
@@ -177,7 +177,7 @@ On-disk artifacts are removed before the config entry so a failure partway throu
 
 Exit codes: 0; 2; 4 (workspace has unsaved work, no `--force`); 5 (cache lock contended); 7.
 
-### 5.5 `repocache repo list [--json]`
+### 5.5 `repocache ls [--json]`
 
 Lists tracked owners, then repos with last sync time and the owner (if any) that auto-added each. The probes are deliberately cheap (a stat and a small metadata read — no recursive size walk or `git` subprocess) so the output can be embedded verbatim in `session-context` (§8.2), which runs on every session start.
 
@@ -216,7 +216,7 @@ Fetches updates for all (or named) cache repos and refreshes their working trees
 
 Behavior:
 0. **Reconcile owners in scope** (before resolving targets, so newly-discovered repos are fetched in this same pass). Owners in scope = all owners when no args, else the args that resolve to an owner. For each, run `gh repo list <owner>` (filtered by the owner's `include_forks` / `include_archived` / `visibility`), and for every repo not already tracked, append a `source`-tagged `[[repo]]` under a brief exclusive config-lock (2s). The `gh` call happens **outside** the config lock, and the lock is released before any per-repo lock is taken, preserving the §7 lock order (config → per-repo). This step is:
-   - **Additive only** — repos that disappeared upstream are never removed (that could delete a workspace with unpushed work); remove them with `repo rm`.
+   - **Additive only** — repos that disappeared upstream are never removed (that could delete a workspace with unpushed work); remove them with `rm`.
    - **Gracefully degrading** — if `gh` is missing/unauthenticated or errors, print a warning to stderr, skip that owner, and continue. Already-known repos still sync. Discovery failures do not change the exit code.
    - Not gated by `--if-older-than` (that gate is per-repo freshness, not owner enumeration), so new repos are caught even when unchanged repos are skipped.
 1. Resolve target set: no args = all repos in config (including those just added in step 0); args = explicit subset per §5.0. A repo arg resolves to that repo; an **owner** arg expands to all repos with `source == <owner>`. Unknown → exit 2; ambiguous → exit 2 listing candidates.
@@ -363,7 +363,7 @@ Workspaces are never chmod-restricted. They are normal git working trees.
 | Per-cache-repo | (same file) | shared | 2s (blocking) | `workspace new` (during clone) |
 
 - The exclusive cache-repo lock includes the `chmod` steps so `workspace new` can't observe a transitional state.
-- `workspace rm`, `workspace list`, `workspace path`, `repo list` take no locks.
+- `workspace rm`, `workspace list`, `workspace path`, `ls` take no locks.
 - On timeout → exit 5 with a message naming the lock and (if recorded) the holder's PID.
 
 ### 7.1 Deadlock-freedom
@@ -427,15 +427,15 @@ hook (§8.3). Because it ships with the binary there is no installed copy
 to drift after an upgrade. Target: ≤ 20 lines. The guide tells the agent:
 
 - The cache lives at `~/.repocache/repos/<host>/<owner>/<repo>/` and is read-only — search with `rg`/`grep`, do not modify.
-- Tracked repos: `repocache repo list`.
+- Tracked repos: `repocache ls`.
 - To edit: `repocache workspace new <repo> <branch>` prints the workspace path; make changes there, then commit, push, open PR with `gh`.
 - To clean up: `repocache workspace rm <repo> <branch>`.
-- To add a new repo to the library: ask the user to run `repocache repo add <url>`.
+- To add a new repo to the library: ask the user to run `repocache add <url>`.
 - For more detail: `repocache help <topic>` or `repocache <cmd> --help`.
 - Branch listing and full-text search are done with native git/`rg` — not wrapped.
 
 After the bundled guide, `session-context` appends a live snapshot of the
-library — the `repo list` table — so the agent starts each session knowing
+library — the `ls` table — so the agent starts each session knowing
 which repos exist without having to run it. The snapshot is generated at hook
 time (so it reflects the current cache) and is best-effort: if the library
 can't be read, or nothing is tracked yet, it is omitted and only the guide is
@@ -661,7 +661,7 @@ Reserved for future use: 9–15.
 - HTTPS: credential helper (`gh auth setup-git`, `git-credential-manager`, OS keychain helpers, etc.).
 - SSH: `ssh-agent` and the user's SSH config for `git@github.com:...` style URLs.
 
-If `git clone <url>` works at the user's shell, `repocache` works. If it doesn't, `repocache` exits 6 with the underlying git error. If `git` itself is not on PATH, commands that need it (`sync`, `repo add`, `workspace new`) fail fast with exit 8 and a one-line "install git" message rather than a raw exec error.
+If `git clone <url>` works at the user's shell, `repocache` works. If it doesn't, `repocache` exits 6 with the underlying git error. If `git` itself is not on PATH, commands that need it (`sync`, `add`, `workspace new`) fail fast with exit 8 and a one-line "install git" message rather than a raw exec error.
 
 ## 12. Concurrency model
 
@@ -673,7 +673,7 @@ If `git clone <url>` works at the user's shell, `repocache` works. If it doesn't
 ## 13. In scope vs out of scope (v1)
 
 ### In scope
-- Library management (add/rm/list)
+- Library management (add/rm/ls)
 - Read-only cache mirror (sync)
 - Workspaces via `git clone --reference`
 - Read-only enforcement via `chmod a-w`
@@ -683,7 +683,7 @@ If `git clone <url>` works at the user's shell, `repocache` works. If it doesn't
 - Stable exit codes
 
 ### Out of scope (deliberately)
-- Wrappers around tools the agent can use itself: `repocache search`, `repocache repo branches`, `repocache locate`, `repocache workspace pr`. The agent uses `rg`, `git`, `gh` directly.
+- Wrappers around tools the agent can use itself: `repocache search`, `repocache branches`, `repocache locate`, `repocache workspace pr`. The agent uses `rg`, `git`, `gh` directly.
 - Trash/undo for `workspace rm`. Dirty-check is the only safety.
 - Sparse / partial-clone for huge repos. Document the limitation; revisit if a real user hits it.
 - MCP server. CLI-first; can wrap later.
@@ -705,7 +705,7 @@ All nine planned steps are implemented and verified end-to-end:
 
 1. ✅ Config loader + `pkg/paths` + Cobra subcommand tree
 2. ✅ `repocache init` (dirs + config only; no agent integration)
-3. ✅ `repocache repo {add,rm,list}`
+3. ✅ `repocache {add,rm,ls}`
 4. ✅ `repocache sync` (parallel, locked, chmod-enforced)
 5. ✅ `repocache workspace {new,list,path,rm}` (with `git clone --reference`)
 6. ✅ `pkg/agents/claude.go` + wired into `init`/`uninstall`

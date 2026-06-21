@@ -150,7 +150,7 @@ func likelyCause(errText, name string) string {
 	case containsAny(low, "could not read username", "authentication failed", "permission denied", "403 forbidden", "terminal prompts disabled", "invalid credentials"):
 		return "authentication — run `gh auth login`, then " + sync
 	case containsAny(low, "repository not found", "not found", "404", "does not exist"):
-		return fmt.Sprintf("repo may be renamed or deleted upstream — verify it exists, or remove it with `repocache repo rm %s`", name)
+		return fmt.Sprintf("repo may be renamed or deleted upstream — verify it exists, or remove it with `repocache rm %s`", name)
 	case containsAny(low, "could not resolve host", "connection refused", "connection timed out", "timed out", "network is unreachable", "temporary failure in name resolution"):
 		return "network — likely transient; check your connection and re-run " + sync
 	case strings.Contains(low, "locked"):

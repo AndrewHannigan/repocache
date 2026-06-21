@@ -273,9 +273,9 @@ func (c *Config) ResolveOwner(name string) (*Owner, error) {
 // helpful header comment.
 func EmptyTemplate() []byte {
 	return []byte(`# repocache config.
-# Add a repo with:        repocache repo add <repo-url>
-# Add a whole user/org:   repocache repo add <owner-url>   # needs gh
-# List with:              repocache repo list
+# Add a repo with:        repocache add <repo-url>
+# Add a whole user/org:   repocache add <owner-url>   # needs gh
+# List with:              repocache ls
 # Sync with:              repocache sync
 #
 # Manual entries look like:

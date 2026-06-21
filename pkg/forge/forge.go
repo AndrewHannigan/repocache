@@ -60,7 +60,7 @@ type ghRepo struct {
 
 // Available reports whether gh is usable: installed and authenticated. It
 // returns ErrGhMissing or ErrGhUnauthed so callers can warn precisely, or nil
-// when gh is ready. Used by `repo add` to warn early; ListOwnerRepos does its
+// when gh is ready. Used by `add` to warn early; ListOwnerRepos does its
 // own check so it never lists twice.
 func Available() error {
 	if _, err := exec.LookPath("gh"); err != nil {

@@ -35,14 +35,14 @@ curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/insta
 repocache init
 
 # add a repo — it's fetched right away (read-only)
-repocache repo add https://github.com/anthropics/anthropic-sdk-python
+repocache add https://github.com/anthropics/anthropic-sdk-python
 
 # GitHub shorthand works too — "owner/repo" is expanded against github.com
-repocache repo add anthropics/anthropic-sdk-python
+repocache add anthropics/anthropic-sdk-python
 
 # ...or track a whole user/org: add discovers its repos and fetches them;
 # later syncs keep pulling any new ones
-repocache repo add anthropics   # bare "owner" shorthand; needs gh
+repocache add anthropics   # bare "owner" shorthand; needs gh
 
 # re-fetch tracked repos any time
 repocache sync
@@ -118,7 +118,9 @@ url = "https://github.com/anthropics"
 ```
 repocache init [--agents=auto|all|none|<list>] [--no-bg-sync]
 repocache uninstall [--agents=...] [--purge]
-repocache repo {add [--owner|--repo],rm,list [--json]}
+repocache add <repo> [--owner|--repo] [--name <n>]
+repocache rm <name> [--force]
+repocache ls [--json]
 repocache sync [<name>...] [--if-older-than <dur>] [--jobs N] [--json]
 repocache workspace {new,list [--json],path,rm [--force]}
 repocache __session-context
@@ -144,9 +146,9 @@ Repocache does not manage credentials. Every git operation defers to whatever `g
 
 ## Limitations & gotchas
 
-- **Requires `git`.** It's the one hard dependency — every cache and workspace operation shells out to it. Commands that need git (`sync`, `repo add`, `workspace new`) check for it up front and exit 8 with an "install git" message if it's missing, instead of a cryptic exec error.
+- **Requires `git`.** It's the one hard dependency — every cache and workspace operation shells out to it. Commands that need git (`sync`, `add`, `workspace new`) check for it up front and exit 8 with an "install git" message if it's missing, instead of a cryptic exec error.
 - **Large repos.** Full clones only — no sparse-checkout or partial-clone yet. Chromium/llvm-sized repos will feel it.
-- **Owner tracking needs `gh`.** Discovering a user/org's repos shells out to the [`gh` CLI](https://cli.github.com/) (GitHub / GHE only). It's the one dependency beyond `git`, and only for discovery — if `gh` is missing or unauthenticated, repocache warns and skips discovery while already-known repos keep syncing. Owner reconciliation is additive: repos deleted upstream stay until you `repocache repo rm` them.
+- **Owner tracking needs `gh`.** Discovering a user/org's repos shells out to the [`gh` CLI](https://cli.github.com/) (GitHub / GHE only). It's the one dependency beyond `git`, and only for discovery — if `gh` is missing or unauthenticated, repocache warns and skips discovery while already-known repos keep syncing. Owner reconciliation is additive: repos deleted upstream stay until you `repocache rm` them.
 
 ---
 

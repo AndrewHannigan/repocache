@@ -19,8 +19,8 @@ import (
 
 const syncLockTimeout = 5 * time.Minute
 
-// syncDefaultJobs is the default concurrency for `sync`, also used when an
-// `repo add` triggers an implicit sync of the just-added entry.
+// syncDefaultJobs is the default concurrency for `sync`, also used when
+// `add` triggers an implicit sync of the just-added entry.
 const syncDefaultJobs = 4
 
 func newSyncCmd() *cobra.Command {
@@ -73,7 +73,7 @@ func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) 
 	}
 	if len(c.Repos) == 0 && len(c.Owners) == 0 {
 		if !jsonOut {
-			fmt.Fprintln(os.Stderr, "no repos in config; add with `repocache repo add <url>`")
+			fmt.Fprintln(os.Stderr, "no repos in config; add with `repocache add <url>`")
 		}
 		return nil
 	}
@@ -373,7 +373,7 @@ func finishErr(r syncResult, start time.Time, err error) syncResult {
 	r.Status = "error"
 	r.Error = err.Error()
 	r.DurationMs = time.Since(start).Milliseconds()
-	// Persist the failure so `repo list` (and the session-context snapshot)
+	// Persist the failure so `ls` (and the session-context snapshot)
 	// can surface it. Best-effort: keep the prior LastSyncAt so the table
 	// still shows the last *successful* sync. Skipped when the cache dir is
 	// absent (a failed first clone) since there's nowhere to write the meta.

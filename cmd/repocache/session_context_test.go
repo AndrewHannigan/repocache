@@ -46,7 +46,7 @@ func TestPrintSessionContext(t *testing.T) {
 	}
 }
 
-// With a configured library, the body appends a live `repo list` snapshot.
+// With a configured library, the body appends a live `ls` snapshot.
 func TestSessionContextBodyIncludesLibrary(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	if err := config.Save(&config.Config{
@@ -59,7 +59,7 @@ func TestSessionContextBodyIncludesLibrary(t *testing.T) {
 	if !strings.HasPrefix(body, string(agents.DocContent)) {
 		t.Fatalf("body should start with the embedded guide")
 	}
-	for _, want := range []string{"repocache repo list", "NAME", "acme/widget"} {
+	for _, want := range []string{"repocache ls", "NAME", "acme/widget"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body should contain %q\n%s", want, body)
 		}
@@ -73,7 +73,7 @@ func TestSessionContextBodyEmptyLibrary(t *testing.T) {
 	if !strings.HasPrefix(body, string(agents.DocContent)) {
 		t.Fatalf("body should start with the embedded guide")
 	}
-	if strings.Contains(body, "repocache repo list`):") {
+	if strings.Contains(body, "repocache ls`):") {
 		t.Errorf("empty library should not append a snapshot section\n%s", body)
 	}
 }
