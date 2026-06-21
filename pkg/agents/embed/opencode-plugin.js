@@ -7,7 +7,7 @@
 // opencode loads it at startup — that is our "session start":
 //
 //   - kick off the background cache refresh (`repocache __bg-sync`), and
-//   - snapshot the guide (`repocache session-context --text`) to inject into
+//   - snapshot the guide (`repocache __session-context --text`) to inject into
 //     the model's system prompt via experimental.chat.system.transform.
 //
 // All logic lives in the binary, so this file never needs to change across
@@ -24,7 +24,7 @@ export const RepocachePlugin = async ({ $, directory }) => {
   // cwd-collision warning resolves against the right repo.
   let guide = ""
   try {
-    guide = (await $`repocache session-context --text`.cwd(directory).quiet().text()).trim()
+    guide = (await $`repocache __session-context --text`.cwd(directory).quiet().text()).trim()
   } catch {
     guide = ""
   }

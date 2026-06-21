@@ -48,6 +48,10 @@ func (g *Gemini) Install(opts InstallOptions) (Installed, error) {
 	// Migrate off the legacy @REPOCACHE.md import + on-disk doc. Best-effort.
 	_ = removeImportLine(g.memoryFile(), "REPOCACHE.md")
 	_ = os.Remove(g.legacyDocFile())
+	// The session-context hook command was renamed `session-context` →
+	// `__session-context`; strip the stale entry so the old (now-unknown)
+	// subcommand doesn't error on every session start. Best-effort.
+	_ = removeSessionStartHook(loadJSONC, saveJSON, g.settingsFile(), legacySessionContextCommand)
 
 	paths, err := ensureArrayEntries(loadJSONC, saveJSON, g.settingsFile(),
 		[]string{"includeDirectories"}, PathsToRegister())

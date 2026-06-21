@@ -9,8 +9,14 @@ const BgSyncCommand = "repocache __bg-sync"
 
 // SessionContextCommand is the command installed into each agent's
 // SessionStart hook to inject the repocache guide as context. Mirrors
-// the public `repocache session-context` subcommand.
-const SessionContextCommand = "repocache session-context"
+// the internal `repocache __session-context` subcommand.
+const SessionContextCommand = "repocache __session-context"
+
+// legacySessionContextCommand is the pre-rename hook command: the
+// session-context subcommand was public (`repocache session-context`)
+// before it became the internal `__session-context`. Install strips any
+// stale entry so the now-unknown subcommand doesn't error every session.
+const legacySessionContextCommand = "repocache session-context"
 
 // Claude implements Agent for Claude Code.
 type Claude struct {
@@ -51,6 +57,10 @@ func (c *Claude) Install(opts InstallOptions) (Installed, error) {
 	// session-context hook. Best-effort.
 	_ = removeImportLine(c.memoryFile(), "REPOCACHE.md")
 	_ = os.Remove(c.legacyDocFile())
+	// The session-context hook command was renamed `session-context` →
+	// `__session-context`; strip the stale entry so the old (now-unknown)
+	// subcommand doesn't error on every session start. Best-effort.
+	_ = removeSessionStartHook(loadJSONC, saveJSON, c.settingsFile(), legacySessionContextCommand)
 
 	paths, err := ensureArrayEntries(loadJSONC, saveJSON, c.settingsFile(),
 		[]string{"permissions", "additionalDirectories"}, PathsToRegister())
