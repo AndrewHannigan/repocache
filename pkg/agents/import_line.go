@@ -8,7 +8,7 @@ import (
 // removeImportLine removes any line starting with `@<doc>` from
 // memoryPath. Used to migrate away from / uninstall the legacy
 // @REPOCACHE.md import that older repocache versions appended to
-// CLAUDE.md / AGENTS.md / GEMINI.md.
+// CLAUDE.md / AGENTS.md.
 func removeImportLine(memoryPath, doc string) error {
 	existing, err := os.ReadFile(memoryPath)
 	if err != nil {

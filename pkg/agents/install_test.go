@@ -70,6 +70,30 @@ func TestClaudeInstallNoBgSync(t *testing.T) {
 	}
 }
 
+func TestAntigravityInstallUsesGoogleSettings(t *testing.T) {
+	home := withHome(t)
+
+	got, err := NewAntigravity().Install(InstallOptions{})
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	if !sliceHas(got.AddedPaths, filepath.Join(home, ".repocache", "repos")) ||
+		!sliceHas(got.AddedPaths, filepath.Join(home, ".repocache", "workspaces")) {
+		t.Errorf("AddedPaths = %v, want repocache repos and workspaces", got.AddedPaths)
+	}
+	if !sliceHas(got.AddedHooks, SessionContextCommand) || !sliceHas(got.AddedHooks, BgSyncCommand) {
+		t.Errorf("AddedHooks = %v, want both session-context and bg-sync", got.AddedHooks)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(home, ".antigravity", "settings.json"))
+	for _, want := range []string{"includeDirectories", SessionContextCommand, BgSyncCommand} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("settings.json missing %q\n%s", want, data)
+		}
+	}
+}
+
 // Install migrates away from a legacy install: the @import line and the
 // on-disk doc are removed, but unrelated user content is preserved.
 func TestClaudeInstallMigratesLegacy(t *testing.T) {

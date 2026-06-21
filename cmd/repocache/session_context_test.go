@@ -28,7 +28,7 @@ func TestPrintSessionContext(t *testing.T) {
 	}
 	inner := strings.TrimSuffix(strings.TrimPrefix(out, "<repocache-session-context>"), "</repocache-session-context>")
 
-	// The wrapped content must be valid JSON in the envelope all three agents accept.
+	// The wrapped content must be valid JSON in the envelope hook-based agents accept.
 	var env sessionContextEnvelope
 	if err := json.Unmarshal([]byte(inner), &env); err != nil {
 		t.Fatalf("wrapped output is not valid JSON: %v\n%s", err, inner)
