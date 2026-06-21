@@ -35,10 +35,11 @@ surrounding hook output:
     <repocache-session-context>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</repocache-session-context>
 
 antigravity gets a PreInvocation injectSteps envelope instead (it has no
-SessionStart event): the guide is injected as a userMessage on the first
-model call of the conversation. The hook payload arrives on stdin; on
-later invocations (invocationNum>0) this prints "{}" so the guide is
-injected once per session, not before every model call.
+SessionStart event): the guide is injected as a userMessage, gated by a
+conversationId-scoped sentinel so it is injected once per conversation.
+The hook payload arrives on stdin; the sentinel is an atomic mkdir in
+~/.repocache/hook_state/ so the guide is never re-injected on later
+turns or model calls.
 
 codex and opencode instead get the raw Markdown body, with no envelope or
 delimiters: Codex accepts plain stdout as developer context, and
@@ -71,12 +72,12 @@ repos are available without having to run it.`,
 // printSessionContext renders the guide body in the shape agentKey expects
 // (see pkg/agents) and writes it, newline-terminated, to w. stdin carries the
 // agent's hook payload (nil if none); it is read only for antigravity, whose
-// PreInvocation hook must inject the guide once per conversation (see below).
+// PreInvocation hook must inject the guide once per conversation.
 func printSessionContext(w io.Writer, stdin io.Reader, agentKey string) error {
 	// Antigravity's PreInvocation hook fires before every model call. Inject
-	// the guide only on the first (invocationNum==0); otherwise emit an empty
-	// result so it isn't re-injected each turn.
-	if agentKey == "antigravity" && !antigravityFirstInvocation(stdin) {
+	// the guide only once per conversation using a conversationId-scoped
+	// sentinel; otherwise emit an empty result so it isn't re-injected.
+	if agentKey == "antigravity" && !antigravityShouldAct(stdin) {
 		_, err := fmt.Fprintln(w, "{}")
 		return err
 	}

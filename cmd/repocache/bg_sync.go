@@ -73,11 +73,12 @@ func bgSyncStart() (showEmptyHint bool) {
 	return false
 }
 
-// bgSyncAntigravity runs bg-sync as an antigravity PreInvocation hook: it acts
-// only on the first model call of the conversation (invocationNum==0) and always
-// emits a JSON result — the cache-empty hint as an injected message, or "{}".
+// bgSyncAntigravity runs bg-sync as an antigravity PreInvocation hook: it
+// acts once per conversation (gated by conversationId-scoped sentinel) and
+// always emits a JSON result — the cache-empty hint as an injected message,
+// or "{}".
 func bgSyncAntigravity(w io.Writer, stdin io.Reader) error {
-	if !antigravityFirstInvocation(stdin) {
+	if !antigravityShouldAct(stdin) {
 		_, err := fmt.Fprintln(w, "{}")
 		return err
 	}

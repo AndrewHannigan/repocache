@@ -642,8 +642,10 @@ https://antigravity.google/docs/hooks and /docs/cli-reference):
    event configuration.
 2. **No SessionStart event.** Antigravity's events are `PreToolUse`,
    `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`. The
-   session-start equivalent is a `PreInvocation` hook (fires before each
-   model call), gated on `invocationNum==0` so it acts once per conversation.
+   session-start equivalent is a `PreInvocation` hook gated by a
+   conversation-scoped sentinel, since `invocationNum` is per-turn
+   (resets for each user message) and 1-based — not a session-wide
+   counter.
 3. **No directory allowlist** (§8.4): nothing is registered for filesystem
    access.
 
@@ -666,8 +668,23 @@ too, so it emits JSON rather than a plain-text hint):
 }
 ```
 
-The hook commands read the PreInvocation payload from stdin. On the first
-model call (`invocationNum==0`):
+The hook commands read the PreInvocation payload from stdin. Each uses a
+two-gate approach to ensure session-start actions run at most once per
+conversation:
+
+1. **`invocationNum == 1`** — a quick pre-check (the first model call of
+   each turn). Because `invocationNum` resets per user message (it is
+   1-based, so every new turn starts at 1), this alone is insufficient;
+   it only avoids a filesystem operation on successive model calls within
+   the same turn.
+2. **`conversationId`-scoped sentinel** — the primary gate. A directory is
+   created at `~/.repocache/hook_state/agy_injected_<conversationId>` via
+   `os.Mkdir`, which is atomic: `Mkdir` succeeds only when the directory
+   does not yet exist. If it succeeds, the action runs; if it fails with
+   EEXIST, the sentinel was already claimed by an earlier turn and the
+   hook emits `{}`.
+
+When the sentinel is first created (first turn of a conversation):
 
 - `__session-context` emits a PreInvocation `injectSteps` envelope that adds
   the guide (§8.3) to the conversation as a `userMessage` (it persists for
@@ -681,8 +698,8 @@ model call (`invocationNum==0`):
 - `__bg-sync` runs the background refresh (§5.12) and emits `{}` (or, on an
   empty cache, an `injectSteps` message nudging `repocache sync`).
 
-On later invocations (`invocationNum>0`) both emit `{}` so the guide is not
-re-injected before every model call.
+On any later turn or model call the sentinel already exists, so both
+commands emit `{}` and the guide is never re-injected.
 
 Detection keys off `~/.gemini/antigravity-cli/` (§8.1). Because the
 `~/.gemini` dir is shared with the standalone Gemini CLI — for which a
