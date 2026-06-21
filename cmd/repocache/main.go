@@ -42,6 +42,7 @@ func newRootCmd() *cobra.Command {
 		newRepoCmd(),
 		newSyncCmd(),
 		newWorkspaceCmd(),
+		newSessionContextCmd(),
 		newBgSyncCmd(),
 	)
 	return cmd
