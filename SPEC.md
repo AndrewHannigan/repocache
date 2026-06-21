@@ -155,12 +155,12 @@ Behavior:
 2. Parse URL; derive default name (`host/owner/repo` for a repo, `host/owner` for an owner). If `--name` given, use it.
 3. Reject if the name already exists as a repo or an owner → exit 3.
 4. Acquire exclusive lock on config; append the `[[repo]]` or `[[owner]]`; release.
-5. Do not fetch/discover. Print a hint to run `repocache sync`.
+5. Immediately run a `sync` scoped to the just-added entry: a repo is fetched into the cache; an owner is discovered (its repos added as `source`-tagged entries) and fetched. The sync's own output follows the `added` line.
 6. For an owner, additionally check `gh` is installed and authenticated; if not, print a non-fatal warning (the entry is saved and will expand once `gh` is available).
 
-Output (repo): `added <name> (run \`repocache sync\` to fetch)`
-Output (owner): `added owner <name> (run \`repocache sync\` to discover and fetch its repos)`
-Exit codes: 0; 3 (name exists); 7 (config error or both `--owner` and `--repo`).
+Output (repo): `added <name>` followed by the scoped `sync` output.
+Output (owner): `added owner <name>` followed by the scoped `sync` output.
+Exit codes: 0; 3 (name exists); 7 (config error or both `--owner` and `--repo`); plus the `sync` exit codes (5 lock, 6 network) if the implicit sync fails.
 
 ### 5.4 `repocache repo rm <name> [--force]`
 
