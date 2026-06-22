@@ -63,16 +63,17 @@ The whole loop:
     shed workspace rm <repo> <branch>  # tear down
 
 Commands:
-  init          bootstrap + integrate with detected agents
-  uninstall     reverse agent integration (--purge also deletes data + config)
   add           add a repo (or a whole user/org) to the library
-  ls            list tracked repos and owners
-  rm            remove a tracked repo or owner
-  sync          fetch tracked repos and re-apply read-only chmod
-  workspace     {new,ls,path,rm} of writable workspaces
-  prune         delete workspaces whose branch has a merged PR
-  history       show recent shed commands
   help <topic>  long-form docs
+  history       show recent shed commands
+  init          bootstrap + integrate with detected agents
+  ls            list tracked repos and owners
+  prune         delete workspaces whose branch has a merged PR
+  rm            remove a tracked repo or owner
+  status        report sync health; show a repo's error and the likely fix
+  sync          fetch tracked repos and re-apply read-only chmod
+  uninstall     reverse agent integration (--purge also deletes data + config)
+  workspace     {new,ls,path,rm} of writable workspaces
 
 Topics: agents, auth, concepts, history, init, library, locking, owner, prune, sync, workspace
 `,
