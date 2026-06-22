@@ -34,6 +34,11 @@ func newRootCmd() *cobra.Command {
 		Version:       version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		// Record successful "working" commands to the history log. PostRun (not
+		// the …E variant) so logging can never alter exit status; cobra runs the
+		// closest Persistent hook up the tree, and no subcommand defines one, so
+		// this fires for every leaf — on success only (a failed RunE skips it).
+		PersistentPostRun: func(c *cobra.Command, _ []string) { recordCommand(c) },
 	}
 	cmd.SetHelpCommand(newHelpCmd())
 	cmd.CompletionOptions.DisableDefaultCmd = true
@@ -47,6 +52,7 @@ func newRootCmd() *cobra.Command {
 		newStatusCmd(),
 		newWorkspaceCmd(),
 		newGcCmd(),
+		newHistoryCmd(),
 		newSessionContextCmd(),
 		newBgSyncCmd(),
 	)
