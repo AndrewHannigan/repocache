@@ -3,7 +3,10 @@
 // status.
 package errs
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // Exit codes as documented in SPEC §9.
 const (
@@ -41,4 +44,15 @@ func Wrap(code int, err error) error {
 		return nil
 	}
 	return &Coded{Code: code, Err: err}
+}
+
+// EnsureCoded guarantees err carries an exit code without clobbering one it
+// already has: if err is already a *Coded it is returned unchanged, otherwise
+// it is wrapped with code. Returns nil if err is nil.
+func EnsureCoded(err error, code int) error {
+	var c *Coded
+	if errors.As(err, &c) {
+		return err
+	}
+	return Wrap(code, err)
 }
