@@ -24,7 +24,7 @@ func newWorkspaceCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newWorkspaceNewCmd(),
-		newWorkspaceListCmd(),
+		newWorkspaceLsCmd(),
 		newWorkspacePathCmd(),
 		newWorkspaceRmCmd(),
 	)
@@ -133,10 +133,10 @@ func resolveRepoName(c *config.Config, name string) (string, bool) {
 	return full, true
 }
 
-func newWorkspaceListCmd() *cobra.Command {
+func newWorkspaceLsCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
-		Use:   "list",
+		Use:   "ls",
 		Short: "List workspaces with dirty/unpushed state and age",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWorkspaceList(jsonOut)
