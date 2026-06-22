@@ -9,11 +9,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/repocache/pkg/cache"
-	"github.com/AndrewHannigan/repocache/pkg/config"
-	"github.com/AndrewHannigan/repocache/pkg/errs"
-	"github.com/AndrewHannigan/repocache/pkg/paths"
-	"github.com/AndrewHannigan/repocache/pkg/workspace"
+	"github.com/AndrewHannigan/shed/pkg/cache"
+	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
 
 func newWorkspaceCmd() *cobra.Command {
@@ -37,7 +37,7 @@ func newWorkspaceNewCmd() *cobra.Command {
 		Use:   "new <repo> <branch>",
 		Short: "Create a workspace via `git clone --reference`",
 		Long: `new creates a writable clone of the cache repo at
-~/.repocache/workspaces/<repo>/<branch>/ using
+~/.shed/workspaces/<repo>/<branch>/ using
 'git clone --reference' so it shares object storage with the cache.
 
 If <branch> exists on origin, checks it out. Otherwise creates it off
@@ -108,7 +108,7 @@ func runWorkspaceNew(name, branch, base string) error {
 
 // resolveWorkspaceName maps a possibly-shorthand repo name to the name a
 // workspace lives under on disk, so `path` and `rm` accept the same shorthand
-// as `new` (e.g. "repocache" → "github.com/AndrewHannigan/repocache").
+// as `new` (e.g. "shed" → "github.com/AndrewHannigan/shed").
 //
 // It prefers a workspace that already exists under the name as given — so
 // exact/full names, and workspaces whose repo is no longer in the config,

@@ -13,8 +13,8 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/AndrewHannigan/repocache/pkg/errs"
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 // Config is the root TOML document.
@@ -38,9 +38,9 @@ type Repo struct {
 	Source string `toml:"source,omitempty"`
 }
 
-// Owner is a tracked user or org. On each sync, repocache lists the owner's
+// Owner is a tracked user or org. On each sync, shed lists the owner's
 // repos (via `gh`) and materializes any new ones as Source-tagged Repo
-// entries, so the rest of repocache treats them as ordinary cache repos.
+// entries, so the rest of shed treats them as ordinary cache repos.
 type Owner struct {
 	URL             string   `toml:"url"`
 	Name            string   `toml:"name,omitempty"`
@@ -51,7 +51,7 @@ type Owner struct {
 	Visibility string `toml:"visibility,omitempty"`
 	// Exclude lists resolved repo names (e.g. "github.com/owner/repo") that
 	// should not be auto-added on sync, even though they belong to this owner.
-	// Populated automatically when `repocache rm` is called on a repo that was
+	// Populated automatically when `shed rm` is called on a repo that was
 	// added by this owner.
 	Exclude []string `toml:"exclude,omitempty"`
 }
@@ -279,11 +279,11 @@ func (c *Config) ResolveOwner(name string) (*Owner, error) {
 // EmptyTemplate returns the contents of an empty config file with a
 // helpful header comment.
 func EmptyTemplate() []byte {
-	return []byte(`# repocache config.
-# Add a repo with:        repocache add <repo-url>
-# Add a whole user/org:   repocache add <owner-url>   # needs gh
-# List with:              repocache ls
-# Sync with:              repocache sync
+	return []byte(`# shed config.
+# Add a repo with:        shed add <repo-url>
+# Add a whole user/org:   shed add <owner-url>   # needs gh
+# List with:              shed ls
+# Sync with:              shed sync
 #
 # Manual entries look like:
 # [[repo]]

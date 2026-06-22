@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/repocache/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/errs"
 )
 
 // version is set at link time by goreleaser via -ldflags "-X main.version=…".
@@ -28,7 +28,7 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           "repocache",
+		Use:           "shed",
 		Short:         "Read-only mirror of git repos for terminal coding agents",
 		Long:          rootLong,
 		Version:       version,
@@ -59,7 +59,7 @@ func newRootCmd() *cobra.Command {
 	return cmd
 }
 
-const rootLong = `repocache maintains a read-only local mirror of GitHub repos and
+const rootLong = `shed maintains a read-only local mirror of GitHub repos and
 creates writable workspaces from it via 'git clone --reference'.
 
 Designed for terminal coding agents (Claude Code, Codex CLI, Cursor,

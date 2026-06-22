@@ -1,4 +1,4 @@
-// Package paths centralizes every on-disk location repocache touches.
+// Package paths centralizes every on-disk location shed touches.
 // All functions return absolute paths.
 package paths
 
@@ -11,9 +11,9 @@ import (
 	"strings"
 )
 
-const appName = "repocache"
+const appName = "shed"
 
-// ConfigDir returns ~/.config/repocache (honoring XDG_CONFIG_HOME).
+// ConfigDir returns ~/.config/shed (honoring XDG_CONFIG_HOME).
 func ConfigDir() string {
 	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
 		return filepath.Join(x, appName)
@@ -21,7 +21,7 @@ func ConfigDir() string {
 	return filepath.Join(home(), ".config", appName)
 }
 
-// DataDir returns ~/.repocache.
+// DataDir returns ~/.shed.
 func DataDir() string {
 	return filepath.Join(home(), "."+appName)
 }
@@ -36,7 +36,7 @@ func LogsDir() string       { return filepath.Join(DataDir(), "logs") }
 func BgSyncLockFile() string { return filepath.Join(DataDir(), ".bg-sync.lock") }
 func BgSyncLogFile() string  { return filepath.Join(LogsDir(), "bg-sync.log") }
 
-// HistoryFile is the JSON-Lines log of recent repocache commands (one event
+// HistoryFile is the JSON-Lines log of recent shed commands (one event
 // per line). HistoryTrimMarkerFile holds the RFC3339 timestamp of the last
 // trim check, used to debounce truncation of the history file.
 func HistoryFile() string           { return filepath.Join(DataDir(), "history.jsonl") }
@@ -49,11 +49,11 @@ func CacheRepoPath(name string) string {
 }
 
 func CacheRepoLockFile(name string) string {
-	return filepath.Join(CacheRepoPath(name), ".git", "repocache.lock")
+	return filepath.Join(CacheRepoPath(name), ".git", "shed.lock")
 }
 
 func CacheRepoMetaFile(name string) string {
-	return filepath.Join(CacheRepoPath(name), ".git", "repocache.meta")
+	return filepath.Join(CacheRepoPath(name), ".git", "shed.meta")
 }
 
 // WorkspacePath returns the on-disk path for a (repo, branch) workspace.

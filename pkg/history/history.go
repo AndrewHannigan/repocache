@@ -1,5 +1,5 @@
-// Package history records recent repocache command invocations to a small
-// on-disk log, so the human (via `repocache history`) and the agent (via the
+// Package history records recent shed command invocations to a small
+// on-disk log, so the human (via `shed history`) and the agent (via the
 // session-context hook) can see what was recently done. The log is a JSON-Lines
 // file, appended to on each tracked command and periodically truncated so it
 // never grows without bound.
@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 const (
@@ -32,7 +32,7 @@ type Event struct {
 }
 
 // Record appends one command invocation to the history log, then opportunistically
-// trims it. Best-effort: it is a no-op (returns nil) when repocache's data dir
+// trims it. Best-effort: it is a no-op (returns nil) when shed's data dir
 // does not exist, and it never creates that dir — so it neither materializes the
 // data dir on its own nor resurrects it after `uninstall --purge`.
 func Record(args []string) error {

@@ -1,4 +1,4 @@
-module github.com/AndrewHannigan/repocache
+module github.com/AndrewHannigan/shed
 
 go 1.26.4
 

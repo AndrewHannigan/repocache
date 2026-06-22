@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/repocache/pkg/errs"
-	"github.com/AndrewHannigan/repocache/pkg/history"
+	"github.com/AndrewHannigan/shed/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/history"
 )
 
 // historyInjectCount is how many recent commands the session-context hook shows
@@ -21,7 +21,7 @@ const historyInjectCount = 20
 // successful runs are appended to the history log: the "working" commands that
 // change the library or workspaces. Everything else — read-only queries (ls,
 // status, workspace ls/path), `sync`, the `history` command itself, the hidden
-// internal commands, and a bare `repocache` — is intentionally absent.
+// internal commands, and a bare `shed` — is intentionally absent.
 var recordedCommands = map[string]bool{
 	"add":           true,
 	"rm":            true,
@@ -52,8 +52,8 @@ func newHistoryCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "history",
-		Short: "Show recent repocache commands",
-		Long: `history prints the most recent repocache commands that changed the
+		Short: "Show recent shed commands",
+		Long: `history prints the most recent shed commands that changed the
 library or workspaces (add, rm, gc, init, uninstall, workspace new/rm), newest
 last. Read-only queries and background syncs are not recorded.
 
@@ -99,7 +99,7 @@ func eventTime(ev history.Event) string {
 }
 
 func eventCommand(ev history.Event) string {
-	return "repocache " + strings.Join(ev.Args, " ")
+	return "shed " + strings.Join(ev.Args, " ")
 }
 
 // recentHistoryText renders the recent-command history for embedding in session
@@ -116,6 +116,6 @@ func recentHistoryText() string {
 	for _, ev := range events {
 		fmt.Fprintf(&lines, "%s  %s\n", eventTime(ev), eventCommand(ev))
 	}
-	return "\nThe user's recent `repocache` commands (most recent last), provided as ambient context:\n\n```\n" +
+	return "\nThe user's recent `shed` commands (most recent last), provided as ambient context:\n\n```\n" +
 		lines.String() + "```\n"
 }

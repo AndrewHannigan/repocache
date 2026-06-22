@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/AndrewHannigan/repocache/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/config"
 )
 
 // resolveRepoName powers the shorthand acceptance in `workspace path`/`rm`,
@@ -11,7 +11,7 @@ import (
 func TestResolveRepoName(t *testing.T) {
 	c := &config.Config{
 		Repos: []config.Repo{
-			{URL: "https://github.com/AndrewHannigan/repocache"},
+			{URL: "https://github.com/AndrewHannigan/shed"},
 			{URL: "https://github.com/acme/widgets"},
 			{URL: "https://github.com/other/widgets"}, // shares leaf "widgets"
 		},
@@ -23,8 +23,8 @@ func TestResolveRepoName(t *testing.T) {
 		want   string
 		wantOK bool
 	}{
-		{"shorthand leaf", "repocache", "github.com/AndrewHannigan/repocache", true},
-		{"full name", "github.com/AndrewHannigan/repocache", "github.com/AndrewHannigan/repocache", true},
+		{"shorthand leaf", "shed", "github.com/AndrewHannigan/shed", true},
+		{"full name", "github.com/AndrewHannigan/shed", "github.com/AndrewHannigan/shed", true},
 		{"unknown", "nope", "", false},
 		{"ambiguous leaf", "widgets", "", false},
 	}

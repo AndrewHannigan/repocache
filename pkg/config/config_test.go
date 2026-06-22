@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/AndrewHannigan/repocache/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/errs"
 )
 
 func TestResolveOwner(t *testing.T) {

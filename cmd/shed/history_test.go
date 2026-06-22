@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/repocache/pkg/history"
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/history"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 // findCmd resolves a command path (e.g. "workspace", "new") against a real root
@@ -60,7 +60,7 @@ func TestRecentHistoryText(t *testing.T) {
 
 	for _, args := range [][]string{
 		{"add", "octocat/Hello-World"},
-		{"workspace", "new", "repocache", "feat-x"},
+		{"workspace", "new", "shed", "feat-x"},
 	} {
 		if err := history.Record(args); err != nil {
 			t.Fatal(err)
@@ -69,9 +69,9 @@ func TestRecentHistoryText(t *testing.T) {
 
 	out := recentHistoryText()
 	for _, want := range []string{
-		"recent `repocache` commands",
-		"repocache add octocat/Hello-World",
-		"repocache workspace new repocache feat-x",
+		"recent `shed` commands",
+		"shed add octocat/Hello-World",
+		"shed workspace new shed feat-x",
 		"```",
 	} {
 		if !strings.Contains(out, want) {
@@ -89,16 +89,16 @@ func TestSessionContextBodyIncludesHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if strings.Contains(sessionContextBody(), "recent `repocache` commands") {
+	if strings.Contains(sessionContextBody(), "recent `shed` commands") {
 		t.Errorf("body should have no history section when nothing is recorded")
 	}
 
-	if err := history.Record([]string{"workspace", "new", "repocache", "feat-x"}); err != nil {
+	if err := history.Record([]string{"workspace", "new", "shed", "feat-x"}); err != nil {
 		t.Fatal(err)
 	}
 	body := sessionContextBody()
-	if !strings.Contains(body, "recent `repocache` commands") ||
-		!strings.Contains(body, "repocache workspace new repocache feat-x") {
+	if !strings.Contains(body, "recent `shed` commands") ||
+		!strings.Contains(body, "shed workspace new shed feat-x") {
 		t.Errorf("body should include the recent-history section:\n%s", body)
 	}
 }

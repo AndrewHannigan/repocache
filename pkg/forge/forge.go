@@ -1,6 +1,6 @@
 // Package forge talks to GitHub by shelling out to the `gh` CLI: it discovers
 // the repos belonging to an owner (a user or org) and reports whether a
-// branch has a merged pull request. This is repocache's only runtime
+// branch has a merged pull request. This is shed's only runtime
 // dependency beyond `git` — everything else syncs with plain `git`, so callers
 // degrade gracefully when `gh` is missing or unauthenticated (see the sentinel
 // errors below).
@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 // Sentinel errors callers use to decide how to degrade. ErrGhMissing means the

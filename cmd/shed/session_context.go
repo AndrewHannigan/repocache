@@ -10,9 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/repocache/pkg/agents"
-	"github.com/AndrewHannigan/repocache/pkg/config"
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/agents"
+	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 func newSessionContextCmd() *cobra.Command {
@@ -20,9 +20,9 @@ func newSessionContextCmd() *cobra.Command {
 	var text bool
 	cmd := &cobra.Command{
 		Use:    "__session-context",
-		Short:  "(internal) Emit the repocache guide in an agent's session-context shape",
+		Short:  "(internal) Emit the shed guide in an agent's session-context shape",
 		Hidden: true,
-		Long: `__session-context prints the repocache guide in the shape the selected
+		Long: `__session-context prints the shed guide in the shape the selected
 agent's session-context integration expects, chosen with --agent <key>.
 The content is identical across agents; only the surrounding shape differs,
 so each agent gets what makes sense for it rather than one agent's
@@ -32,7 +32,7 @@ claude gets a JSON envelope it reads from its SessionStart hook and
 injects into the model's context, delimited so it can be extracted from
 surrounding hook output:
 
-    <repocache-session-context>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</repocache-session-context>
+    <shed-session-context>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</shed-session-context>
 
 codex and opencode instead get the raw Markdown body, with no envelope or
 delimiters: Codex accepts plain stdout as developer context, and
@@ -51,14 +51,14 @@ repos are available without having to run it.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --text is the deprecated alias for --agent opencode (the raw
 			// body), kept so opencode plugins installed before --agent existed
-			// keep working until the next `repocache init`.
+			// keep working until the next `shed init`.
 			if text {
 				agentKey = "opencode"
 			}
 			return printSessionContext(os.Stdout, agentKey)
 		},
 	}
-	// Default to claude so a bare `repocache __session-context` (the hook
+	// Default to claude so a bare `shed __session-context` (the hook
 	// command installed before --agent existed) still emits the envelope the
 	// hook-based agents accept.
 	cmd.Flags().StringVar(&agentKey, "agent", "claude", "agent whose session-context output shape to emit (claude, codex, cursor, opencode)")
@@ -80,8 +80,8 @@ func printSessionContext(w io.Writer, agentKey string) error {
 
 // sessionContextBody is the bundled guide followed by a live snapshot of the
 // library (so the agent starts each session already knowing which repos are
-// available without having to run `repocache ls` itself) and a short log of the
-// user's recent repocache commands (so the agent has ambient awareness of what
+// available without having to run `shed ls` itself) and a short log of the
+// user's recent shed commands (so the agent has ambient awareness of what
 // they've been working on). Both appendices are best-effort: if either can't be
 // read it is simply omitted.
 func sessionContextBody() string {
@@ -93,7 +93,7 @@ func sessionContextBody() string {
 		body = w + "\n" + body
 	}
 	if list := repoListText(); list != "" {
-		body += "\nThe library currently contains (output of `repocache ls`):\n\n```\n" + list + "```\n"
+		body += "\nThe library currently contains (output of `shed ls`):\n\n```\n" + list + "```\n"
 	}
 	body += recentHistoryText()
 	return body
@@ -123,7 +123,7 @@ func syncHealthBanner() string {
 			fmt.Fprintf(&b, ">   - %s — last good sync %s\n", f.Name, relTime(f.LastSyncAt))
 		}
 	}
-	b.WriteString("> Run `repocache status <repo>` for the error and the fix.\n")
+	b.WriteString("> Run `shed status <repo>` for the error and the fix.\n")
 	return b.String()
 }
 
@@ -134,7 +134,7 @@ func syncHealthBanner() string {
 // surfaced here for the specific repo so the agent can't skip the check.
 //
 // Best-effort: any failure (not in a git repo, no origin, unreadable config)
-// yields "" and the body is emitted unchanged. A cwd inside repocache's own
+// yields "" and the body is emitted unchanged. A cwd inside shed's own
 // data dir (a workspace, or the read-only cache) shares the upstream origin
 // and is the intended place to edit, so it never warns there.
 func cwdCollisionWarning() string {
@@ -178,13 +178,13 @@ func collisionWarning(cwd, origin string, repos []config.Repo) string {
 		return fmt.Sprintf("> ⚠️ HEADS UP — local checkout collision\n"+
 			">\n"+
 			"> Your current working directory `%s` is also library repo `%s`.\n"+
-			"> They are two independent clones, and a `repocache workspace` is kept\n"+
+			"> They are two independent clones, and a `shed workspace` is kept\n"+
 			"> up to date automatically, so it is the fresher copy. This cwd is the\n"+
 			"> one genuinely ambiguous case, though — you may have been launched here\n"+
 			"> on purpose to edit in place. Before editing anything here, STOP and ask\n"+
 			"> the user which to use:\n"+
 			">   - edit this checkout in place (it may be behind upstream), or\n"+
-			">   - create an isolated, always-fresh workspace: `repocache workspace new %s <branch>`\n"+
+			">   - create an isolated, always-fresh workspace: `shed workspace new %s <branch>`\n"+
 			">\n"+
 			"> Do not assume — the choice decides where your commits land.\n",
 			paths.Display(cwd), name, name)

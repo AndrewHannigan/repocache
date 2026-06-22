@@ -10,9 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/repocache/pkg/cache"
-	"github.com/AndrewHannigan/repocache/pkg/config"
-	"github.com/AndrewHannigan/repocache/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/cache"
+	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/errs"
 )
 
 func newStatusCmd() *cobra.Command {
@@ -83,7 +83,7 @@ func runStatusSummary(c *config.Config) error {
 		fmt.Fprintf(w, "  %s\t%s\n", f.Name, lastGoodSync(f.LastSyncAt))
 	}
 	w.Flush()
-	fmt.Println("Run `repocache status <repo>` for the full error and suggested fix.")
+	fmt.Println("Run `shed status <repo>` for the full error and suggested fix.")
 	return nil
 }
 
@@ -103,7 +103,7 @@ func runStatusRepo(c *config.Config, arg string) error {
 
 	fmt.Println(name)
 	if meta == nil {
-		fmt.Printf("  not synced yet — run `repocache sync %s`\n", name)
+		fmt.Printf("  not synced yet — run `shed sync %s`\n", name)
 		return nil
 	}
 	fmt.Printf("  last good sync:  %s\n", stampLine(meta.LastSyncAt))
@@ -145,12 +145,12 @@ func stampLine(t time.Time) string {
 // string heuristics over git's output — best-effort, never authoritative.
 func likelyCause(errText, name string) string {
 	low := strings.ToLower(errText)
-	sync := fmt.Sprintf("`repocache sync %s`", name)
+	sync := fmt.Sprintf("`shed sync %s`", name)
 	switch {
 	case containsAny(low, "could not read username", "authentication failed", "permission denied", "403 forbidden", "terminal prompts disabled", "invalid credentials"):
 		return "authentication — run `gh auth login`, then " + sync
 	case containsAny(low, "repository not found", "not found", "404", "does not exist"):
-		return fmt.Sprintf("repo may be renamed or deleted upstream — verify it exists, or remove it with `repocache rm %s`", name)
+		return fmt.Sprintf("repo may be renamed or deleted upstream — verify it exists, or remove it with `shed rm %s`", name)
 	case containsAny(low, "could not resolve host", "connection refused", "connection timed out", "timed out", "network is unreachable", "temporary failure in name resolution"):
 		return "network — likely transient; check your connection and re-run " + sync
 	case strings.Contains(low, "locked"):

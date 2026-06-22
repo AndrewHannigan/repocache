@@ -9,10 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/repocache/pkg/agents"
-	"github.com/AndrewHannigan/repocache/pkg/errs"
-	"github.com/AndrewHannigan/repocache/pkg/paths"
-	"github.com/AndrewHannigan/repocache/pkg/workspace"
+	"github.com/AndrewHannigan/shed/pkg/agents"
+	"github.com/AndrewHannigan/shed/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
 
 func newUninstallCmd() *cobra.Command {
@@ -20,15 +20,15 @@ func newUninstallCmd() *cobra.Command {
 	var purge bool
 	cmd := &cobra.Command{
 		Use:   "uninstall",
-		Short: "Reverse agent integration (leaves repocache data and config in place)",
-		Long: `uninstall removes the entries repocache previously added to each
+		Short: "Reverse agent integration (leaves shed data and config in place)",
+		Long: `uninstall removes the entries shed previously added to each
 agent's config: the allowed-directory entries and SessionStart hooks.
-Uses a sidecar state file to know which entries are repocache's; other
+Uses a sidecar state file to know which entries are shed's; other
 entries are preserved. Also cleans up the legacy @REPOCACHE.md import
-and doc file that older repocache versions installed.
+and doc file that older shed versions installed.
 
-By default this does NOT delete ~/.config/repocache/ or
-~/.repocache/. Pass --purge to also remove those, deleting
+By default this does NOT delete ~/.config/shed/ or
+~/.shed/. Pass --purge to also remove those, deleting
 all cached repos, workspaces, and config. --purge warns and asks for
 confirmation if any workspace has uncommitted or unpushed work.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -36,7 +36,7 @@ confirmation if any workspace has uncommitted or unpushed work.`,
 		},
 	}
 	cmd.Flags().StringVar(&agentsFlag, "agents", "auto", "which agents to uninstall: auto|all|<comma-separated list>")
-	cmd.Flags().BoolVar(&purge, "purge", false, "also delete ~/.config/repocache and ~/.repocache (all cached repos, workspaces, and config)")
+	cmd.Flags().BoolVar(&purge, "purge", false, "also delete ~/.config/shed and ~/.shed (all cached repos, workspaces, and config)")
 	return cmd
 }
 
@@ -82,7 +82,7 @@ func runUninstall(flag string, purge bool) error {
 	return nil
 }
 
-// runPurge deletes repocache's config and data directories. It first
+// runPurge deletes shed's config and data directories. It first
 // scans workspaces for uncommitted or unpushed work and, if any is
 // found, prints them and asks for confirmation before deleting.
 func runPurge() error {
@@ -162,7 +162,7 @@ func confirmPurge() bool {
 		fmt.Fprintln(os.Stderr, "refusing to purge dirty workspaces without an interactive confirmation")
 		return false
 	}
-	fmt.Fprint(os.Stderr, "\nDelete all repocache data and config anyway? [y/N] ")
+	fmt.Fprint(os.Stderr, "\nDelete all shed data and config anyway? [y/N] ")
 	r := bufio.NewReader(os.Stdin)
 	line, _ := r.ReadString('\n')
 	line = strings.TrimSpace(strings.ToLower(line))

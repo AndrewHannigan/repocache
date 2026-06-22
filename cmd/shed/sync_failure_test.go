@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AndrewHannigan/repocache/pkg/cache"
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/cache"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 // TestFinishErrPersistsFailure verifies a failed sync records the error in the

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
-// setupDataDir points HOME at a temp dir and creates the repocache data dir, so
+// setupDataDir points HOME at a temp dir and creates the shed data dir, so
 // Record has somewhere to write. Returns the data dir path.
 func setupDataDir(t *testing.T) string {
 	t.Helper()
@@ -28,7 +28,7 @@ func TestRecordAndRecent(t *testing.T) {
 
 	for _, args := range [][]string{
 		{"add", "octocat/Hello-World"},
-		{"workspace", "new", "repocache", "feat-x"},
+		{"workspace", "new", "shed", "feat-x"},
 		{"gc"},
 	} {
 		if err := Record(args); err != nil {

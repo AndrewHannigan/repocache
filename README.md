@@ -1,4 +1,4 @@
-# repocache
+# shed
 
 ![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -7,7 +7,7 @@ A managed repo catalog for terminal coding agents
 - 🔒 **OS-enforced read-only repos** — every repo is a pristine reference that is impossible to clobber.
 - ⚡ **Cheap workspaces** — `git clone --reference` shares the object store; no history re-download.
 - 🔄 **Repos never stale** — refreshed in the background at session start.
-- 🤝 **Auto-integrates with your agents** — one `repocache init` wires up Claude Code, Codex, Cursor, and opencode.
+- 🤝 **Auto-integrates with your agents** — one `shed init` wires up Claude Code, Codex, Cursor, and opencode.
 - 📦 **Persistent shared library** — cached once and reused across sessions, never re-cloned to `/tmp`.
 - 🧰 **Natively searchable** — `rg`, `grep`, `git`, and `gh` work directly; no wrappers.
 - 🌐 **Simpler multi-repo PRs** — spin up writable workspaces on demand from the read-only repos.
@@ -18,10 +18,10 @@ A managed repo catalog for terminal coding agents
 
 ```bash
 # macOS (Homebrew)
-brew install AndrewHannigan/tap/repocache
+brew install AndrewHannigan/tap/shed
 
 # Linux / other Unix
-curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/shed/main/install.sh | sh
 ```
 
 ---
@@ -30,29 +30,29 @@ curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/insta
 
 ```bash
 # integrate with your agents
-repocache init
+shed init
 
 # add a repo — it's fetched right away (read-only)
-repocache add https://github.com/octocat/Hello-World
+shed add https://github.com/octocat/Hello-World
 
 # GitHub shorthand works too — "owner/repo" is expanded against github.com
-repocache add octocat/Hello-World
+shed add octocat/Hello-World
 
 # now run claude, cursor-agent, codex, or opencode — your agent knows how to use it
 ```
 
-That's the whole loop. Repocache adds exactly two things to your agent's world:
+That's the whole loop. Shed adds exactly two things to your agent's world:
 
-- A **physically read-only** directory at `~/.repocache/repos/<host>/<owner>/<repo>/` (chmod a-w), so the agent can `rg`/`grep` freely with zero risk of accidental writes.
+- A **physically read-only** directory at `~/.shed/repos/<host>/<owner>/<repo>/` (chmod a-w), so the agent can `rg`/`grep` freely with zero risk of accidental writes.
 - A `workspace new` command that syncs the repo first (so you fork from up-to-date code) and returns the path to an editable clone derived from the cache via `git clone --reference`.
 
-Everything else — searching, branch listing, PR creation — uses tools the agent already knows (`rg`, `git`, `gh`). Repocache doesn't wrap them.
+Everything else — searching, branch listing, PR creation — uses tools the agent already knows (`rg`, `git`, `gh`). Shed doesn't wrap them.
 
 ---
 
 ## Supported agents
 
-`repocache init` auto-detects each agent by config-dir presence and (in TTY mode) prompts before writing anything:
+`shed init` auto-detects each agent by config-dir presence and (in TTY mode) prompts before writing anything:
 
 | Agent | Config dir | Allowed-dir setting | SessionStart hooks |
 |-------|-----------|---------------------|--------------------|
@@ -61,25 +61,25 @@ Everything else — searching, branch listing, PR creation — uses tools the ag
 | Cursor CLI | `~/.cursor/` | n/a³ | session-context + bg-sync (`hooks.json`)³ |
 | opencode | `~/.config/opencode/` | n/a² | plugin (see below)² |
 
-¹ Codex requires you to trust new hooks: after `repocache init`, open Codex CLI once and run `/hooks`. Note: Codex's TUI prints the injected guide as a visible "SessionStart hook (completed)" event each session — unlike Claude, it can't yet inject it silently ([codex#15497](https://github.com/openai/codex/issues/15497)).
+¹ Codex requires you to trust new hooks: after `shed init`, open Codex CLI once and run `/hooks`. Note: Codex's TUI prints the injected guide as a visible "SessionStart hook (completed)" event each session — unlike Claude, it can't yet inject it silently ([codex#15497](https://github.com/openai/codex/issues/15497)).
 
-² opencode has no SessionStart shell hook and no path allowlist. Instead, `init` drops a plugin at `~/.config/opencode/plugin/repocache.js`, auto-loaded at startup; it runs `repocache __bg-sync` and injects the guide into the model's system prompt via opencode's `experimental.chat.system.transform` hook. `uninstall` deletes the file.
+² opencode has no SessionStart shell hook and no path allowlist. Instead, `init` drops a plugin at `~/.config/opencode/plugin/shed.js`, auto-loaded at startup; it runs `shed __bg-sync` and injects the guide into the model's system prompt via opencode's `experimental.chat.system.transform` hook. `uninstall` deletes the file.
 
-³ Cursor's hooks live in `~/.cursor/hooks.json` under `hooks.sessionStart` (a flatter, camelCase shape than Claude/Codex). repocache adds two `sessionStart` entries — `repocache __session-context --agent cursor` and `repocache __bg-sync`. The session-context one prints a `{"additional_context":"…"}` JSON object that Cursor injects into the conversation. Cursor has no per-directory allowlist (like opencode, the `chmod a-w` on `repos/` enforces read-only), so no paths are registered. If a hand-rolled `~/.cursor/plugins/local/repocache` plugin is present, `init` removes it so the guide isn't injected twice.
+³ Cursor's hooks live in `~/.cursor/hooks.json` under `hooks.sessionStart` (a flatter, camelCase shape than Claude/Codex). shed adds two `sessionStart` entries — `shed __session-context --agent cursor` and `shed __bg-sync`. The session-context one prints a `{"additional_context":"…"}` JSON object that Cursor injects into the conversation. Cursor has no per-directory allowlist (like opencode, the `chmod a-w` on `repos/` enforces read-only), so no paths are registered. If a hand-rolled `~/.cursor/plugins/local/shed` plugin is present, `init` removes it so the guide isn't injected twice.
 
-All edits are idempotent and recorded in a sidecar state file, so `repocache uninstall` removes only what repocache added.
+All edits are idempotent and recorded in a sidecar state file, so `shed uninstall` removes only what shed added.
 
-**Why a SessionStart hook and not a static doc or a skill?** Skills load lazily — the agent only sees them once something triggers, but the whole point is that the agent reaches for repocache *before* doing the wrong thing (cloning into `/tmp`, hallucinating a path). The `repocache __session-context` hook injects the guide into context at the start of every session. Because that text is generated by the binary rather than written to a file, it's always current — there's nothing to drift after an upgrade.
+**Why a SessionStart hook and not a static doc or a skill?** Skills load lazily — the agent only sees them once something triggers, but the whole point is that the agent reaches for shed *before* doing the wrong thing (cloning into `/tmp`, hallucinating a path). The `shed __session-context` hook injects the guide into context at the start of every session. Because that text is generated by the binary rather than written to a file, it's always current — there's nothing to drift after an upgrade.
 
 ---
 
 ## Layout on disk
 
 ```
-~/.config/repocache/
+~/.config/shed/
 └── config.toml                              # your tracked repos
 
-~/.repocache/
+~/.shed/
 ├── repos/<host>/<owner>/<repo>/             # cache (chmod a-w)
 └── workspaces/<host>/<owner>/<repo>/<br>/   # editable (git clone --reference)
 ```
@@ -107,19 +107,19 @@ url = "https://github.com/octocat"
 
 ## Why `git clone --reference`, not `git worktree`
 
-Both share an underlying object store, but they are not interchangeable. A worktree of the cache *is* the cache: committing in it mutates `<cache>/.git/refs/...`, breaking the read-only invariant, and worktrees forbid checking out the same branch twice. `--reference` clones keep independent refs, allow two agents on the same branch, and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Repocache sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race.
+Both share an underlying object store, but they are not interchangeable. A worktree of the cache *is* the cache: committing in it mutates `<cache>/.git/refs/...`, breaking the read-only invariant, and worktrees forbid checking out the same branch twice. `--reference` clones keep independent refs, allow two agents on the same branch, and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Shed sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race.
 
 ---
 
 ## Authentication
 
-Repocache does not manage credentials. Every git operation defers to whatever `git clone <url>` already works with in your shell — HTTPS credential helpers or `ssh-agent`. If `git clone <url>` works, repocache works.
+Shed does not manage credentials. Every git operation defers to whatever `git clone <url>` already works with in your shell — HTTPS credential helpers or `ssh-agent`. If `git clone <url>` works, shed works.
 
 ---
 
 ## Documentation
 
-- `repocache --help` and `repocache <cmd> --help` — flag reference
+- `shed --help` and `shed <cmd> --help` — flag reference
 
 ## License
 

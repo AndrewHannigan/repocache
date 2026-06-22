@@ -8,7 +8,7 @@ import (
 
 	"github.com/tailscale/hujson"
 
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 // loadJSONC reads a JSONC file (JSON with comments). Comments are

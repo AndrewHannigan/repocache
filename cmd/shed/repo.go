@@ -13,12 +13,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/repocache/pkg/cache"
-	"github.com/AndrewHannigan/repocache/pkg/config"
-	"github.com/AndrewHannigan/repocache/pkg/errs"
-	"github.com/AndrewHannigan/repocache/pkg/forge"
-	"github.com/AndrewHannigan/repocache/pkg/paths"
-	"github.com/AndrewHannigan/repocache/pkg/workspace"
+	"github.com/AndrewHannigan/shed/pkg/cache"
+	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/forge"
+	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
 
 const configLockTimeout = 2 * time.Second
@@ -32,7 +32,7 @@ func newAddCmd() *cobra.Command {
 		Long: `add appends a repo to the library. <repo> may be a full git URL
 (https://, ssh://, or scp-style git@host:owner/repo) or GitHub shorthand:
 a bare "owner/repo" or "owner" is expanded against github.com, so
-"repocache add octocat/Hello-World" and "repocache add octocat"
+"shed add octocat/Hello-World" and "shed add octocat"
 both just work.
 
 If <repo> points at a bare user or org (a single path segment, e.g.
@@ -103,7 +103,7 @@ func runRepoAddOne(url, overrideName string) error {
 	}
 	fmt.Printf("added %s\n", effectiveName)
 	// Fetch the new repo right away so the cache is populated without a
-	// separate `repocache sync`. Scoped to just this repo.
+	// separate `shed sync`. Scoped to just this repo.
 	return runSync([]string{effectiveName}, syncDefaultJobs, 0, false)
 }
 
@@ -491,7 +491,7 @@ func collectRepoList(c *config.Config) ([]repoRow, []ownerRow, error) {
 // writeRepoTable renders the human-readable `ls` table to out.
 func writeRepoTable(out io.Writer, rows []repoRow, owners []ownerRow) error {
 	if len(rows) == 0 && len(owners) == 0 {
-		fmt.Fprintln(out, "(no repos tracked; add with `repocache add <url>`)")
+		fmt.Fprintln(out, "(no repos tracked; add with `shed add <url>`)")
 		return nil
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)

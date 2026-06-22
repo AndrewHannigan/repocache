@@ -1,22 +1,22 @@
 #!/usr/bin/env sh
-# repocache install script
+# shed install script
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/repocache/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/shed/main/install.sh | sh
 #
 # Environment variables:
-#   REPOCACHE_INSTALL_DIR — install dir (default: /usr/local/bin)
-#   REPOCACHE_VERSION     — release tag without leading 'v' (default: latest)
+#   SHED_INSTALL_DIR — install dir (default: /usr/local/bin)
+#   SHED_VERSION     — release tag without leading 'v' (default: latest)
 #
 # Examples:
-#   REPOCACHE_VERSION=0.0.4 sh install.sh
-#   REPOCACHE_INSTALL_DIR=$HOME/.local/bin sh install.sh
+#   SHED_VERSION=0.0.4 sh install.sh
+#   SHED_INSTALL_DIR=$HOME/.local/bin sh install.sh
 
 set -eu
 
-REPO="AndrewHannigan/repocache"
-BINARY="repocache"
-INSTALL_DIR="${REPOCACHE_INSTALL_DIR:-/usr/local/bin}"
-VERSION="${REPOCACHE_VERSION:-latest}"
+REPO="AndrewHannigan/shed"
+BINARY="shed"
+INSTALL_DIR="${SHED_INSTALL_DIR:-/usr/local/bin}"
+VERSION="${SHED_VERSION:-latest}"
 
 # ── Detect OS ─────────────────────────────────────────────────────────────────
 case "$(uname -s)" in
@@ -24,7 +24,7 @@ case "$(uname -s)" in
   Darwin*) OS="darwin" ;;
   *)
     printf 'error: unsupported OS: %s\n' "$(uname -s)" >&2
-    printf '       repocache is for Linux and macOS.\n' >&2
+    printf '       shed is for Linux and macOS.\n' >&2
     exit 1
     ;;
 esac
@@ -42,7 +42,7 @@ esac
 # ── Suggest Homebrew on macOS ─────────────────────────────────────────────────
 if [ "$OS" = "darwin" ] && command -v brew >/dev/null 2>&1; then
   printf 'note: on macOS, the recommended install is:\n'
-  printf '      brew install AndrewHannigan/tap/repocache\n'
+  printf '      brew install AndrewHannigan/tap/shed\n'
   printf '      (signed + notarized, auto-updates via `brew upgrade`)\n\n'
   printf 'Continuing with manual install in 3 seconds... (Ctrl-C to abort)\n\n'
   sleep 3
@@ -128,5 +128,5 @@ esac
 # ── Next step ─────────────────────────────────────────────────────────────────
 printf '\nNext, run:\n'
 printf '    %s init\n' "$BINARY"
-printf '  to wire repocache into your coding agents (Claude Code, Codex, Cursor, ...).\n'
+printf '  to wire shed into your coding agents (Claude Code, Codex, Cursor, ...).\n'
 printf '  It asks before editing any agent config, and is safe to re-run.\n'

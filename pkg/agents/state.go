@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
-// State is the on-disk record of what repocache has installed into each
+// State is the on-disk record of what shed has installed into each
 // agent's config files. Used to compute precise reversals on uninstall.
 type State struct {
 	Agents map[string]Installed `json:"agents,omitempty"`
