@@ -69,7 +69,7 @@ Commands:
   ls            list tracked repos and owners
   rm            remove a tracked repo or owner
   sync          fetch tracked repos and re-apply read-only chmod
-  workspace     {new,list,path,rm} of writable workspaces
+  workspace     {new,ls,path,rm} of writable workspaces
   help <topic>  long-form docs
 
 Topics: agents, auth, concepts, init, library, locking, owner, sync, workspace
@@ -256,7 +256,7 @@ sharing object storage but with independent refs. Edits happen here.
     the absolute workspace path on stdout; make changes there, then commit
     and push.
 
-  repocache workspace list [--json]
+  repocache workspace ls [--json]
     Every workspace with repo, branch, dirty state, unpushed-commit count,
     age of the newest file.
 
