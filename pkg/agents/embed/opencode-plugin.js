@@ -1,8 +1,8 @@
 // shed:managed — installed by `shed init`. Safe to delete; shed
 // will reinstall it on the next `init`, or run `shed uninstall` to remove.
 //
-// opencode has no SessionStart shell-command hook like Claude/Codex and
-// no per-directory access allowlist, so shed integrates as a plugin that
+// opencode has no SessionStart shell-command hook and no per-directory
+// access allowlist, so shed integrates as a plugin that
 // shells back to the `shed` binary. The plugin module body runs once when
 // opencode loads it at startup — that is our "session start":
 //

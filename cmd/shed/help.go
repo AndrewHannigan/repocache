@@ -320,11 +320,10 @@ Session context
 Supported (auto-detected by config-dir presence):
 
   claude       ~/.claude/             — Claude Code
-  codex        ~/.codex/              — OpenAI's Codex CLI
   cursor       ~/.cursor/             — Cursor's CLI agent (cursor-agent)
   opencode     ~/.config/opencode/    — opencode
 
-For claude and codex, 'shed init' writes (idempotently, recorded in a
+For claude, 'shed init' writes (idempotently, recorded in a
 sidecar state file so 'uninstall' can reverse precisely):
 
   1. The cache + workspaces dirs in the allowed-filesystem-paths
@@ -339,7 +338,7 @@ sidecar state file so 'uninstall' can reverse precisely):
 
 cursor is also a SessionStart-hook agent, but its hooks live in
 ~/.cursor/hooks.json under 'hooks.sessionStart' — a flatter, camelCase
-shape than Claude/Codex. 'init' adds the same two hooks there (session-
+shape than Claude's. 'init' adds the same two hooks there (session-
 context + bg-sync); --agent cursor emits a '{"additional_context":"…"}'
 JSON object Cursor injects into the conversation. Cursor has no path
 allowlist (the chmod a-w on repos/ enforces read-only), so no paths are

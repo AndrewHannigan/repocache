@@ -34,9 +34,8 @@ surrounding hook output:
 
     <shed-session-context>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</shed-session-context>
 
-codex and opencode instead get the raw Markdown body, with no envelope or
-delimiters: Codex accepts plain stdout as developer context, and
-opencode's plugin pushes the text into the model's system prompt itself.
+opencode gets the raw Markdown body, with no envelope or delimiters: its
+plugin pushes the text into the model's system prompt.
 
 cursor gets a flat JSON object its sessionStart hook reads from stdout,
 whose additional_context field is injected into the conversation:
@@ -61,7 +60,7 @@ repos are available without having to run it.`,
 	// Default to claude so a bare `shed __session-context` (the hook
 	// command installed before --agent existed) still emits the envelope the
 	// hook-based agents accept.
-	cmd.Flags().StringVar(&agentKey, "agent", "claude", "agent whose session-context output shape to emit (claude, codex, cursor, opencode)")
+	cmd.Flags().StringVar(&agentKey, "agent", "claude", "agent whose session-context output shape to emit (claude, cursor, opencode)")
 	cmd.Flags().BoolVar(&text, "text", false, "deprecated alias for --agent opencode (raw guide body)")
 	_ = cmd.Flags().MarkHidden("text")
 	return cmd

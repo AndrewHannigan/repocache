@@ -27,7 +27,7 @@ type InstallOptions struct {
 
 // Agent is the interface every supported agent implements.
 type Agent interface {
-	Key() string    // stable lower-case identifier: "claude", "codex", ...
+	Key() string    // stable lower-case identifier: "claude", "cursor", ...
 	Name() string   // display name: "Claude Code"
 	Detected() bool // is the agent installed (config dir present)?
 	Install(opts InstallOptions) (Installed, error)
@@ -56,7 +56,6 @@ type Installed struct {
 func All() []Agent {
 	return []Agent{
 		NewClaude(),
-		NewCodex(),
 		NewCursor(),
 		NewOpencode(),
 	}
@@ -143,7 +142,7 @@ func installHooks(opts InstallOptions, sessionContextCmd, bgSyncCmd string, ensu
 	return added, nil
 }
 
-// hookLabel is the short human label for a hook command, used for the Codex
+// hookLabel is the short human label for a hook command, used for the
 // statusMessage. The session-context command carries a trailing --agent <key>,
 // so commands are matched by prefix rather than exact equality.
 func hookLabel(command string) string {

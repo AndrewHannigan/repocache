@@ -50,34 +50,24 @@ func TestPrintSessionContextClaudeEnvelope(t *testing.T) {
 	}
 }
 
-// The plain-text agents (codex, opencode) get the raw Markdown body — no
-// envelope, no delimiter tags. Codex injects plain stdout as developer
-// context; opencode's plugin pushes the text into the system prompt directly.
-// Codex additionally gets a leading newline so the body breaks off Codex's
-// "hook context: " label onto its own line.
-func TestPrintSessionContextPlainTextAgents(t *testing.T) {
-	for agent, wantPrefix := range map[string]string{
-		"codex":    "\n" + string(agents.DocContent),
-		"opencode": string(agents.DocContent),
-	} {
-		t.Run(agent, func(t *testing.T) {
-			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+// opencode gets the raw Markdown body — no envelope, no delimiter tags. Its
+// plugin pushes the text into the system prompt directly.
+func TestPrintSessionContextOpencodeBody(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-			var buf bytes.Buffer
-			if err := printSessionContext(&buf, agent); err != nil {
-				t.Fatalf("printSessionContext: %v", err)
-			}
-			out := buf.String()
-			if strings.Contains(out, "<shed-session-context>") || strings.Contains(out, "hookSpecificOutput") {
-				t.Errorf("%s output must be raw body, not the hook envelope:\n%s", agent, out)
-			}
-			if !strings.HasPrefix(out, wantPrefix) {
-				t.Errorf("%s output should start with %q:\n%s", agent, wantPrefix, out)
-			}
-			if !strings.HasSuffix(out, "\n") {
-				t.Errorf("output should be newline-terminated")
-			}
-		})
+	var buf bytes.Buffer
+	if err := printSessionContext(&buf, "opencode"); err != nil {
+		t.Fatalf("printSessionContext: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "<shed-session-context>") || strings.Contains(out, "hookSpecificOutput") {
+		t.Errorf("opencode output must be raw body, not the hook envelope:\n%s", out)
+	}
+	if !strings.HasPrefix(out, string(agents.DocContent)) {
+		t.Errorf("opencode output should start with the embedded guide:\n%s", out)
+	}
+	if !strings.HasSuffix(out, "\n") {
+		t.Errorf("output should be newline-terminated")
 	}
 }
 

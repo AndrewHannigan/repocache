@@ -35,7 +35,7 @@ shed init
 # add a repo (github shorthand works)
 shed add octocat/Hello-World
 
-# now run claude, cursor-agent, codex, or opencode — your agent knows how to use it
+# now run claude, cursor-agent, or opencode — your agent knows how to use it
 ```
 
 ---
@@ -47,15 +47,12 @@ shed add octocat/Hello-World
 | Agent | Config dir | Allowed-dir setting | SessionStart hooks |
 |-------|-----------|---------------------|--------------------|
 | Claude Code | `~/.claude/` | `settings.json` → `permissions.additionalDirectories` | session-context + bg-sync |
-| Codex CLI | `~/.codex/` | `config.toml` → `sandbox_workspace_write.writable_roots` | session-context + bg-sync (requires trust)¹ |
-| Cursor CLI | `~/.cursor/` | n/a³ | session-context + bg-sync (`hooks.json`)³ |
-| opencode | `~/.config/opencode/` | n/a² | plugin (see below)² |
+| Cursor CLI | `~/.cursor/` | n/a² | session-context + bg-sync (`hooks.json`)² |
+| opencode | `~/.config/opencode/` | n/a¹ | plugin (see below)¹ |
 
-¹ Codex requires you to trust new hooks: after `shed init`, open Codex CLI once and run `/hooks`. Note: Codex's TUI prints the injected guide as a visible "SessionStart hook (completed)" event each session — unlike Claude, it can't yet inject it silently ([codex#15497](https://github.com/openai/codex/issues/15497)).
+¹ opencode has no SessionStart shell hook and no path allowlist. Instead, `init` drops a plugin at `~/.config/opencode/plugin/shed.js`, auto-loaded at startup; it runs `shed __bg-sync` and injects the guide into the model's system prompt via opencode's `experimental.chat.system.transform` hook. `uninstall` deletes the file.
 
-² opencode has no SessionStart shell hook and no path allowlist. Instead, `init` drops a plugin at `~/.config/opencode/plugin/shed.js`, auto-loaded at startup; it runs `shed __bg-sync` and injects the guide into the model's system prompt via opencode's `experimental.chat.system.transform` hook. `uninstall` deletes the file.
-
-³ Cursor's hooks live in `~/.cursor/hooks.json` under `hooks.sessionStart` (a flatter, camelCase shape than Claude/Codex). shed adds two `sessionStart` entries — `shed __session-context --agent cursor` and `shed __bg-sync`. The session-context one prints a `{"additional_context":"…"}` JSON object that Cursor injects into the conversation. Cursor has no per-directory allowlist (like opencode, the `chmod a-w` on `repos/` enforces read-only), so no paths are registered. If a hand-rolled `~/.cursor/plugins/local/shed` plugin is present, `init` removes it so the guide isn't injected twice.
+² Cursor's hooks live in `~/.cursor/hooks.json` under `hooks.sessionStart` (a flatter, camelCase shape than Claude's). shed adds two `sessionStart` entries — `shed __session-context --agent cursor` and `shed __bg-sync`. The session-context one prints a `{"additional_context":"…"}` JSON object that Cursor injects into the conversation. Cursor has no per-directory allowlist (like opencode, the `chmod a-w` on `repos/` enforces read-only), so no paths are registered. If a hand-rolled `~/.cursor/plugins/local/shed` plugin is present, `init` removes it so the guide isn't injected twice.
 
 All edits are idempotent and recorded in a sidecar state file, so `shed uninstall` removes only what shed added.
 
