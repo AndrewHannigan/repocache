@@ -38,6 +38,11 @@ codex and opencode instead get the raw Markdown body, with no envelope or
 delimiters: Codex accepts plain stdout as developer context, and
 opencode's plugin pushes the text into the model's system prompt itself.
 
+cursor gets a flat JSON object its sessionStart hook reads from stdout,
+whose additional_context field is injected into the conversation:
+
+    {"additional_context":"..."}
+
 The guide is generated from the running binary, so it is always current —
 there is no on-disk doc to drift after an upgrade. It also appends a live
 snapshot of the library (the "ls" table) so the agent knows which
@@ -56,7 +61,7 @@ repos are available without having to run it.`,
 	// Default to claude so a bare `repocache __session-context` (the hook
 	// command installed before --agent existed) still emits the envelope the
 	// hook-based agents accept.
-	cmd.Flags().StringVar(&agentKey, "agent", "claude", "agent whose session-context output shape to emit (claude, codex, opencode)")
+	cmd.Flags().StringVar(&agentKey, "agent", "claude", "agent whose session-context output shape to emit (claude, codex, cursor, opencode)")
 	cmd.Flags().BoolVar(&text, "text", false, "deprecated alias for --agent opencode (raw guide body)")
 	_ = cmd.Flags().MarkHidden("text")
 	return cmd
