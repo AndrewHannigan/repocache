@@ -70,9 +70,10 @@ Commands:
   rm            remove a tracked repo or owner
   sync          fetch tracked repos and re-apply read-only chmod
   workspace     {new,ls,path,rm} of writable workspaces
+  gc            delete workspaces whose branch has a merged PR
   help <topic>  long-form docs
 
-Topics: agents, auth, concepts, init, library, locking, owner, sync, workspace
+Topics: agents, auth, concepts, gc, init, library, locking, owner, sync, workspace
 `,
 
 	"concepts": `Concepts
@@ -267,14 +268,24 @@ sharing object storage but with independent refs. Edits happen here.
     Delete workspace dir. Refuses with exit 4 if dirty or unpushed
     unless --force.
 
-  repocache workspace gc [--dry-run] [--force]
-    Delete every workspace whose branch has a merged pull request (asks
-    GitHub via the gh CLI). Skips workspaces with uncommitted or unpushed
-    changes unless --force. --dry-run previews without deleting.
-
 The workspace's origin remote points at the upstream URL, not the cache,
 so 'git push' works normally. New branches have no upstream until your
 first 'git push -u origin <branch>'.
+
+To bulk-clean workspaces whose work has already landed, see 'repocache help gc'.
+`,
+
+	"gc": `gc — delete workspaces whose branch has a merged PR
+
+  repocache gc [--dry-run] [--force]
+    Delete every workspace whose branch has a merged pull request (asks
+    GitHub via the gh CLI), reclaiming the ones whose work has already
+    landed. Skips workspaces with uncommitted or unpushed changes so local
+    work is never lost; pass --force to remove them anyway. --dry-run
+    previews without deleting.
+
+gc is entirely gh-driven, so gh must be installed and authenticated; it
+fails fast rather than degrade when gh can't report merge status.
 `,
 
 	"agents": `agents — terminal coding agent integration
