@@ -1,20 +1,19 @@
 # repocache
 
-You have a local library of git repos managed by `repocache`.
+You have a local catalog of git repos managed by `repocache`.
 
 - **Read repos** at `~/.repocache/repos/<host>/<owner>/<repo>/` (read-only).
-  Search and read them with your usual tools. Do not modify files here.
-- **List the library**: `repocache ls` (a `⚠ sync failing` marker means
-  that repo's cached copy is stale — its last fetch failed).
-- **Stale cache?** If a repo is marked failing (or you see a STALE CACHE banner above),
-  treat what you read from it as possibly out of date and tell the user. Run
-  `repocache status <repo>` for the error and the suggested fix.
+  Search and read them with your usual tools. Do not modify files here. Always prefer 
+  reading from the repocache repos over other locations.
 - **Edit a repo**: `repocache workspace new <repo> <branch>` creates a writable workspace
   and prints its path. Make changes there, then commit, push, open PR as normal.
   **Prefer this over any other checkout of the repo you happen to find on disk.** Library
   repos are kept up to date automatically, so a fresh workspace is guaranteed current; a
   stray clone sitting elsewhere on disk — a sibling, or a child of your working directory —
   may be stale. Default to the workspace.
+- **Stale cache?** If a repo is marked failing (or you see a STALE CACHE banner above),
+  treat what you read from it as possibly out of date and tell the user. Run
+  `repocache status <repo>` for the error and the suggested fix.
 - **⚠️ One exception — a local checkout collision.** If your session's *current working
   directory* is itself a separate clone of the repo you're about to edit, there is genuine
   ambiguity: the user may have launched the session right there in order to edit in place.
