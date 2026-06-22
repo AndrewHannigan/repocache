@@ -1,10 +1,8 @@
 # repocache
 
-![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
+![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-D97757?logo=claude&logoColor=white) ![Codex](https://img.shields.io/badge/Codex-412991?logo=openai&logoColor=white) ![Cursor](https://img.shields.io/badge/Cursor-000000?logo=cursor&logoColor=white) ![opencode](https://img.shields.io/badge/opencode-000000?logo=opencode&logoColor=white)
 
-![Claude Code](https://img.shields.io/badge/Claude%20Code-D97757?logo=claude&logoColor=white) ![Codex](https://img.shields.io/badge/Codex-412991?logo=openai&logoColor=white) ![Cursor](https://img.shields.io/badge/Cursor-000000?logo=cursor&logoColor=white) ![opencode](https://img.shields.io/badge/opencode-000000?logo=opencode&logoColor=white)
-
-git repo management for terminal coding agents
+A managed repo catalog for terminal coding agents
 
 - 🔒 **OS-enforced read-only repos** — every repo is a pristine reference that is impossible to clobber.
 - ⚡ **Cheap workspaces** — `git clone --reference` shares the object store; no history re-download.
