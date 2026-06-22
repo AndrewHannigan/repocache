@@ -7,9 +7,9 @@ import (
 
 // Cursor implements Agent for Cursor's CLI agent (cursor-agent).
 //
-// Cursor is a SessionStart-hook agent like Claude and Codex, but its hooks file
+// Cursor is a SessionStart-hook agent like Claude, but its hooks file
 // differs structurally: it uses the camelCase event name `hooks.sessionStart`
-// with FLAT command entries ({"command": "..."}) rather than Claude/Codex's
+// with FLAT command entries ({"command": "..."}) rather than Claude's
 // PascalCase `hooks.SessionStart` with nested {"hooks":[{"type","command"}]}
 // entries, and it requires a top-level "version": 1. So Cursor uses its own
 // hook helpers below (ensure/removeCursorSessionStartHook) instead of the

@@ -62,5 +62,5 @@ func newRootCmd() *cobra.Command {
 const rootLong = `shed maintains a read-only local mirror of GitHub repos and
 creates writable workspaces from it via 'git clone --reference'.
 
-Designed for terminal coding agents (Claude Code, Codex CLI, Cursor,
-opencode) to search across many repos and edit a few.`
+Designed for terminal coding agents (Claude Code, Cursor, opencode)
+to search across many repos and edit a few.`
