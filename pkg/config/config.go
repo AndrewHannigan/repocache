@@ -42,10 +42,10 @@ type Repo struct {
 // repos (via `gh`) and materializes any new ones as Source-tagged Repo
 // entries, so the rest of shed treats them as ordinary cache repos.
 type Owner struct {
-	URL             string   `toml:"url"`
-	Name            string   `toml:"name,omitempty"`
-	IncludeForks    bool     `toml:"include_forks,omitempty"`
-	IncludeArchived bool     `toml:"include_archived,omitempty"`
+	URL             string `toml:"url"`
+	Name            string `toml:"name,omitempty"`
+	IncludeForks    bool   `toml:"include_forks,omitempty"`
+	IncludeArchived bool   `toml:"include_archived,omitempty"`
 	// Visibility filters discovered repos: "all" (default), "public", or
 	// "private". Empty is treated as "all".
 	Visibility string `toml:"visibility,omitempty"`

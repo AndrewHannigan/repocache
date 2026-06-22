@@ -1,9 +1,8 @@
 package agents
 
-// SessionStart hook helpers, generic over the settings file format
-// (JSON or TOML). Each agent constructs its own outer entry with the
-// matcher/extras it wants and passes the canonical command string used
-// for idempotency + cleanup.
+// SessionStart hook helpers for JSON/JSONC settings files. Each agent
+// constructs its own outer entry with the matcher/extras it wants and
+// passes the canonical command string used for idempotency + cleanup.
 
 // ensureSessionStartHook adds `entry` to hooks.SessionStart (creating
 // the nested structure if missing). Idempotent — if any existing entry

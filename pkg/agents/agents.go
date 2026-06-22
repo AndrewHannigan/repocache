@@ -142,20 +142,6 @@ func installHooks(opts InstallOptions, sessionContextCmd, bgSyncCmd string, ensu
 	return added, nil
 }
 
-// hookLabel is the short human label for a hook command, used for the
-// statusMessage. The session-context command carries a trailing --agent <key>,
-// so commands are matched by prefix rather than exact equality.
-func hookLabel(command string) string {
-	switch {
-	case strings.HasPrefix(command, BgSyncCommand):
-		return "shed bg-sync"
-	case strings.HasPrefix(command, SessionContextCommand):
-		return "shed session-context"
-	default:
-		return "shed"
-	}
-}
-
 // ErrNotDetected is returned by Install when the agent's config dir is
 // missing (called for an undetected agent via --agents=all or explicit).
 var ErrNotDetected = errors.New("agent not detected (config dir missing)")
