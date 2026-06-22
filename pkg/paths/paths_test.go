@@ -1,6 +1,10 @@
 package paths
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestNormalizeURL(t *testing.T) {
 	tests := []struct {
@@ -57,5 +61,85 @@ func TestNormalizeURLClassification(t *testing.T) {
 	}
 	if got, err := DefaultName(repo); err != nil || got != "github.com/octocat/Hello-World" {
 		t.Errorf("DefaultName(%q) = %q, %v; want github.com/octocat/Hello-World", repo, got, err)
+	}
+}
+
+func TestValidateName(t *testing.T) {
+	valid := []string{
+		"github.com/octocat/Hello-World",
+		"github.com/octocat",
+		"example.com/group/sub/repo",
+	}
+	for _, n := range valid {
+		if err := ValidateName(n); err != nil {
+			t.Errorf("ValidateName(%q) = %v, want nil", n, err)
+		}
+	}
+	invalid := []string{
+		"",
+		"..",
+		"github.com/../../../etc/passwd",
+		"../../../../tmp/pwn",
+		"/etc/passwd",
+		"github.com//octocat",
+		`github.com\octocat`,
+	}
+	for _, n := range invalid {
+		if err := ValidateName(n); err == nil {
+			t.Errorf("ValidateName(%q) = nil, want error", n)
+		}
+	}
+}
+
+func TestValidateBranch(t *testing.T) {
+	valid := []string{"main", "feature/login", "release/v1.2.3"}
+	for _, b := range valid {
+		if err := ValidateBranch(b); err != nil {
+			t.Errorf("ValidateBranch(%q) = %v, want nil", b, err)
+		}
+	}
+	invalid := []string{
+		"",
+		"../../../../tmp/evil",
+		"feature/../../escape",
+		"/abs",
+		"-x",            // would be parsed as a git option
+		"--upload-pack", // option injection
+	}
+	for _, b := range invalid {
+		if err := ValidateBranch(b); err == nil {
+			t.Errorf("ValidateBranch(%q) = nil, want error", b)
+		}
+	}
+}
+
+func TestWriteFileAtomicPreservesMode(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "settings.json")
+
+	// New file uses the supplied default mode.
+	if err := WriteFileAtomic(p, []byte("a"), 0640); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0640 {
+		t.Fatalf("new file mode = %o, want 0640", fi.Mode().Perm())
+	}
+
+	// User tightens the file; a rewrite must not widen it back to the default.
+	if err := os.Chmod(p, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFileAtomic(p, []byte("bb"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0600 {
+		t.Fatalf("rewritten file mode = %o, want preserved 0600", fi.Mode().Perm())
+	}
+	if got, _ := os.ReadFile(p); string(got) != "bb" {
+		t.Fatalf("content = %q, want %q", got, "bb")
+	}
+	// No temp file left behind.
+	if _, err := os.Stat(p + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("temp file %q.tmp should not exist", p)
 	}
 }

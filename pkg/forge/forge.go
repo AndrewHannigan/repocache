@@ -129,10 +129,12 @@ func MergedPR(host, repo, branch string) (int, error) {
 // single newest merged PR whose head branch is branch. Kept pure (no exec) so
 // it can be unit-tested.
 func buildPRListArgs(repo, branch string) []string {
+	// The "--flag=value" form binds each value to its flag, so a repo or branch
+	// beginning with "-" can't be mistaken for a separate flag.
 	return []string{
 		"pr", "list",
-		"--repo", repo,
-		"--head", branch,
+		"--repo=" + repo,
+		"--head=" + branch,
 		"--state", "merged",
 		"--json", "number",
 		"--limit", "1",
@@ -162,7 +164,7 @@ func buildListArgs(login string, f Filter) []string {
 		limit = defaultLimit
 	}
 	args := []string{
-		"repo", "list", login,
+		"repo", "list",
 		"--limit", strconv.Itoa(limit),
 		"--json", "name,url,sshUrl,isFork,isArchived,visibility",
 	}
@@ -175,7 +177,9 @@ func buildListArgs(login string, f Filter) []string {
 	if v := strings.ToLower(f.Visibility); v != "" && v != "all" {
 		args = append(args, "--visibility", v)
 	}
-	return args
+	// "--" terminates flags, then login positionally, so an owner that begins
+	// with "-" can't be parsed as a gh flag (argument injection).
+	return append(args, "--", login)
 }
 
 // decodeRepos parses the JSON array gh emits and maps each entry to a Repo,
