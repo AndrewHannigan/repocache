@@ -226,20 +226,16 @@ func unpushedCount(path string) (int, bool) {
 }
 
 func newestMtime(path string) time.Time {
-	var newest time.Time
-	filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if strings.Contains(p, string(filepath.Separator)+".git"+string(filepath.Separator)) {
-			return nil
-		}
-		if info.ModTime().After(newest) {
-			newest = info.ModTime()
-		}
-		return nil
-	})
-	return newest
+	cmd := exec.Command("git", "-C", path, "log", "-g", "-1", "--format=%ct")
+	out, err := cmd.Output()
+	if err != nil {
+		return time.Time{}
+	}
+	ts, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+	if err != nil {
+		return time.Time{}
+	}
+	return time.Unix(ts, 0)
 }
 
 // CheckClean returns (dirty, unpushed, error). If the workspace is
