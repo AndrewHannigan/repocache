@@ -3,6 +3,7 @@
 package paths
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -53,6 +54,90 @@ func CacheRepoMetaFile(name string) string {
 // Branch with slashes becomes nested dirs.
 func WorkspacePath(name, branch string) string {
 	return filepath.Join(WorkspacesDir(), filepath.FromSlash(name), filepath.FromSlash(branch))
+}
+
+// checkSafeRelPath verifies p is a relative, slash-separated path that cannot
+// escape a base directory once joined into one: no absolute prefix, no Windows
+// volume/backslash, and no ".." or empty segment. Repo names and branches are
+// always "/"-separated regardless of host OS, so we split on "/" rather than
+// the OS separator. Without this, a name or branch like "../../etc/x" would
+// make filepath.Join resolve outside ReposDir/WorkspacesDir.
+func checkSafeRelPath(p string) error {
+	if strings.HasPrefix(p, "/") || filepath.IsAbs(p) {
+		return errors.New("must be a relative path")
+	}
+	if strings.ContainsRune(p, '\\') {
+		return errors.New("must not contain backslashes")
+	}
+	for _, seg := range strings.Split(p, "/") {
+		switch seg {
+		case "..":
+			return errors.New(`must not contain a ".." segment`)
+		case "":
+			return errors.New("must not contain empty path segments")
+		}
+	}
+	return nil
+}
+
+// ValidateName reports an error when name is not a safe relative repo name —
+// one that, joined under ReposDir or WorkspacesDir, could escape it. Called
+// when names enter config (user `--name` overrides, URL-derived defaults, and
+// owner-discovered repos) so a traversing name is rejected before it ever
+// reaches a path.
+func ValidateName(name string) error {
+	if name == "" {
+		return errors.New("repo name is empty")
+	}
+	if err := checkSafeRelPath(name); err != nil {
+		return fmt.Errorf("repo name %q is unsafe: %w", name, err)
+	}
+	return nil
+}
+
+// ValidateBranch is ValidateName's analog for branch names, which become
+// nested directories under a workspace and must likewise stay contained. It
+// additionally rejects a leading "-" so the branch can't be parsed as an
+// option when passed to git (e.g. `git clone --branch`, `git checkout -b`);
+// git refs cannot begin with "-" anyway.
+func ValidateBranch(branch string) error {
+	if branch == "" {
+		return errors.New("branch is empty")
+	}
+	if strings.HasPrefix(branch, "-") {
+		return fmt.Errorf("branch %q is unsafe: must not start with %q", branch, "-")
+	}
+	if err := checkSafeRelPath(branch); err != nil {
+		return fmt.Errorf("branch %q is unsafe: %w", branch, err)
+	}
+	return nil
+}
+
+// WriteFileAtomic writes data to path atomically: it writes a sibling temp
+// file (same directory, so the rename stays on one filesystem) and renames it
+// over path, so a reader or a crash never sees a half-written file. When path
+// already exists its permission bits are preserved; otherwise defaultPerm is
+// used. The temp file is chmod'd to the chosen mode before the rename, so the
+// result does not depend on the process umask, and the temp is cleaned up if a
+// later step fails.
+func WriteFileAtomic(path string, data []byte, defaultPerm os.FileMode) error {
+	perm := defaultPerm
+	if fi, err := os.Stat(path); err == nil {
+		perm = fi.Mode().Perm()
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, perm); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp, perm); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // NormalizeURL expands a user-supplied repo reference into a full git URL.
