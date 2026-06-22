@@ -32,21 +32,11 @@ curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/shed/main/install.sh
 # integrate with your agents
 shed init
 
-# add a repo — it's fetched right away (read-only)
-shed add https://github.com/octocat/Hello-World
-
-# GitHub shorthand works too — "owner/repo" is expanded against github.com
+# add a repo (github shorthand works)
 shed add octocat/Hello-World
 
 # now run claude, cursor-agent, codex, or opencode — your agent knows how to use it
 ```
-
-That's the whole loop. Shed adds exactly two things to your agent's world:
-
-- A **physically read-only** directory at `~/.shed/repos/<host>/<owner>/<repo>/` (chmod a-w), so the agent can `rg`/`grep` freely with zero risk of accidental writes.
-- A `workspace new` command that syncs the repo first (so you fork from up-to-date code) and returns the path to an editable clone derived from the cache via `git clone --reference`.
-
-Everything else — searching, branch listing, PR creation — uses tools the agent already knows (`rg`, `git`, `gh`). Shed doesn't wrap them.
 
 ---
 
