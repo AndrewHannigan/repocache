@@ -15,12 +15,12 @@ import (
 	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
 
-func newGcCmd() *cobra.Command {
+func newPruneCmd() *cobra.Command {
 	var dryRun, force bool
 	cmd := &cobra.Command{
-		Use:   "gc",
+		Use:   "prune",
 		Short: "Delete workspaces whose branch has a merged PR",
-		Long: `gc removes every workspace whose branch has a merged pull request,
+		Long: `prune removes every workspace whose branch has a merged pull request,
 reclaiming the ones whose work has already landed. It asks GitHub which
 branches are merged via the gh CLI, so gh must be installed and authenticated.
 
@@ -28,7 +28,7 @@ Workspaces with uncommitted or unpushed changes are skipped so local work is
 never lost; pass --force to remove them anyway. Use --dry-run to preview.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runGc(dryRun, force)
+			return runPrune(dryRun, force)
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be removed without deleting")
@@ -36,11 +36,11 @@ never lost; pass --force to remove them anyway. Use --dry-run to preview.`,
 	return cmd
 }
 
-func runGc(dryRun, force bool) error {
+func runPrune(dryRun, force bool) error {
 	if err := cache.RequireGit(); err != nil {
 		return errs.Wrap(errs.MissingDep, err)
 	}
-	// gc is entirely gh-driven, so fail fast (rather than degrade) when gh
+	// prune is entirely gh-driven, so fail fast (rather than degrade) when gh
 	// can't tell us which branches are merged.
 	if err := forge.Available(); err != nil {
 		if errors.Is(err, forge.ErrGhMissing) {
@@ -81,13 +81,13 @@ func runGc(dryRun, force bool) error {
 			failed++
 			continue
 		}
-		switch decideGc(pr, i.Dirty, i.Unpushed, force) {
-		case gcKeep:
+		switch decidePrune(pr, i.Dirty, i.Unpushed, force) {
+		case pruneKeep:
 			kept++
-		case gcSkip:
+		case pruneSkip:
 			fmt.Printf("skipped %s (PR #%d merged, but has %s)\n", i.Branch, pr, localChangesDesc(i))
 			skipped++
-		case gcPrune:
+		case pruneRemove:
 			if dryRun {
 				fmt.Printf("would prune %s (PR #%d merged)\n", i.Branch, pr)
 				pruned++
@@ -119,27 +119,27 @@ func runGc(dryRun, force bool) error {
 	return nil
 }
 
-// gcAction is what gc decides to do with one workspace.
-type gcAction int
+// pruneAction is what prune decides to do with one workspace.
+type pruneAction int
 
 const (
-	gcKeep  gcAction = iota // no merged PR — leave it alone
-	gcSkip                  // merged, but has local work and --force wasn't given
-	gcPrune                 // merged and safe to delete
+	pruneKeep   pruneAction = iota // no merged PR — leave it alone
+	pruneSkip                      // merged, but has local work and --force wasn't given
+	pruneRemove                    // merged and safe to delete
 )
 
-// decideGc chooses an action for a workspace given its merged-PR number (0
+// decidePrune chooses an action for a workspace given its merged-PR number (0
 // when none), dirty flag, and unpushed count (-1 when no upstream, treated as
 // "nothing unpushed" since a merged PR means the branch reached the remote).
 // Pure, so it is unit-testable.
-func decideGc(prNumber int, dirty bool, unpushed int, force bool) gcAction {
+func decidePrune(prNumber int, dirty bool, unpushed int, force bool) pruneAction {
 	if prNumber == 0 {
-		return gcKeep
+		return pruneKeep
 	}
 	if !force && (dirty || unpushed > 0) {
-		return gcSkip
+		return pruneSkip
 	}
-	return gcPrune
+	return pruneRemove
 }
 
 // ghRepoFromName splits a workspace repo name ("host/owner/repo") into the

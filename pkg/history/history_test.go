@@ -29,7 +29,7 @@ func TestRecordAndRecent(t *testing.T) {
 	for _, args := range [][]string{
 		{"add", "octocat/Hello-World"},
 		{"workspace", "new", "shed", "feat-x"},
-		{"gc"},
+		{"prune"},
 	} {
 		if err := Record(args); err != nil {
 			t.Fatalf("Record(%v): %v", args, err)
@@ -44,7 +44,7 @@ func TestRecordAndRecent(t *testing.T) {
 		t.Fatalf("got %d events, want 3", len(all))
 	}
 	// Oldest first.
-	if all[0].Args[0] != "add" || all[2].Args[0] != "gc" {
+	if all[0].Args[0] != "add" || all[2].Args[0] != "prune" {
 		t.Errorf("unexpected order: %v", all)
 	}
 	// Times are populated and monotonic-ish (not zero).
@@ -57,7 +57,7 @@ func TestRecordAndRecent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Recent(2): %v", err)
 	}
-	if len(last2) != 2 || last2[0].Args[1] != "new" || last2[1].Args[0] != "gc" {
+	if len(last2) != 2 || last2[0].Args[1] != "new" || last2[1].Args[0] != "prune" {
 		t.Errorf("Recent(2) = %v, want the last two events", last2)
 	}
 }
@@ -83,7 +83,7 @@ func TestRecentSkipsCorruptLines(t *testing.T) {
 	setupDataDir(t)
 	content := `{"t":"2026-06-22T10:00:00Z","args":["add","a"]}
 this is not json
-{"t":"2026-06-22T10:01:00Z","args":["gc"]}
+{"t":"2026-06-22T10:01:00Z","args":["prune"]}
 { "t": "truncated...`
 	if err := os.WriteFile(paths.HistoryFile(), []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -92,7 +92,7 @@ this is not json
 	if err != nil {
 		t.Fatalf("Recent: %v", err)
 	}
-	if len(events) != 2 || events[0].Args[0] != "add" || events[1].Args[0] != "gc" {
+	if len(events) != 2 || events[0].Args[0] != "add" || events[1].Args[0] != "prune" {
 		t.Errorf("expected the two valid events, got %v", events)
 	}
 }

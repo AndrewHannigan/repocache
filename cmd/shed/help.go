@@ -64,18 +64,18 @@ The whole loop:
 
 Commands:
   add           add a repo (or a whole user/org) to the library
-  gc            delete workspaces whose branch has a merged PR
   help <topic>  long-form docs
   history       show recent shed commands
   init          bootstrap + integrate with detected agents
   ls            list tracked repos and owners
+  prune         delete workspaces whose branch has a merged PR
   rm            remove a tracked repo or owner
   status        report sync health; show a repo's error and the likely fix
   sync          fetch tracked repos and re-apply read-only chmod
   uninstall     reverse agent integration (--purge also deletes data + config)
   workspace     {new,ls,path,rm} of writable workspaces
 
-Topics: agents, auth, concepts, gc, history, init, library, locking, owner, sync, workspace
+Topics: agents, auth, concepts, history, init, library, locking, owner, prune, sync, workspace
 `,
 
 	"concepts": `Concepts
@@ -274,19 +274,19 @@ The workspace's origin remote points at the upstream URL, not the cache,
 so 'git push' works normally. New branches have no upstream until your
 first 'git push -u origin <branch>'.
 
-To bulk-clean workspaces whose work has already landed, see 'shed help gc'.
+To bulk-clean workspaces whose work has already landed, see 'shed help prune'.
 `,
 
-	"gc": `gc — delete workspaces whose branch has a merged PR
+	"prune": `prune — delete workspaces whose branch has a merged PR
 
-  shed gc [--dry-run] [--force]
+  shed prune [--dry-run] [--force]
     Delete every workspace whose branch has a merged pull request (asks
     GitHub via the gh CLI), reclaiming the ones whose work has already
     landed. Skips workspaces with uncommitted or unpushed changes so local
     work is never lost; pass --force to remove them anyway. --dry-run
     previews without deleting.
 
-gc is entirely gh-driven, so gh must be installed and authenticated; it
+prune is entirely gh-driven, so gh must be installed and authenticated; it
 fails fast rather than degrade when gh can't report merge status.
 `,
 
@@ -298,7 +298,7 @@ fails fast rather than degrade when gh can't report merge status.
 
 What's recorded
   Only "working" commands that change the library or workspaces are logged:
-  add, rm, gc, init, uninstall, and workspace new/rm. Read-only queries (ls,
+  add, rm, prune, init, uninstall, and workspace new/rm. Read-only queries (ls,
   status, workspace ls/path), background syncs, and the plain 'sync' command
   are not recorded, and only commands that succeed are. Each entry is the
   command exactly as you typed it, with a timestamp.
