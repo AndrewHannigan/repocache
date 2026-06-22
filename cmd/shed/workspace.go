@@ -260,16 +260,3 @@ func runWorkspaceRm(name, branch string, force bool) error {
 	fmt.Printf("removed %s\n", paths.Display(path))
 	return nil
 }
-
-func joinAnd(parts []string) string {
-	switch len(parts) {
-	case 0:
-		return ""
-	case 1:
-		return parts[0]
-	case 2:
-		return parts[0] + " and " + parts[1]
-	default:
-		return parts[0] + ", " + joinAnd(parts[1:])
-	}
-}
