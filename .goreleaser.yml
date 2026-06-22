@@ -31,7 +31,6 @@ archives:
       {{- .Arch }}
     files:
       - README.md
-      - SPEC.md
       - LICENSE
 
 checksum:
