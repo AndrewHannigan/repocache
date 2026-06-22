@@ -109,11 +109,7 @@ func Save(c *Config) error {
 	if err != nil {
 		return err
 	}
-	tmp := paths.ConfigFile() + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, paths.ConfigFile())
+	return paths.WriteFileAtomic(paths.ConfigFile(), data, 0644)
 }
 
 // WithLock acquires the config lock, runs fn, releases the lock.
@@ -153,6 +149,9 @@ func (c *Config) Validate() error {
 		if err != nil {
 			return fmt.Errorf("repo[%d] (%q): %w", i, r.URL, err)
 		}
+		if err := paths.ValidateName(name); err != nil {
+			return fmt.Errorf("repo[%d] (%q): %w", i, r.URL, err)
+		}
 		if prev, ok := seen[name]; ok {
 			return fmt.Errorf("name %q appears in both %s and repo %d", name, prev, i)
 		}
@@ -164,6 +163,9 @@ func (c *Config) Validate() error {
 		}
 		name, err := o.ResolvedName()
 		if err != nil {
+			return fmt.Errorf("owner[%d] (%q): %w", i, o.URL, err)
+		}
+		if err := paths.ValidateName(name); err != nil {
 			return fmt.Errorf("owner[%d] (%q): %w", i, o.URL, err)
 		}
 		if prev, ok := seen[name]; ok {

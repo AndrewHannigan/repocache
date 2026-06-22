@@ -1,9 +1,9 @@
-// Package forge discovers the repos belonging to an owner (a GitHub user or
-// org) by shelling out to the `gh` CLI. This is shed's only runtime
-// dependency beyond `git`, and it is used *only* for owner discovery — once a
-// repo has been discovered it syncs with plain `git`, so callers degrade
-// gracefully when `gh` is missing or unauthenticated (see the sentinel errors
-// below).
+// Package forge talks to GitHub by shelling out to the `gh` CLI: it discovers
+// the repos belonging to an owner (a user or org) and reports whether a
+// branch has a merged pull request. This is shed's only runtime
+// dependency beyond `git` — everything else syncs with plain `git`, so callers
+// degrade gracefully when `gh` is missing or unauthenticated (see the sentinel
+// errors below).
 package forge
 
 import (
@@ -98,9 +98,62 @@ func ListOwnerRepos(ownerURL string, f Filter) ([]Repo, error) {
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, classifyExecErr(err, stderr.String())
+		return nil, classifyExecErr("gh repo list", err, stderr.String())
 	}
 	return decodeRepos(out, isSSHURL(ownerURL))
+}
+
+// MergedPR returns the number of a merged pull request whose head branch is
+// branch in repo (an "owner/name" slug), or 0 if there is none. host selects
+// the GitHub host: "" or "github.com" use gh's default; any other value
+// targets an enterprise host via GH_HOST. Like ListOwnerRepos it returns
+// ErrGhMissing / ErrGhUnauthed (wrapped) when gh can't be used.
+func MergedPR(host, repo, branch string) (int, error) {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return 0, ErrGhMissing
+	}
+	cmd := exec.Command("gh", buildPRListArgs(repo, branch)...)
+	if host != "" && host != "github.com" {
+		cmd.Env = append(os.Environ(), "GH_HOST="+host)
+	}
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, classifyExecErr("gh pr list", err, stderr.String())
+	}
+	return decodeMergedPR(out)
+}
+
+// buildPRListArgs builds the `gh pr list` argument vector that asks for the
+// single newest merged PR whose head branch is branch. Kept pure (no exec) so
+// it can be unit-tested.
+func buildPRListArgs(repo, branch string) []string {
+	// The "--flag=value" form binds each value to its flag, so a repo or branch
+	// beginning with "-" can't be mistaken for a separate flag.
+	return []string{
+		"pr", "list",
+		"--repo=" + repo,
+		"--head=" + branch,
+		"--state", "merged",
+		"--json", "number",
+		"--limit", "1",
+	}
+}
+
+// decodeMergedPR parses the JSON array gh emits for `pr list` and returns the
+// first PR's number, or 0 when the array is empty. Pure for testability.
+func decodeMergedPR(data []byte) (int, error) {
+	var prs []struct {
+		Number int `json:"number"`
+	}
+	if err := json.Unmarshal(data, &prs); err != nil {
+		return 0, fmt.Errorf("parse gh pr list output: %w", err)
+	}
+	if len(prs) == 0 {
+		return 0, nil
+	}
+	return prs[0].Number, nil
 }
 
 // buildListArgs builds the `gh repo list` argument vector for login under f.
@@ -111,7 +164,7 @@ func buildListArgs(login string, f Filter) []string {
 		limit = defaultLimit
 	}
 	args := []string{
-		"repo", "list", login,
+		"repo", "list",
 		"--limit", strconv.Itoa(limit),
 		"--json", "name,url,sshUrl,isFork,isArchived,visibility",
 	}
@@ -124,7 +177,9 @@ func buildListArgs(login string, f Filter) []string {
 	if v := strings.ToLower(f.Visibility); v != "" && v != "all" {
 		args = append(args, "--visibility", v)
 	}
-	return args
+	// "--" terminates flags, then login positionally, so an owner that begins
+	// with "-" can't be parsed as a gh flag (argument injection).
+	return append(args, "--", login)
 }
 
 // decodeRepos parses the JSON array gh emits and maps each entry to a Repo,
@@ -151,9 +206,10 @@ func decodeRepos(data []byte, wantSSH bool) ([]Repo, error) {
 	return repos, nil
 }
 
-// classifyExecErr turns a failed `gh repo list` into a sentinel where possible
-// so callers can degrade. Pure for testability.
-func classifyExecErr(err error, stderr string) error {
+// classifyExecErr turns a failed gh invocation (what names it, e.g.
+// "gh repo list") into a sentinel where possible so callers can degrade.
+// Pure for testability.
+func classifyExecErr(what string, err error, stderr string) error {
 	if errors.Is(err, exec.ErrNotFound) {
 		return ErrGhMissing
 	}
@@ -165,7 +221,7 @@ func classifyExecErr(err error, stderr string) error {
 		strings.Contains(s, "requires authentication"):
 		return fmt.Errorf("%w: %s", ErrGhUnauthed, strings.TrimSpace(stderr))
 	default:
-		return fmt.Errorf("gh repo list failed: %v: %s", err, strings.TrimSpace(stderr))
+		return fmt.Errorf("%s failed: %v: %s", what, err, strings.TrimSpace(stderr))
 	}
 }
 

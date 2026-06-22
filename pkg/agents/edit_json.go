@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/tailscale/hujson"
+
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 // loadJSONC reads a JSONC file (JSON with comments). Comments are
@@ -38,9 +40,7 @@ func saveJSON(filePath string, root map[string]any) error {
 	if err != nil {
 		return err
 	}
-	tmp := filePath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, filePath)
+	// Preserve the existing file's mode (this rewrites a user-owned settings
+	// file that may be deliberately restricted); 0644 only for a new file.
+	return paths.WriteFileAtomic(filePath, data, 0644)
 }

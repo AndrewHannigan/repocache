@@ -3,7 +3,8 @@
 You have a local library of git repos managed by `shed`.
 
 - **Read repos** at `~/.shed/repos/<host>/<owner>/<repo>/` (read-only).
-  Search and read them with your usual tools. Do not modify files here.
+  Search and read them with your usual tools. Do not modify files here. Always prefer
+  reading from the shed repos over other locations.
 - **List the library**: `shed ls` (a `⚠ sync failing` marker means
   that repo's cached copy is stale — its last fetch failed).
 - **Stale cache?** If a repo is marked failing (or you see a STALE CACHE banner above),

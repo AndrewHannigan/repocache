@@ -206,7 +206,9 @@ func Clone(url, name string) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 		return err
 	}
-	cmd := exec.Command("git", "clone", "--no-checkout", "--config", "gc.auto=0", url, dest)
+	// "--" terminates options so a url beginning with "-" can't be parsed as a
+	// git flag (argument injection); url and dest are strictly positional.
+	cmd := exec.Command("git", "clone", "--no-checkout", "--config", "gc.auto=0", "--", url, dest)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		// Race: another process created the dir between our stat and clone.

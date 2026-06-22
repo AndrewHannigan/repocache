@@ -125,4 +125,8 @@ case ":$PATH:" in
     ;;
 esac
 
-printf '\nRun '\''%s init'\'' to get started.\n' "$BINARY"
+# ── Next step ─────────────────────────────────────────────────────────────────
+printf '\nNext, run:\n'
+printf '    %s init\n' "$BINARY"
+printf '  to wire shed into your coding agents (Claude Code, Codex, Cursor, ...).\n'
+printf '  It asks before editing any agent config, and is safe to re-run.\n'

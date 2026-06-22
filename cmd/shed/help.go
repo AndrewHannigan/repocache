@@ -69,10 +69,12 @@ Commands:
   ls            list tracked repos and owners
   rm            remove a tracked repo or owner
   sync          fetch tracked repos and re-apply read-only chmod
-  workspace     {new,list,path,rm} of writable workspaces
+  workspace     {new,ls,path,rm} of writable workspaces
+  gc            delete workspaces whose branch has a merged PR
+  history       show recent shed commands
   help <topic>  long-form docs
 
-Topics: agents, auth, concepts, init, library, locking, owner, sync, workspace
+Topics: agents, auth, concepts, gc, history, init, library, locking, owner, sync, workspace
 `,
 
 	"concepts": `Concepts
@@ -256,7 +258,7 @@ sharing object storage but with independent refs. Edits happen here.
     the absolute workspace path on stdout; make changes there, then commit
     and push.
 
-  shed workspace list [--json]
+  shed workspace ls [--json]
     Every workspace with repo, branch, dirty state, unpushed-commit count,
     age of the newest file.
 
@@ -270,6 +272,47 @@ sharing object storage but with independent refs. Edits happen here.
 The workspace's origin remote points at the upstream URL, not the cache,
 so 'git push' works normally. New branches have no upstream until your
 first 'git push -u origin <branch>'.
+
+To bulk-clean workspaces whose work has already landed, see 'shed help gc'.
+`,
+
+	"gc": `gc — delete workspaces whose branch has a merged PR
+
+  shed gc [--dry-run] [--force]
+    Delete every workspace whose branch has a merged pull request (asks
+    GitHub via the gh CLI), reclaiming the ones whose work has already
+    landed. Skips workspaces with uncommitted or unpushed changes so local
+    work is never lost; pass --force to remove them anyway. --dry-run
+    previews without deleting.
+
+gc is entirely gh-driven, so gh must be installed and authenticated; it
+fails fast rather than degrade when gh can't report merge status.
+`,
+
+	"history": `history — show recent shed commands
+
+  shed history [-n <count>] [--json]
+    Print recent shed commands, newest last. Default 20; -n/--limit
+    changes how many. --json emits the raw events.
+
+What's recorded
+  Only "working" commands that change the library or workspaces are logged:
+  add, rm, gc, init, uninstall, and workspace new/rm. Read-only queries (ls,
+  status, workspace ls/path), background syncs, and the plain 'sync' command
+  are not recorded, and only commands that succeed are. Each entry is the
+  command exactly as you typed it, with a timestamp.
+
+Storage and truncation
+  Appended to ~/.shed/history.jsonl (one JSON object per line). The log
+  is trimmed back to the most recent 200 entries, at most once every few
+  minutes (a marker file debounces the trim), so it never grows without bound
+  and the trim cost isn't paid on every command.
+
+Session context
+  The last 20 commands are also injected into each agent's session context by
+  the SessionStart hook, so the agent has ambient awareness of what you've
+  been working on (e.g. which repo you recently made a workspace in). It is
+  presented as neutral context, not as instructions.
 `,
 
 	"agents": `agents — terminal coding agent integration

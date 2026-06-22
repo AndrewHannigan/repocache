@@ -48,6 +48,21 @@ func Exists(name, branch string) bool {
 // clones starting from base (or origin/HEAD if base is empty) and
 // creates a new local branch named branch.
 func New(name, branch, base, url string) (string, error) {
+	// Guard the path-forming inputs so a name/branch can't escape WorkspacesDir
+	// (filepath.Join would resolve a ".." away). base only ever becomes a git
+	// ref, but validating it too keeps option-injection out of `git clone
+	// --branch`.
+	if err := paths.ValidateName(name); err != nil {
+		return "", err
+	}
+	if err := paths.ValidateBranch(branch); err != nil {
+		return "", err
+	}
+	if base != "" {
+		if err := paths.ValidateBranch(base); err != nil {
+			return "", err
+		}
+	}
 	if !cache.Exists(name) {
 		return "", fmt.Errorf("cache repo not present; run `shed sync %s` first", name)
 	}
@@ -95,10 +110,12 @@ func New(name, branch, base, url string) (string, error) {
 }
 
 func runGitClone(referencePath, url, branch, dest string) error {
+	// "--" terminates options so a url beginning with "-" can't be parsed as a
+	// git flag (argument injection); url and dest are strictly positional.
 	cmd := exec.Command("git", "clone",
 		"--reference", referencePath,
 		"--branch", branch,
-		url, dest)
+		"--", url, dest)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git clone: %w (output: %s)", err, strings.TrimSpace(string(out)))
@@ -209,20 +226,16 @@ func unpushedCount(path string) (int, bool) {
 }
 
 func newestMtime(path string) time.Time {
-	var newest time.Time
-	filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if strings.Contains(p, string(filepath.Separator)+".git"+string(filepath.Separator)) {
-			return nil
-		}
-		if info.ModTime().After(newest) {
-			newest = info.ModTime()
-		}
-		return nil
-	})
-	return newest
+	cmd := exec.Command("git", "-C", path, "log", "-g", "-1", "--format=%ct")
+	out, err := cmd.Output()
+	if err != nil {
+		return time.Time{}
+	}
+	ts, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+	if err != nil {
+		return time.Time{}
+	}
+	return time.Unix(ts, 0)
 }
 
 // CheckClean returns (dirty, unpushed, error). If the workspace is

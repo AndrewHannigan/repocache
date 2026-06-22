@@ -50,9 +50,5 @@ func SaveState(s *State) error {
 	if err != nil {
 		return err
 	}
-	tmp := stateFile() + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, stateFile())
+	return paths.WriteFileAtomic(stateFile(), data, 0644)
 }

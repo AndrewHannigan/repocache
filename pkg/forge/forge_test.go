@@ -18,27 +18,30 @@ func TestBuildListArgs(t *testing.T) {
 			name:  "defaults exclude forks and archived",
 			login: "octocat",
 			f:     Filter{},
-			want: []string{"repo", "list", "octocat",
+			want: []string{"repo", "list",
 				"--limit", "1000",
 				"--json", "name,url,sshUrl,isFork,isArchived,visibility",
-				"--source", "--no-archived"},
+				"--source", "--no-archived",
+				"--", "octocat"},
 		},
 		{
 			name:  "include everything, custom limit, private only",
 			login: "acme",
 			f:     Filter{IncludeForks: true, IncludeArchived: true, Visibility: "private", Limit: 5},
-			want: []string{"repo", "list", "acme",
+			want: []string{"repo", "list",
 				"--limit", "5",
 				"--json", "name,url,sshUrl,isFork,isArchived,visibility",
-				"--visibility", "private"},
+				"--visibility", "private",
+				"--", "acme"},
 		},
 		{
 			name:  "visibility all is omitted",
 			login: "acme",
 			f:     Filter{IncludeForks: true, IncludeArchived: true, Visibility: "all"},
-			want: []string{"repo", "list", "acme",
+			want: []string{"repo", "list",
 				"--limit", "1000",
-				"--json", "name,url,sshUrl,isFork,isArchived,visibility"},
+				"--json", "name,url,sshUrl,isFork,isArchived,visibility",
+				"--", "acme"},
 		},
 	}
 	for _, tt := range tests {
@@ -104,7 +107,7 @@ func TestClassifyExecErr(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := classifyExecErr(tt.err, tt.stderr)
+			got := classifyExecErr("gh repo list", tt.err, tt.stderr)
 			if got == nil {
 				t.Fatal("classifyExecErr returned nil")
 			}
@@ -121,6 +124,45 @@ func TestClassifyExecErr(t *testing.T) {
 				if errors.Is(got, ErrGhMissing) || errors.Is(got, ErrGhUnauthed) {
 					t.Fatalf("want a non-sentinel error, got %v", got)
 				}
+			}
+		})
+	}
+}
+
+func TestBuildPRListArgs(t *testing.T) {
+	got := buildPRListArgs("acme/widgets", "feature/login")
+	want := []string{
+		"pr", "list",
+		"--repo=acme/widgets",
+		"--head=feature/login",
+		"--state", "merged",
+		"--json", "number",
+		"--limit", "1",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("buildPRListArgs() = %v, want %v", got, want)
+	}
+}
+
+func TestDecodeMergedPR(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		want    int
+		wantErr bool
+	}{
+		{"merged", `[{"number":42}]`, 42, false},
+		{"none", `[]`, 0, false},
+		{"garbage", `not json`, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := decodeMergedPR([]byte(tt.data))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("decodeMergedPR() err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Fatalf("decodeMergedPR() = %d, want %d", got, tt.want)
 			}
 		})
 	}

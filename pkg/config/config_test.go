@@ -52,6 +52,18 @@ func TestValidateRejectsOwnerRepoNameClash(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsTraversingName(t *testing.T) {
+	// A name (here via an explicit override, but a crafted URL is the same)
+	// that would escape ReposDir once joined must be refused, so it can never
+	// reach a path. See paths.ValidateName.
+	c := &Config{
+		Repos: []Repo{{URL: "https://github.com/acme/widgets", Name: "../../../../tmp/pwn"}},
+	}
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected validation error for a name containing a \"..\" segment")
+	}
+}
+
 func TestReposForOwner(t *testing.T) {
 	owner := "github.com/acme"
 	c := &Config{Repos: []Repo{

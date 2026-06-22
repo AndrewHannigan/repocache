@@ -24,7 +24,7 @@ func newWorkspaceCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newWorkspaceNewCmd(),
-		newWorkspaceListCmd(),
+		newWorkspaceLsCmd(),
 		newWorkspacePathCmd(),
 		newWorkspaceRmCmd(),
 	)
@@ -54,6 +54,17 @@ origin/HEAD (or --base). Prints the workspace path on stdout.`,
 func runWorkspaceNew(name, branch, base string) error {
 	if err := cache.RequireGit(); err != nil {
 		return errs.Wrap(errs.MissingDep, err)
+	}
+	// Reject an unsafe branch/base up front, before the (network) sync below,
+	// so a traversing or option-looking ref fails fast with a clear message.
+	// workspace.New re-checks as the authoritative library-level guard.
+	if err := paths.ValidateBranch(branch); err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	if base != "" {
+		if err := paths.ValidateBranch(base); err != nil {
+			return errs.Wrap(errs.Config, err)
+		}
 	}
 	c, err := config.Load()
 	if err != nil {
@@ -133,10 +144,10 @@ func resolveRepoName(c *config.Config, name string) (string, bool) {
 	return full, true
 }
 
-func newWorkspaceListCmd() *cobra.Command {
+func newWorkspaceLsCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
-		Use:   "list",
+		Use:   "ls",
 		Short: "List workspaces with dirty/unpushed state and age",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWorkspaceList(jsonOut)
