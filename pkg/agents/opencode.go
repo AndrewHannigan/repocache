@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 )
 
-// opencodePlugin is the plugin module repocache drops into opencode's
-// plugin directory. It shells back to the `repocache` binary, so it never
+// opencodePlugin is the plugin module shed drops into opencode's
+// plugin directory. It shells back to the `shed` binary, so it never
 // needs to change across upgrades.
 //
 //go:embed embed/opencode-plugin.js
@@ -40,7 +40,7 @@ func (o *Opencode) Detected() bool {
 }
 
 func (o *Opencode) pluginFile() string {
-	return filepath.Join(o.dir, "plugin", "repocache.js")
+	return filepath.Join(o.dir, "plugin", "shed.js")
 }
 
 func (o *Opencode) Install(opts InstallOptions) (Installed, error) {

@@ -1,15 +1,15 @@
 version: 2
 
-project_name: repocache
+project_name: shed
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: repocache
-    main: ./cmd/repocache
-    binary: repocache
+  - id: shed
+    main: ./cmd/shed
+    binary: shed
     env:
       - CGO_ENABLED=0
     goos:
@@ -62,8 +62,8 @@ notarize:
         timeout: 30m
 
 homebrew_casks:
-  - name: repocache
-    binaries: [repocache]
+  - name: shed
+    binaries: [shed]
     repository:
       owner: AndrewHannigan
       name: homebrew-tap
@@ -72,6 +72,6 @@ homebrew_casks:
     commit_author:
       name: goreleaser-bot
       email: bot@goreleaser.com
-    commit_msg_template: "repocache: cask update for {{ .Tag }}"
-    homepage: "https://github.com/AndrewHannigan/repocache"
+    commit_msg_template: "shed: cask update for {{ .Tag }}"
+    homepage: "https://github.com/AndrewHannigan/shed"
     description: "Read-only mirror of git repos for terminal coding agents"

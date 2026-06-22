@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/AndrewHannigan/repocache/pkg/config"
-	"github.com/AndrewHannigan/repocache/pkg/errs"
-	"github.com/AndrewHannigan/repocache/pkg/forge"
+	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/forge"
 )
 
 func TestNewOwnerRepos(t *testing.T) {

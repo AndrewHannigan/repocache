@@ -10,16 +10,16 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/repocache/pkg/cache"
-	"github.com/AndrewHannigan/repocache/pkg/config"
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/cache"
+	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
-const bgSyncWorkerEnv = "REPOCACHE_BG_SYNC_WORKER"
+const bgSyncWorkerEnv = "SHED_BG_SYNC_WORKER"
 
 // cacheEmptyHint nudges the user to populate an empty cache. It is printed to
 // stdout for the plain-stdout agents.
-const cacheEmptyHint = "repocache: cache is empty. Run `repocache sync` to fetch your tracked repos."
+const cacheEmptyHint = "shed: cache is empty. Run `shed sync` to fetch your tracked repos."
 
 func newBgSyncCmd() *cobra.Command {
 	cmd := &cobra.Command{

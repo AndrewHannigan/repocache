@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AndrewHannigan/repocache/pkg/cache"
-	"github.com/AndrewHannigan/repocache/pkg/config"
-	"github.com/AndrewHannigan/repocache/pkg/errs"
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/cache"
+	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 // mkMeta creates a cache repo dir and writes its meta sidecar. Requires an
@@ -28,7 +28,7 @@ func mkMeta(t *testing.T, name string, m cache.Meta) {
 func TestLikelyCause(t *testing.T) {
 	cases := []struct{ name, err, want string }{
 		{"auth", "git fetch: exit status 128 (output: fatal: could not read Username for 'https://github.com')", "gh auth login"},
-		{"notfound", "git fetch: exit status 128 (output: ERROR: Repository not found.)", "repocache rm"},
+		{"notfound", "git fetch: exit status 128 (output: ERROR: Repository not found.)", "shed rm"},
 		{"network", "git fetch: exit status 128 (output: fatal: unable to access: Could not resolve host: github.com)", "network"},
 		{"locked", "locked", "lock"},
 		{"disk", "fatal: write error: No space left on device", "disk full"},

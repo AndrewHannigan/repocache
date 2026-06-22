@@ -1,4 +1,4 @@
-// Package paths centralizes every on-disk location repocache touches.
+// Package paths centralizes every on-disk location shed touches.
 // All functions return absolute paths.
 package paths
 
@@ -10,9 +10,9 @@ import (
 	"strings"
 )
 
-const appName = "repocache"
+const appName = "shed"
 
-// ConfigDir returns ~/.config/repocache (honoring XDG_CONFIG_HOME).
+// ConfigDir returns ~/.config/shed (honoring XDG_CONFIG_HOME).
 func ConfigDir() string {
 	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
 		return filepath.Join(x, appName)
@@ -20,7 +20,7 @@ func ConfigDir() string {
 	return filepath.Join(home(), ".config", appName)
 }
 
-// DataDir returns ~/.repocache.
+// DataDir returns ~/.shed.
 func DataDir() string {
 	return filepath.Join(home(), "."+appName)
 }
@@ -42,11 +42,11 @@ func CacheRepoPath(name string) string {
 }
 
 func CacheRepoLockFile(name string) string {
-	return filepath.Join(CacheRepoPath(name), ".git", "repocache.lock")
+	return filepath.Join(CacheRepoPath(name), ".git", "shed.lock")
 }
 
 func CacheRepoMetaFile(name string) string {
-	return filepath.Join(CacheRepoPath(name), ".git", "repocache.meta")
+	return filepath.Join(CacheRepoPath(name), ".git", "shed.meta")
 }
 
 // WorkspacePath returns the on-disk path for a (repo, branch) workspace.

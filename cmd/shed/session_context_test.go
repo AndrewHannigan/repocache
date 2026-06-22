@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AndrewHannigan/repocache/pkg/agents"
-	"github.com/AndrewHannigan/repocache/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/agents"
+	"github.com/AndrewHannigan/shed/pkg/config"
 )
 
 // Claude gets the hookSpecificOutput JSON envelope, wrapped in
-// <repocache-session-context> tags, carrying the guide as additionalContext.
+// <shed-session-context> tags, carrying the guide as additionalContext.
 func TestPrintSessionContextClaudeEnvelope(t *testing.T) {
 	// Isolate from the real user config so the snapshot and the
 	// collision-detection both see an empty library.
@@ -22,13 +22,13 @@ func TestPrintSessionContextClaudeEnvelope(t *testing.T) {
 		t.Fatalf("printSessionContext: %v", err)
 	}
 
-	// Output is wrapped in <repocache-session-context>...</> tags so it
+	// Output is wrapped in <shed-session-context>...</> tags so it
 	// can be extracted unambiguously from surrounding hook output.
 	out := strings.TrimSuffix(buf.String(), "\n")
-	if !strings.HasPrefix(out, "<repocache-session-context>") || !strings.HasSuffix(out, "</repocache-session-context>") {
-		t.Fatalf("output should be wrapped in <repocache-session-context> tags:\n%s", buf.String())
+	if !strings.HasPrefix(out, "<shed-session-context>") || !strings.HasSuffix(out, "</shed-session-context>") {
+		t.Fatalf("output should be wrapped in <shed-session-context> tags:\n%s", buf.String())
 	}
-	inner := strings.TrimSuffix(strings.TrimPrefix(out, "<repocache-session-context>"), "</repocache-session-context>")
+	inner := strings.TrimSuffix(strings.TrimPrefix(out, "<shed-session-context>"), "</shed-session-context>")
 
 	var env struct {
 		HookSpecificOutput struct {
@@ -68,7 +68,7 @@ func TestPrintSessionContextPlainTextAgents(t *testing.T) {
 				t.Fatalf("printSessionContext: %v", err)
 			}
 			out := buf.String()
-			if strings.Contains(out, "<repocache-session-context>") || strings.Contains(out, "hookSpecificOutput") {
+			if strings.Contains(out, "<shed-session-context>") || strings.Contains(out, "hookSpecificOutput") {
 				t.Errorf("%s output must be raw body, not the hook envelope:\n%s", agent, out)
 			}
 			if !strings.HasPrefix(out, wantPrefix) {
@@ -91,7 +91,7 @@ func TestPrintSessionContextCursorJSON(t *testing.T) {
 		t.Fatalf("printSessionContext: %v", err)
 	}
 	out := buf.String()
-	if strings.Contains(out, "<repocache-session-context>") || strings.Contains(out, "hookSpecificOutput") {
+	if strings.Contains(out, "<shed-session-context>") || strings.Contains(out, "hookSpecificOutput") {
 		t.Errorf("cursor output must be a flat JSON object, not the hook envelope:\n%s", out)
 	}
 
@@ -131,7 +131,7 @@ func TestSessionContextBodyIncludesLibrary(t *testing.T) {
 	if !strings.HasPrefix(body, string(agents.DocContent)) {
 		t.Fatalf("body should start with the embedded guide")
 	}
-	for _, want := range []string{"repocache ls", "NAME", "acme/widget"} {
+	for _, want := range []string{"shed ls", "NAME", "acme/widget"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body should contain %q\n%s", want, body)
 		}
@@ -145,7 +145,7 @@ func TestSessionContextBodyEmptyLibrary(t *testing.T) {
 	if !strings.HasPrefix(body, string(agents.DocContent)) {
 		t.Fatalf("body should start with the embedded guide")
 	}
-	if strings.Contains(body, "repocache ls`):") {
+	if strings.Contains(body, "shed ls`):") {
 		t.Errorf("empty library should not append a snapshot section\n%s", body)
 	}
 }

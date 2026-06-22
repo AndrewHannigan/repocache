@@ -55,7 +55,7 @@ func TestClaudeInstallUsesHooksNotImport(t *testing.T) {
 }
 
 // --no-bg-sync skips only the bg-sync hook; session-context still installs
-// (it is how the agent learns about repocache at all).
+// (it is how the agent learns about shed at all).
 func TestClaudeInstallNoBgSync(t *testing.T) {
 	withHome(t)
 
@@ -101,11 +101,11 @@ func TestClaudeInstallMigratesLegacy(t *testing.T) {
 }
 
 // Install migrates superseded session-context hooks to the per-agent form.
-// An older install wrote either the public `repocache session-context`
-// subcommand (since renamed, now removed) or the bare `repocache
-// __session-context` (before --agent <key> selected the per-agent shape).
-// Both must be stripped and replaced with `repocache __session-context
-// --agent claude`.
+// An older install (under the old `repocache` binary name) wrote either the
+// public `repocache session-context` subcommand (since renamed, now removed)
+// or the bare `repocache __session-context` (before --agent <key> selected the
+// per-agent shape). Both must be stripped and replaced with the current
+// `shed __session-context --agent claude`.
 func TestClaudeInstallMigratesLegacyHooks(t *testing.T) {
 	for _, legacy := range legacySessionContextCommands {
 		t.Run(legacy, func(t *testing.T) {
@@ -146,7 +146,7 @@ func TestOpencodeInstallWritesPlugin(t *testing.T) {
 		t.Fatalf("Install: %v", err)
 	}
 
-	plugin := filepath.Join(home, ".config", "opencode", "plugin", "repocache.js")
+	plugin := filepath.Join(home, ".config", "opencode", "plugin", "shed.js")
 	if _, err := os.Stat(plugin); err != nil {
 		t.Errorf("plugin not written: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestOpencodeUninstallReverses(t *testing.T) {
 		t.Fatalf("Uninstall: %v", err)
 	}
 
-	plugin := filepath.Join(home, ".config", "opencode", "plugin", "repocache.js")
+	plugin := filepath.Join(home, ".config", "opencode", "plugin", "shed.js")
 	if _, err := os.Stat(plugin); !os.IsNotExist(err) {
 		t.Errorf("plugin should be removed, stat err = %v", err)
 	}

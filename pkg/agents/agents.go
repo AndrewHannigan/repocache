@@ -1,4 +1,4 @@
-// Package agents handles installing and uninstalling repocache
+// Package agents handles installing and uninstalling shed
 // integration into each supported terminal coding agent.
 package agents
 
@@ -9,11 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
-// DocContent is the repocache guide bundled into the binary. It is the
-// body emitted by `repocache __session-context` and injected into each
+// DocContent is the shed guide bundled into the binary. It is the
+// body emitted by `shed __session-context` and injected into each
 // agent's context via its SessionStart hook. Because it ships with the
 // binary, it is always current — there is no installed copy to drift.
 //
@@ -32,7 +32,7 @@ type Agent interface {
 	Detected() bool // is the agent installed (config dir present)?
 	Install(opts InstallOptions) (Installed, error)
 	Uninstall(prev Installed) error
-	// SessionContextOutput renders the repocache guide body into the exact
+	// SessionContextOutput renders the shed guide body into the exact
 	// shape this agent's session-context integration expects (e.g. the
 	// hookSpecificOutput JSON envelope for the hook-based agents, or the raw
 	// Markdown body for opencode's plugin). The content is identical across
@@ -45,7 +45,7 @@ type Agent interface {
 type Installed struct {
 	AddedPaths []string `json:"added_paths,omitempty"`
 	AddedHooks []string `json:"added_hooks,omitempty"`
-	// AddedFiles are whole files repocache materialized (not edits to an
+	// AddedFiles are whole files shed materialized (not edits to an
 	// existing settings file). Used by agents like opencode whose
 	// integration is a dropped-in plugin file rather than config edits;
 	// uninstall deletes exactly these.
@@ -112,7 +112,7 @@ func allKeys() []string {
 	return out
 }
 
-// PathsToRegister returns the two repocache directories that every agent
+// PathsToRegister returns the two shed directories that every agent
 // must be told it can access.
 func PathsToRegister() []string {
 	return []string{paths.ReposDir(), paths.WorkspacesDir()}
@@ -120,7 +120,7 @@ func PathsToRegister() []string {
 
 // installHooks installs the hook commands every agent gets: session-context
 // (always — it replaces the old @import as how the agent learns about
-// repocache) and bg-sync (unless --no-bg-sync). sessionContextCmd carries a
+// shed) and bg-sync (unless --no-bg-sync). sessionContextCmd carries a
 // trailing --agent <key> so the subcommand renders the output shape that agent
 // expects; bgSyncCmd is the bare bg-sync command. ensure is an agent-specific
 // closure that adds one hook entry for a command and reports whether it was
@@ -149,11 +149,11 @@ func installHooks(opts InstallOptions, sessionContextCmd, bgSyncCmd string, ensu
 func hookLabel(command string) string {
 	switch {
 	case strings.HasPrefix(command, BgSyncCommand):
-		return "repocache bg-sync"
+		return "shed bg-sync"
 	case strings.HasPrefix(command, SessionContextCommand):
-		return "repocache session-context"
+		return "shed session-context"
 	default:
-		return "repocache"
+		return "shed"
 	}
 }
 

@@ -5,18 +5,18 @@ import (
 	"path/filepath"
 )
 
-const BgSyncCommand = "repocache __bg-sync"
+const BgSyncCommand = "shed __bg-sync"
 
 // SessionContextCommand is the base session-context subcommand. The command
 // actually installed into each agent's SessionStart hook appends --agent
 // <key> to it (see sessionContextCommand), so __session-context can render
 // the output shape that agent expects.
-const SessionContextCommand = "repocache __session-context"
+const SessionContextCommand = "shed __session-context"
 
-// legacySessionContextCommand is the pre-rename hook command: the
-// session-context subcommand was public (`repocache session-context`)
-// before it became the internal `__session-context`. Install strips any
-// stale entry so the now-unknown subcommand doesn't error every session.
+// legacySessionContextCommand is the original public subcommand
+// (`repocache session-context`, under the old binary name) before it became
+// the internal `__session-context`. Install strips any stale entry so the
+// now-unknown subcommand doesn't error every session.
 const legacySessionContextCommand = "repocache session-context"
 
 // Claude implements Agent for Claude Code.
@@ -54,7 +54,7 @@ func (c *Claude) Install(opts InstallOptions) (Installed, error) {
 		return Installed{}, err
 	}
 	// Migrate off the legacy @REPOCACHE.md import + on-disk doc that older
-	// repocache versions installed; context now comes from the
+	// shed versions installed; context now comes from the
 	// session-context hook. Best-effort.
 	_ = removeImportLine(c.memoryFile(), "REPOCACHE.md")
 	_ = os.Remove(c.legacyDocFile())

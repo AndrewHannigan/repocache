@@ -1,5 +1,5 @@
 // Package forge discovers the repos belonging to an owner (a GitHub user or
-// org) by shelling out to the `gh` CLI. This is repocache's only runtime
+// org) by shelling out to the `gh` CLI. This is shed's only runtime
 // dependency beyond `git`, and it is used *only* for owner discovery — once a
 // repo has been discovered it syncs with plain `git`, so callers degrade
 // gracefully when `gh` is missing or unauthenticated (see the sentinel errors
@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 // Sentinel errors callers use to decide how to degrade. ErrGhMissing means the

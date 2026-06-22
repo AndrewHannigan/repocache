@@ -10,11 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/repocache/pkg/cache"
-	"github.com/AndrewHannigan/repocache/pkg/config"
-	"github.com/AndrewHannigan/repocache/pkg/errs"
-	"github.com/AndrewHannigan/repocache/pkg/forge"
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/cache"
+	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/forge"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 const syncLockTimeout = 5 * time.Minute
@@ -78,7 +78,7 @@ func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) 
 	}
 	if len(c.Repos) == 0 && len(c.Owners) == 0 {
 		if !jsonOut {
-			fmt.Fprintln(os.Stderr, "no repos in config; add with `repocache add <url>`")
+			fmt.Fprintln(os.Stderr, "no repos in config; add with `shed add <url>`")
 		}
 		return nil
 	}
@@ -331,7 +331,7 @@ func syncOne(name, url string, ifOlderThan time.Duration) syncResult {
 		if errors.Is(err, cache.ErrLocked) {
 			r.locked = true
 			return finishErr(r, start, fmt.Errorf(
-				"locked: could not acquire %s within %s (held by another repocache process)",
+				"locked: could not acquire %s within %s (held by another shed process)",
 				paths.CacheRepoLockFile(name), syncLockTimeout))
 		}
 		return finishErr(r, start, err)

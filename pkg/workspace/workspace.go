@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AndrewHannigan/repocache/pkg/cache"
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/cache"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 const cacheLockTimeout = 2 * time.Second
@@ -49,7 +49,7 @@ func Exists(name, branch string) bool {
 // creates a new local branch named branch.
 func New(name, branch, base, url string) (string, error) {
 	if !cache.Exists(name) {
-		return "", fmt.Errorf("cache repo not present; run `repocache sync %s` first", name)
+		return "", fmt.Errorf("cache repo not present; run `shed sync %s` first", name)
 	}
 	wsPath := PathFor(name, branch)
 	if _, err := os.Stat(wsPath); err == nil {

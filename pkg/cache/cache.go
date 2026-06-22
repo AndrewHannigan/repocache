@@ -1,5 +1,5 @@
 // Package cache inspects on-disk state of cache repos: existence, size,
-// and the .git/repocache.meta sidecar.
+// and the .git/shed.meta sidecar.
 package cache
 
 import (
@@ -15,17 +15,17 @@ import (
 
 	"github.com/gofrs/flock"
 
-	"github.com/AndrewHannigan/repocache/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 // ErrLocked is returned when a cache repo's lock cannot be acquired in time.
 var ErrLocked = errors.New("cache repo locked by another process")
 
 // ErrGitMissing is returned by RequireGit when the git binary is not on PATH.
-// git is repocache's one hard dependency — every cache and workspace operation
+// git is shed's one hard dependency — every cache and workspace operation
 // shells out to it (clone, fetch, checkout) — so it is the one thing we cannot
 // degrade around the way we do for gh (see pkg/forge).
-var ErrGitMissing = errors.New("git not found on PATH — repocache requires git (install from https://git-scm.com/downloads)")
+var ErrGitMissing = errors.New("git not found on PATH — shed requires git (install from https://git-scm.com/downloads)")
 
 // RequireGit reports whether the git binary is available on PATH, returning
 // ErrGitMissing if not. Commands that shell out to git call this first so the
@@ -38,7 +38,7 @@ func RequireGit() error {
 	return nil
 }
 
-// Meta is the JSON sidecar written at <cache>/.git/repocache.meta after a
+// Meta is the JSON sidecar written at <cache>/.git/shed.meta after a
 // sync. LastSyncAt records the last *successful* sync; LastError/LastErrorAt
 // record the most recent failed attempt (cleared on the next success).
 type Meta struct {

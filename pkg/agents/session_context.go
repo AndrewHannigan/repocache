@@ -1,6 +1,6 @@
 package agents
 
-// Per-agent session-context output. The repocache guide body is generated
+// Per-agent session-context output. The shed guide body is generated
 // once (by the command layer) and handed to the selected agent's
 // SessionContextOutput, which wraps it in the exact shape that agent's
 // integration expects. The content is identical across agents; only the
@@ -17,8 +17,8 @@ import (
 // output so the model can extract it unambiguously from whatever else an
 // agent prints around hook stdout.
 const (
-	sessionContextOpenTag  = "<repocache-session-context>"
-	sessionContextCloseTag = "</repocache-session-context>"
+	sessionContextOpenTag  = "<shed-session-context>"
+	sessionContextCloseTag = "</shed-session-context>"
 )
 
 // hookEnvelope is the SessionStart hook JSON Claude reads to inject context.
@@ -37,7 +37,7 @@ type hookEnvelope struct {
 }
 
 // renderHookEnvelope marshals body into the SessionStart hook envelope,
-// wrapped in <repocache-session-context> tags.
+// wrapped in <shed-session-context> tags.
 func renderHookEnvelope(body string) (string, error) {
 	var env hookEnvelope
 	env.HookSpecificOutput.HookEventName = "SessionStart"
@@ -63,7 +63,7 @@ func (c *Claude) SessionContextOutput(body string) (string, error) {
 //
 // A leading newline is prepended because Codex prints hook stdout right after
 // its "hook context: " label on the same line; the blank line breaks the body
-// onto its own line so the "# repocache" heading renders cleanly.
+// onto its own line so the "# shed" heading renders cleanly.
 //
 // NOTE: unlike Claude, Codex does NOT conceal this from the user — its TUI
 // prints the hook's stdout as a visible "SessionStart hook (completed) / hook
@@ -117,15 +117,15 @@ func sessionContextCommand(agentKey string) string {
 }
 
 // legacySessionContextCommands are session-context hook commands that earlier
-// repocache versions installed. Install strips them so a superseded form does
-// not run (or error) on every session start:
-//   - "repocache session-context"   — the pre-rename public subcommand,
+// versions installed under the old `repocache` binary name. Install strips
+// them so a superseded form does not run (or error) on every session start:
+//   - "repocache session-context"   — the original public subcommand,
 //     which no longer exists (now the internal __session-context).
 //   - "repocache __session-context" — the pre-per-agent bare form, before
 //     --agent <key> selected the per-agent output shape.
 var legacySessionContextCommands = []string{
 	legacySessionContextCommand,
-	SessionContextCommand,
+	"repocache __session-context",
 }
 
 // removeLegacySessionContextHooks strips every superseded session-context hook

@@ -40,10 +40,11 @@ func (c *Cursor) hooksFile() string { return filepath.Join(c.dir, "hooks.json") 
 
 // legacyPluginDir is the hand-rolled plugin some pre-first-class setups dropped
 // at ~/.cursor/plugins/local/repocache/ (a .cursor-plugin manifest + a
-// sessionStart script that shelled back to `repocache __session-context --agent
-// cursor`). First-class support uses ~/.cursor/hooks.json instead; install
-// removes the plugin so the guide isn't injected twice once `--agent cursor`
-// becomes valid. Best-effort, mirroring the other agents' legacy migrations.
+// sessionStart script that shelled back to the old `repocache __session-context
+// --agent cursor`). First-class support uses ~/.cursor/hooks.json instead;
+// install removes the plugin so the guide isn't injected twice once
+// `--agent cursor` becomes valid. Best-effort, mirroring the other agents'
+// legacy migrations.
 func (c *Cursor) legacyPluginDir() string {
 	return filepath.Join(c.dir, "plugins", "local", "repocache")
 }

@@ -1,4 +1,4 @@
-// Package errs defines the stable exit codes used by repocache and a
+// Package errs defines the stable exit codes used by shed and a
 // typed error that carries one. main.go converts these to process exit
 // status.
 package errs
