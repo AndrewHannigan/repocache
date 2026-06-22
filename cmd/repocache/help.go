@@ -267,6 +267,11 @@ sharing object storage but with independent refs. Edits happen here.
     Delete workspace dir. Refuses with exit 4 if dirty or unpushed
     unless --force.
 
+  repocache workspace gc [--dry-run] [--force]
+    Delete every workspace whose branch has a merged pull request (asks
+    GitHub via the gh CLI). Skips workspaces with uncommitted or unpushed
+    changes unless --force. --dry-run previews without deleting.
+
 The workspace's origin remote points at the upstream URL, not the cache,
 so 'git push' works normally. New branches have no upstream until your
 first 'git push -u origin <branch>'.
