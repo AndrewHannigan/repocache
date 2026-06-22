@@ -21,12 +21,13 @@ const cacheLockTimeout = 2 * time.Second
 
 // Info is a single workspace's state for listing.
 type Info struct {
-	Name     string    `json:"name"` // repo name e.g. "github.com/foo/bar"
-	Branch   string    `json:"branch"`
-	Path     string    `json:"path"`
-	Dirty    bool      `json:"dirty"`
-	Unpushed int       `json:"unpushed"` // -1 if no upstream set
-	Age      time.Time `json:"age_mtime"`
+	Name          string    `json:"name"` // repo name e.g. "github.com/foo/bar"
+	Branch        string    `json:"branch"`
+	Path          string    `json:"path"`
+	Dirty         bool      `json:"dirty"`
+	Unpushed      int       `json:"unpushed"` // -1 if no upstream set
+	Age           time.Time `json:"age_mtime"`
+	RepoUpdatedAt time.Time `json:"last_sync_at"` // cache repo last successful sync; zero if never
 }
 
 // PathFor returns the absolute workspace path. Does not check existence.
@@ -160,6 +161,7 @@ func defaultBranch(name string) (string, error) {
 // List returns all workspaces present on disk, scoped to the given repo
 // names (so the repo/branch split is unambiguous).
 func List(repoNames []string) ([]Info, error) {
+	repoUpdated := loadRepoUpdatedAt(repoNames)
 	var out []Info
 	for _, name := range repoNames {
 		repoDir := filepath.Join(paths.WorkspacesDir(), filepath.FromSlash(name))
@@ -179,7 +181,7 @@ func List(repoNames []string) ([]Info, error) {
 				if err != nil || rel == "." {
 					return nil
 				}
-				out = append(out, infoFor(name, filepath.ToSlash(rel), p))
+				out = append(out, infoFor(name, filepath.ToSlash(rel), p, repoUpdated[name]))
 				return filepath.SkipDir
 			}
 			return nil
@@ -191,13 +193,37 @@ func List(repoNames []string) ([]Info, error) {
 	return out, nil
 }
 
-func infoFor(name, branch, path string) Info {
-	i := Info{Name: name, Branch: branch, Path: path, Unpushed: -1}
+// loadRepoUpdatedAt reads each repo's repocache.meta sidecar once. The
+// probes are deliberately cheap (a stat and a small metadata read) so
+// workspace ls stays fast even when cache repos are large.
+func loadRepoUpdatedAt(repoNames []string) map[string]time.Time {
+	out := make(map[string]time.Time, len(repoNames))
+	for _, name := range repoNames {
+		if !cache.Exists(name) {
+			continue
+		}
+		meta, err := cache.LoadMeta(name)
+		if err != nil || meta == nil {
+			continue
+		}
+		out[name] = meta.LastSyncAt
+	}
+	return out
+}
+
+func infoFor(name, branch, path string, repoUpdatedAt time.Time) Info {
+	i := Info{
+		Name:          name,
+		Branch:        branch,
+		Path:          path,
+		Unpushed:      -1,
+		RepoUpdatedAt: repoUpdatedAt,
+	}
 	i.Dirty, _ = isDirty(path)
 	if n, ok := unpushedCount(path); ok {
 		i.Unpushed = n
 	}
-	i.Age = newestMtime(path)
+	i.Age = workspaceMtime(path)
 	return i
 }
 
@@ -225,21 +251,12 @@ func unpushedCount(path string) (int, bool) {
 	return n, true
 }
 
-func newestMtime(path string) time.Time {
-	var newest time.Time
-	filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if strings.Contains(p, string(filepath.Separator)+".git"+string(filepath.Separator)) {
-			return nil
-		}
-		if info.ModTime().After(newest) {
-			newest = info.ModTime()
-		}
-		return nil
-	})
-	return newest
+func workspaceMtime(path string) time.Time {
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
 }
 
 // CheckClean returns (dirty, unpushed, error). If the workspace is
@@ -312,7 +329,7 @@ func ListAll() ([]Info, error) {
 			if err != nil || rel == "." {
 				return nil
 			}
-			out = append(out, infoFor(filepath.ToSlash(rel), "", p))
+			out = append(out, infoFor(filepath.ToSlash(rel), "", p, time.Time{}))
 			return filepath.SkipDir
 		}
 		return nil

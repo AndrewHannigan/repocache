@@ -183,7 +183,7 @@ func runWorkspaceList(jsonOut bool) error {
 		return nil
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "REPO\tBRANCH\tDIRTY\tUNPUSHED\tAGE\tPATH")
+	fmt.Fprintln(w, "REPO\tBRANCH\tDIRTY\tUNPUSHED\tREPO UPDATED\tAGE\tPATH")
 	for _, i := range infos {
 		dirty := "no"
 		if i.Dirty {
@@ -193,8 +193,8 @@ func runWorkspaceList(jsonOut bool) error {
 		if i.Unpushed >= 0 {
 			unpushed = fmt.Sprintf("%d", i.Unpushed)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			i.Name, i.Branch, dirty, unpushed, relTime(i.Age), paths.Display(i.Path))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			i.Name, i.Branch, dirty, unpushed, relTime(i.RepoUpdatedAt), relTime(i.Age), paths.Display(i.Path))
 	}
 	return w.Flush()
 }

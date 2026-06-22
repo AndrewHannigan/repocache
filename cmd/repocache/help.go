@@ -259,7 +259,7 @@ sharing object storage but with independent refs. Edits happen here.
 
   repocache workspace ls [--json]
     Every workspace with repo, branch, dirty state, unpushed-commit count,
-    age of the newest file.
+    when the cache repo was last synced, and workspace directory age.
 
   repocache workspace path <repo> <branch>
     Print absolute workspace path. Exit 2 if missing.
