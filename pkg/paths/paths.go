@@ -36,6 +36,12 @@ func LogsDir() string       { return filepath.Join(DataDir(), "logs") }
 func BgSyncLockFile() string { return filepath.Join(DataDir(), ".bg-sync.lock") }
 func BgSyncLogFile() string  { return filepath.Join(LogsDir(), "bg-sync.log") }
 
+// HistoryFile is the JSON-Lines log of recent repocache commands (one event
+// per line). HistoryTrimMarkerFile holds the RFC3339 timestamp of the last
+// trim check, used to debounce truncation of the history file.
+func HistoryFile() string           { return filepath.Join(DataDir(), "history.jsonl") }
+func HistoryTrimMarkerFile() string { return filepath.Join(DataDir(), ".history-trim") }
+
 // CacheRepoPath returns the on-disk path for a named cache repo
 // (e.g. "github.com/foo/bar" → "<DataDir>/repos/github.com/foo/bar").
 func CacheRepoPath(name string) string {

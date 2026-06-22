@@ -79,9 +79,11 @@ func printSessionContext(w io.Writer, agentKey string) error {
 }
 
 // sessionContextBody is the bundled guide followed by a live snapshot of the
-// library, so the agent starts each session already knowing which repos are
-// available without having to run `repocache ls` itself. The snapshot
-// is best-effort: if the library can't be read it is simply omitted.
+// library (so the agent starts each session already knowing which repos are
+// available without having to run `repocache ls` itself) and a short log of the
+// user's recent repocache commands (so the agent has ambient awareness of what
+// they've been working on). Both appendices are best-effort: if either can't be
+// read it is simply omitted.
 func sessionContextBody() string {
 	body := string(agents.DocContent)
 	if w := syncHealthBanner(); w != "" {
@@ -93,6 +95,7 @@ func sessionContextBody() string {
 	if list := repoListText(); list != "" {
 		body += "\nThe library currently contains (output of `repocache ls`):\n\n```\n" + list + "```\n"
 	}
+	body += recentHistoryText()
 	return body
 }
 

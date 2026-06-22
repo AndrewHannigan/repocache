@@ -71,9 +71,10 @@ Commands:
   sync          fetch tracked repos and re-apply read-only chmod
   workspace     {new,ls,path,rm} of writable workspaces
   gc            delete workspaces whose branch has a merged PR
+  history       show recent repocache commands
   help <topic>  long-form docs
 
-Topics: agents, auth, concepts, gc, init, library, locking, owner, sync, workspace
+Topics: agents, auth, concepts, gc, history, init, library, locking, owner, sync, workspace
 `,
 
 	"concepts": `Concepts
@@ -286,6 +287,32 @@ To bulk-clean workspaces whose work has already landed, see 'repocache help gc'.
 
 gc is entirely gh-driven, so gh must be installed and authenticated; it
 fails fast rather than degrade when gh can't report merge status.
+`,
+
+	"history": `history — show recent repocache commands
+
+  repocache history [-n <count>] [--json]
+    Print recent repocache commands, newest last. Default 20; -n/--limit
+    changes how many. --json emits the raw events.
+
+What's recorded
+  Only "working" commands that change the library or workspaces are logged:
+  add, rm, gc, init, uninstall, and workspace new/rm. Read-only queries (ls,
+  status, workspace ls/path), background syncs, and the plain 'sync' command
+  are not recorded, and only commands that succeed are. Each entry is the
+  command exactly as you typed it, with a timestamp.
+
+Storage and truncation
+  Appended to ~/.repocache/history.jsonl (one JSON object per line). The log
+  is trimmed back to the most recent 200 entries, at most once every few
+  minutes (a marker file debounces the trim), so it never grows without bound
+  and the trim cost isn't paid on every command.
+
+Session context
+  The last 20 commands are also injected into each agent's session context by
+  the SessionStart hook, so the agent has ambient awareness of what you've
+  been working on (e.g. which repo you recently made a workspace in). It is
+  presented as neutral context, not as instructions.
 `,
 
 	"agents": `agents — terminal coding agent integration
