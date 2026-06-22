@@ -75,3 +75,10 @@ homebrew_casks:
     commit_msg_template: "repocache: cask update for {{ .Tag }}"
     homepage: "https://github.com/AndrewHannigan/repocache"
     description: "Read-only mirror of git repos for terminal coding agents"
+    caveats: |
+      Run this once to set up repocache and wire it into your coding agents:
+
+        repocache init
+
+      It detects your agents (Claude Code, Codex, Cursor, ...) and asks before
+      editing any of their config. Interactive and idempotent — safe to re-run.
