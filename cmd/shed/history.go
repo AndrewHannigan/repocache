@@ -25,7 +25,7 @@ const historyInjectCount = 20
 var recordedCommands = map[string]bool{
 	"add":           true,
 	"rm":            true,
-	"gc":            true,
+	"prune":         true,
 	"init":          true,
 	"uninstall":     true,
 	"workspace new": true,
@@ -54,7 +54,7 @@ func newHistoryCmd() *cobra.Command {
 		Use:   "history",
 		Short: "Show recent shed commands",
 		Long: `history prints the most recent shed commands that changed the
-library or workspaces (add, rm, gc, init, uninstall, workspace new/rm), newest
+library or workspaces (add, rm, prune, init, uninstall, workspace new/rm), newest
 last. Read-only queries and background syncs are not recorded.
 
 The same recent history (last 20) is injected into each agent's session context,
