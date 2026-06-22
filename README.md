@@ -2,15 +2,15 @@
 
 ![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
 
-A managed repo catalog for terminal coding agents
+A managed repo catalog for terminal coding agents.
 
-- 🔒 **OS-enforced read-only repos** — every repo is a pristine reference that is impossible to clobber.
-- ⚡ **Cheap workspaces** — `git clone --reference` shares the object store; no history re-download.
+- 🔒 **Read-only repos** — every repo is a pristine reference that is automatically updated and impossible to clobber.
+- ⚡ **Write-ready workspaces** — your agent runs `shed workspace new` and makes its edits in the created workspace.
 - 🔄 **Repos never stale** — refreshed in the background at session start.
-- 🤝 **Auto-integrates with your agents** — one `shed init` wires up Claude Code, Codex, Cursor, and opencode.
+- 🤝 **Auto-integrates with your agents** — one `shed init` wires up your agent with hooks providing dynamic context from shed.
 - 📦 **Persistent shared library** — cached once and reused across sessions, never re-cloned to `/tmp`.
-- 🧰 **Natively searchable** — `rg`, `grep`, `git`, and `gh` work directly; no wrappers.
-- 🌐 **Simpler multi-repo PRs** — spin up writable workspaces on demand from the read-only repos.
+- 🧰 **Natively searchable** — agents can use `rg`, `grep`, `git`, and `gh` across the entire catalog directly.
+- 🌐 **Simpler multi-repo PRs** — spin up writable workspaces on demand within a single session.
 
 ---
 
@@ -97,7 +97,7 @@ url = "https://github.com/octocat"
 
 ## Why `git clone --reference`, not `git worktree`
 
-Both share an underlying object store, but they are not interchangeable. A worktree of the cache *is* the cache: committing in it mutates `<cache>/.git/refs/...`, breaking the read-only invariant, and worktrees forbid checking out the same branch twice. `--reference` clones keep independent refs, allow two agents on the same branch, and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Shed sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race.
+Both share an underlying object store, but they are not interchangeable. A worktree modifies state in the originating repo's `./git/`, breaking the read-only invariant. `--reference` clones keep independent refs and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Shed sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race.
 
 ---
 
