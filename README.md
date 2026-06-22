@@ -32,10 +32,7 @@ curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/shed/main/install.sh
 # integrate with your agents
 shed init
 
-# add a repo — it's fetched right away (read-only)
-shed add https://github.com/octocat/Hello-World
-
-# GitHub shorthand works too — "owner/repo" is expanded against github.com
+# GitHub shorthand works — "owner/repo" is expanded against github.com
 shed add octocat/Hello-World
 
 # now run claude, cursor-agent, codex, or opencode — your agent knows how to use it
