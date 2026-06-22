@@ -2,7 +2,7 @@ package main
 
 // Shared presentation helpers for human-readable command output. Kept here
 // rather than inside any one command's file because they are used across
-// add/rm/ls, sync, status, workspace, gc, and session-context.
+// add/rm/ls, sync, status, workspace, prune, and session-context.
 
 import (
 	"fmt"

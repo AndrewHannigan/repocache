@@ -2,29 +2,29 @@ package main
 
 import "testing"
 
-// decideGc gates `gc`: prune only merged branches, and never discard local
-// work unless --force.
-func TestDecideGc(t *testing.T) {
+// decidePrune gates `prune`: remove only merged branches, and never discard
+// local work unless --force.
+func TestDecidePrune(t *testing.T) {
 	tests := []struct {
 		name     string
 		prNumber int
 		dirty    bool
 		unpushed int
 		force    bool
-		want     gcAction
+		want     pruneAction
 	}{
-		{"no merged PR", 0, false, 0, false, gcKeep},
-		{"no merged PR even if dirty", 0, true, 3, false, gcKeep},
-		{"merged and clean", 12, false, 0, false, gcPrune},
-		{"merged, no upstream", 12, false, -1, false, gcPrune},
-		{"merged but dirty", 12, true, 0, false, gcSkip},
-		{"merged but unpushed", 12, false, 2, false, gcSkip},
-		{"merged, dirty, forced", 12, true, 2, true, gcPrune},
+		{"no merged PR", 0, false, 0, false, pruneKeep},
+		{"no merged PR even if dirty", 0, true, 3, false, pruneKeep},
+		{"merged and clean", 12, false, 0, false, pruneRemove},
+		{"merged, no upstream", 12, false, -1, false, pruneRemove},
+		{"merged but dirty", 12, true, 0, false, pruneSkip},
+		{"merged but unpushed", 12, false, 2, false, pruneSkip},
+		{"merged, dirty, forced", 12, true, 2, true, pruneRemove},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := decideGc(tt.prNumber, tt.dirty, tt.unpushed, tt.force); got != tt.want {
-				t.Errorf("decideGc(%d, %v, %d, %v) = %d, want %d",
+			if got := decidePrune(tt.prNumber, tt.dirty, tt.unpushed, tt.force); got != tt.want {
+				t.Errorf("decidePrune(%d, %v, %d, %v) = %d, want %d",
 					tt.prNumber, tt.dirty, tt.unpushed, tt.force, got, tt.want)
 			}
 		})
