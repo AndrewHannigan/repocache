@@ -29,6 +29,15 @@ type Info struct {
 	Age      time.Time `json:"age_mtime"`
 }
 
+// IsDirty runs git status to check whether the workspace has uncommitted changes.
+// This is intentionally not populated by List — it runs git status, which is
+// O(n) in working-tree file count. Callers that need the dirty state (gc,
+// uninstall, repo rm) call this explicitly.
+func (i Info) IsDirty() bool {
+	dirty, _, _ := CheckClean(i.Path)
+	return dirty
+}
+
 // PathFor returns the absolute workspace path. Does not check existence.
 func PathFor(name, branch string) string {
 	return paths.WorkspacePath(name, branch)
@@ -193,7 +202,6 @@ func List(repoNames []string) ([]Info, error) {
 
 func infoFor(name, branch, path string) Info {
 	i := Info{Name: name, Branch: branch, Path: path, Unpushed: -1}
-	i.Dirty, _ = isDirty(path)
 	if n, ok := unpushedCount(path); ok {
 		i.Unpushed = n
 	}

@@ -339,7 +339,7 @@ func blockedWorkspaces(workspaces []workspace.Info) []string {
 	var blocked []string
 	for _, ws := range workspaces {
 		parts := []string{}
-		if ws.Dirty {
+		if ws.IsDirty() {
 			parts = append(parts, "uncommitted changes")
 		}
 		if ws.Unpushed > 0 {

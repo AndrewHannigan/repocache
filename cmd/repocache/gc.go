@@ -81,11 +81,12 @@ func runGc(dryRun, force bool) error {
 			failed++
 			continue
 		}
-		switch decideGc(pr, i.Dirty, i.Unpushed, force) {
+		dirty := i.IsDirty()
+		switch decideGc(pr, dirty, i.Unpushed, force) {
 		case gcKeep:
 			kept++
 		case gcSkip:
-			fmt.Printf("skipped %s (PR #%d merged, but has %s)\n", i.Branch, pr, localChangesDesc(i))
+			fmt.Printf("skipped %s (PR #%d merged, but has %s)\n", i.Branch, pr, localChangesDesc(i.Branch, dirty, i.Unpushed))
 			skipped++
 		case gcPrune:
 			if dryRun {
@@ -155,13 +156,13 @@ func ghRepoFromName(name string) (host, repo string, ok bool) {
 
 // localChangesDesc describes a workspace's uncommitted/unpushed state for the
 // "skipped" message.
-func localChangesDesc(i workspace.Info) string {
+func localChangesDesc(branch string, dirty bool, unpushed int) string {
 	parts := []string{}
-	if i.Dirty {
+	if dirty {
 		parts = append(parts, "uncommitted changes")
 	}
-	if i.Unpushed > 0 {
-		parts = append(parts, fmt.Sprintf("%d unpushed commits", i.Unpushed))
+	if unpushed > 0 {
+		parts = append(parts, fmt.Sprintf("%d unpushed commits", unpushed))
 	}
 	return joinAnd(parts)
 }

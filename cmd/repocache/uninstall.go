@@ -138,6 +138,7 @@ func dirtyWorkspaces() ([]workspace.Info, error) {
 	}
 	var dirty []workspace.Info
 	for _, w := range all {
+		w.Dirty = w.IsDirty()
 		if w.Dirty || w.Unpushed > 0 {
 			dirty = append(dirty, w)
 		}
