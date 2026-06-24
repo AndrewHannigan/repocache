@@ -55,6 +55,7 @@ func newRootCmd() *cobra.Command {
 		newHistoryCmd(),
 		newSessionContextCmd(),
 		newBgSyncCmd(),
+		newWelcomeTourCmd(),
 	)
 	return cmd
 }
