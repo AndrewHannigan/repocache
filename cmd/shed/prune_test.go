@@ -1,31 +1,61 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
-// decidePrune gates `prune`: remove only merged branches, and never discard
-// local work unless --force.
+// decidePrune gates `prune`: remove only reclaimable branches, and never
+// discard local work unless --force.
 func TestDecidePrune(t *testing.T) {
 	tests := []struct {
 		name     string
-		prNumber int
+		prunable bool
 		dirty    bool
 		unpushed int
 		force    bool
 		want     pruneAction
 	}{
-		{"no merged PR", 0, false, 0, false, pruneKeep},
-		{"no merged PR even if dirty", 0, true, 3, false, pruneKeep},
-		{"merged and clean", 12, false, 0, false, pruneRemove},
-		{"merged, no upstream", 12, false, -1, false, pruneRemove},
-		{"merged but dirty", 12, true, 0, false, pruneSkip},
-		{"merged but unpushed", 12, false, 2, false, pruneSkip},
-		{"merged, dirty, forced", 12, true, 2, true, pruneRemove},
+		{"not reclaimable", false, false, 0, false, pruneKeep},
+		{"not reclaimable even if dirty", false, true, 3, false, pruneKeep},
+		{"reclaimable and clean", true, false, 0, false, pruneRemove},
+		{"reclaimable, no upstream", true, false, -1, false, pruneRemove},
+		{"reclaimable but dirty", true, true, 0, false, pruneSkip},
+		{"reclaimable but unpushed", true, false, 2, false, pruneSkip},
+		{"reclaimable, dirty, forced", true, true, 2, true, pruneRemove},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := decidePrune(tt.prNumber, tt.dirty, tt.unpushed, tt.force); got != tt.want {
-				t.Errorf("decidePrune(%d, %v, %d, %v) = %d, want %d",
-					tt.prNumber, tt.dirty, tt.unpushed, tt.force, got, tt.want)
+			if got := decidePrune(tt.prunable, tt.dirty, tt.unpushed, tt.force); got != tt.want {
+				t.Errorf("decidePrune(%v, %v, %d, %v) = %d, want %d",
+					tt.prunable, tt.dirty, tt.unpushed, tt.force, got, tt.want)
+			}
+		})
+	}
+}
+
+// pruneReason reports the highest-priority reason a workspace is reclaimable.
+func TestPruneReason(t *testing.T) {
+	tests := []struct {
+		name          string
+		prNumber      int
+		landed        bool
+		defaultBranch string
+		expired       bool
+		inactive      time.Duration
+		want          string
+	}{
+		{"merged PR wins", 12, true, "main", true, 100 * 24 * time.Hour, "PR #12 merged"},
+		{"landed into named default", 0, true, "main", false, 0, "merged into main"},
+		{"landed, default unknown", 0, true, "", false, 0, "merged into default branch"},
+		{"expired only", 0, false, "main", true, 100 * 24 * time.Hour, "inactive for 100 days"},
+		{"nothing", 0, false, "main", false, 0, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := pruneReason(tt.prNumber, tt.landed, tt.defaultBranch, tt.expired, tt.inactive); got != tt.want {
+				t.Errorf("pruneReason(%d, %v, %q, %v, %v) = %q, want %q",
+					tt.prNumber, tt.landed, tt.defaultBranch, tt.expired, tt.inactive, got, tt.want)
 			}
 		})
 	}

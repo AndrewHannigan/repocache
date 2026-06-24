@@ -238,6 +238,56 @@ func newestMtime(path string) time.Time {
 	return time.Unix(ts, 0)
 }
 
+// LandedInDefault reports whether the workspace's branch has already landed in
+// its remote default branch — that is, the branch tip (HEAD) is an ancestor of
+// refs/remotes/origin/HEAD, so every commit is already contained in the default
+// branch. This catches merge- and rebase-merged work even when no PR is
+// associated (e.g. a direct push or a local merge).
+//
+// The second return value is the default branch's short name (e.g. "main") for
+// use in messages. landed is false when the default branch can't be resolved
+// (treated conservatively as "not landed", so a stale or missing origin/HEAD
+// never causes a deletion) or when the branch is itself the default branch (so
+// a checkout of main is never pruned just for containing itself).
+//
+// Comparing against the last-fetched origin/HEAD means staleness only ever
+// makes this more conservative: an out-of-date default branch yields a false
+// negative (keep), never a false positive (delete).
+func LandedInDefault(path, branch string) (landed bool, defaultBranch string, err error) {
+	def, err := defaultBranchShortName(path)
+	if err != nil {
+		// Can't resolve the default branch — stay conservative and keep.
+		return false, "", nil
+	}
+	if def == branch {
+		return false, def, nil
+	}
+	cmd := exec.Command("git", "-C", path,
+		"merge-base", "--is-ancestor", "HEAD", "refs/remotes/origin/HEAD")
+	err = cmd.Run()
+	if err == nil {
+		return true, def, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return false, def, nil
+	}
+	return false, def, err
+}
+
+// defaultBranchShortName resolves the workspace's remote default branch to its
+// short name (e.g. "main") via refs/remotes/origin/HEAD.
+func defaultBranchShortName(path string) (string, error) {
+	cmd := exec.Command("git", "-C", path,
+		"symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	short := strings.TrimSpace(string(out))
+	return strings.TrimPrefix(short, "origin/"), nil
+}
+
 // CheckClean returns (dirty, unpushed, error). If the workspace is
 // clean, returns (false, 0, nil).
 func CheckClean(path string) (bool, int, error) {
