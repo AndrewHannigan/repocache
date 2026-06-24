@@ -19,7 +19,7 @@ import (
 
 func newPruneCmd() *cobra.Command {
 	var dryRun, force, yes bool
-	var isOlderThan time.Duration
+	var ifOlderThan time.Duration
 	cmd := &cobra.Command{
 		Use:   "prune",
 		Short: "Delete workspaces whose work has already landed",
@@ -29,7 +29,7 @@ has a merged pull request, or its commits are already contained in the
 remote default branch (a merge- or rebase-merge with no PR). The merged-PR
 check asks GitHub via the gh CLI, so gh must be installed and authenticated.
 
-With --is-older-than, also reclaim workspaces whose last activity (newest
+With --if-older-than, also reclaim workspaces whose last activity (newest
 reflog entry) is older than the given duration, regardless of merge status.
 
 Workspaces with uncommitted or unpushed changes are skipped so local work is
@@ -38,13 +38,13 @@ the workspaces and asks for confirmation; pass --yes to skip the prompt or
 --dry-run to preview without deleting.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPrune(dryRun, force, yes, isOlderThan)
+			return runPrune(dryRun, force, yes, ifOlderThan)
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be removed without deleting")
 	cmd.Flags().BoolVar(&force, "force", false, "remove even if there are uncommitted or unpushed changes")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
-	cmd.Flags().DurationVar(&isOlderThan, "is-older-than", 0, "also remove workspaces inactive longer than this (e.g. 720h)")
+	cmd.Flags().DurationVar(&ifOlderThan, "if-older-than", 0, "also remove workspaces inactive longer than this (e.g. 720h)")
 	return cmd
 }
 
@@ -54,7 +54,7 @@ type prunePlan struct {
 	reason string
 }
 
-func runPrune(dryRun, force, yes bool, isOlderThan time.Duration) error {
+func runPrune(dryRun, force, yes bool, ifOlderThan time.Duration) error {
 	if err := cache.RequireGit(); err != nil {
 		return errs.Wrap(errs.MissingDep, err)
 	}
@@ -112,7 +112,7 @@ func runPrune(dryRun, force, yes bool, isOlderThan time.Duration) error {
 				fmt.Fprintf(os.Stderr, "warning: %s %s: could not check default-branch status: %v\n", repo, i.Branch, err)
 			}
 		}
-		expired := isOlderThan > 0 && !i.Age.IsZero() && now.Sub(i.Age) > isOlderThan
+		expired := ifOlderThan > 0 && !i.Age.IsZero() && now.Sub(i.Age) > ifOlderThan
 		prunable := pr != 0 || landed || expired
 		reason := pruneReason(pr, landed, defaultBranch, expired, now.Sub(i.Age))
 		switch decidePrune(prunable, i.Dirty, i.Unpushed, force) {

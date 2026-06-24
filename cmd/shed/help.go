@@ -279,14 +279,14 @@ To bulk-clean workspaces whose work has already landed, see 'shed help prune'.
 
 	"prune": `prune — delete workspaces whose work has already landed
 
-  shed prune [--dry-run] [--force] [--yes] [--is-older-than <dur>]
+  shed prune [--dry-run] [--force] [--yes] [--if-older-than <dur>]
     Delete every workspace whose work has already landed, reclaiming the
     ones safe to delete. A workspace is reclaimed when its branch has a
     merged pull request (asked of GitHub via the gh CLI), or its commits
     are already contained in the remote default branch (a merge- or
-    rebase-merge with no PR). With --is-older-than, also reclaim workspaces
+    rebase-merge with no PR). With --if-older-than, also reclaim workspaces
     whose last activity (newest reflog entry) is older than the given
-    duration, e.g. --is-older-than 720h. Skips workspaces with uncommitted
+    duration, e.g. --if-older-than 720h. Skips workspaces with uncommitted
     or unpushed changes so local work is never lost; pass --force to remove
     them anyway.
     Before deleting, prune lists the workspaces and asks for confirmation;
