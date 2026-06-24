@@ -20,6 +20,14 @@ import (
 //go:embed embed/guide.md
 var DocContent []byte
 
+// TourContent is the welcome-tour script bundled into the binary, emitted by
+// `shed __welcome-tour`. It is a set of instructions the agent reads and then
+// performs as a live, narrated walkthrough of shed. Like DocContent it ships
+// with the binary, so it never drifts after an upgrade.
+//
+//go:embed embed/welcome_tour.md
+var TourContent []byte
+
 // InstallOptions tunes a per-agent install. Most agents ignore most options.
 type InstallOptions struct {
 	NoBgSync bool // Claude only: skip the SessionStart hook.
