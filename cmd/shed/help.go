@@ -68,7 +68,7 @@ Commands:
   history       show recent shed commands
   init          bootstrap + integrate with detected agents
   ls            list tracked repos and owners
-  prune         delete workspaces whose branch has a merged PR
+  prune         delete workspaces whose work has already landed
   rm            remove a tracked repo or owner
   status        report sync health; show a repo's error and the likely fix
   sync          fetch tracked repos and re-apply read-only chmod
@@ -277,17 +277,23 @@ first 'git push -u origin <branch>'.
 To bulk-clean workspaces whose work has already landed, see 'shed help prune'.
 `,
 
-	"prune": `prune — delete workspaces whose branch has a merged PR
+	"prune": `prune — delete workspaces whose work has already landed
 
-  shed prune [--dry-run] [--force]
-    Delete every workspace whose branch has a merged pull request (asks
-    GitHub via the gh CLI), reclaiming the ones whose work has already
-    landed. Skips workspaces with uncommitted or unpushed changes so local
-    work is never lost; pass --force to remove them anyway. --dry-run
-    previews without deleting.
+  shed prune [--dry-run] [--force] [--yes] [--if-older-than <dur>]
+    Delete every workspace whose work has already landed, reclaiming the
+    ones safe to delete. A workspace is reclaimed when its branch has a
+    merged pull request (asked of GitHub via the gh CLI), or its commits
+    are already contained in the remote default branch (a merge- or
+    rebase-merge with no PR). With --if-older-than, also reclaim workspaces
+    whose last activity (newest reflog entry) is older than the given
+    duration, e.g. --if-older-than 720h. Skips workspaces with uncommitted
+    or unpushed changes so local work is never lost; pass --force to remove
+    them anyway.
+    Before deleting, prune lists the workspaces and asks for confirmation;
+    pass --yes to skip the prompt or --dry-run to preview without deleting.
 
-prune is entirely gh-driven, so gh must be installed and authenticated; it
-fails fast rather than degrade when gh can't report merge status.
+The merged-PR check is gh-driven, so gh must be installed and authenticated;
+prune fails fast rather than degrade when gh can't report merge status.
 `,
 
 	"history": `history — show recent shed commands
