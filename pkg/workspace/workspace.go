@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/AndrewHannigan/shed/pkg/cache"
+	"github.com/AndrewHannigan/shed/pkg/git"
 	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
@@ -102,7 +103,7 @@ func New(name, branch, base, url string) (string, error) {
 		if err := runGitClone(cachePath, url, baseBranch, wsPath); err != nil {
 			return "", err
 		}
-		if err := runGit(wsPath, "checkout", "-b", branch); err != nil {
+		if _, err := git.Run(wsPath, "checkout", "-b", branch); err != nil {
 			return "", err
 		}
 	}
@@ -112,24 +113,11 @@ func New(name, branch, base, url string) (string, error) {
 func runGitClone(referencePath, url, branch, dest string) error {
 	// "--" terminates options so a url beginning with "-" can't be parsed as a
 	// git flag (argument injection); url and dest are strictly positional.
-	cmd := exec.Command("git", "clone",
+	_, err := git.Run("", "clone",
 		"--reference", referencePath,
 		"--branch", branch,
 		"--", url, dest)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("git clone: %w (output: %s)", err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-func runGit(dir string, args ...string) error {
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("git %s: %w (output: %s)", args[0], err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	return err
 }
 
 func refExists(name, ref string) (bool, error) {
@@ -157,35 +145,44 @@ func defaultBranch(name string) (string, error) {
 	return strings.TrimPrefix(full, "refs/remotes/origin/"), nil
 }
 
+// eachWorkspace walks root and invokes fn for every workspace it finds — a
+// directory containing a .git — passing the workspace's slash-separated path
+// relative to root and its absolute path. It does not descend into a workspace
+// once found. A root that does not exist yields no calls and no error; other
+// errors stat-ing root are returned.
+func eachWorkspace(root string, fn func(rel, abs string)) error {
+	if _, err := os.Stat(root); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	return filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
+			return nil
+		}
+		if s, err := os.Stat(filepath.Join(p, ".git")); err == nil && s.IsDir() {
+			rel, err := filepath.Rel(root, p)
+			if err != nil || rel == "." {
+				return nil
+			}
+			fn(filepath.ToSlash(rel), p)
+			return filepath.SkipDir
+		}
+		return nil
+	})
+}
+
 // List returns all workspaces present on disk, scoped to the given repo
 // names (so the repo/branch split is unambiguous).
 func List(repoNames []string) ([]Info, error) {
 	var out []Info
 	for _, name := range repoNames {
 		repoDir := filepath.Join(paths.WorkspacesDir(), filepath.FromSlash(name))
-		if _, err := os.Stat(repoDir); err != nil {
-			continue
-		}
-		walkErr := filepath.Walk(repoDir, func(p string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil
-			}
-			if !info.IsDir() {
-				return nil
-			}
-			// A dir containing .git is a workspace root. Don't recurse further.
-			if s, err := os.Stat(filepath.Join(p, ".git")); err == nil && s.IsDir() {
-				rel, err := filepath.Rel(repoDir, p)
-				if err != nil || rel == "." {
-					return nil
-				}
-				out = append(out, infoFor(name, filepath.ToSlash(rel), p))
-				return filepath.SkipDir
-			}
-			return nil
-		})
-		if walkErr != nil {
-			return nil, walkErr
+		if err := eachWorkspace(repoDir, func(rel, abs string) {
+			out = append(out, infoFor(name, rel, abs))
+		}); err != nil {
+			return nil, err
 		}
 	}
 	return out, nil
@@ -341,30 +338,11 @@ func RemoveAllForRepo(name string) error {
 // the repo-relative path on disk (repo name plus branch); callers that
 // only need paths and dirty/unpushed status should prefer this over List.
 func ListAll() ([]Info, error) {
-	root := paths.WorkspacesDir()
-	if _, err := os.Stat(root); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
 	var out []Info
-	walkErr := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
-		if err != nil || !info.IsDir() {
-			return nil
-		}
-		if s, err := os.Stat(filepath.Join(p, ".git")); err == nil && s.IsDir() {
-			rel, err := filepath.Rel(root, p)
-			if err != nil || rel == "." {
-				return nil
-			}
-			out = append(out, infoFor(filepath.ToSlash(rel), "", p))
-			return filepath.SkipDir
-		}
-		return nil
-	})
-	if walkErr != nil {
-		return nil, walkErr
+	if err := eachWorkspace(paths.WorkspacesDir(), func(rel, abs string) {
+		out = append(out, infoFor(rel, "", abs))
+	}); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/gofrs/flock"
 
+	"github.com/AndrewHannigan/shed/pkg/git"
 	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
@@ -126,7 +126,6 @@ func ClearFirstSyncError(name string) {
 // configured for whatever transport url names. A non-nil error wraps git's
 // output so callers can classify it (auth vs. network vs. not-found).
 func Reachable(url string) error {
-	cmd := exec.Command("git", "ls-remote", "--heads", "--", url)
 	// GIT_TERMINAL_PROMPT=0 stops HTTPS from prompting for username/password.
 	// BatchMode=yes does the same for SSH (no passphrase/password prompt);
 	// accept-new avoids hanging on an unknown host key the first time.
@@ -135,12 +134,8 @@ func Reachable(url string) error {
 	if os.Getenv("GIT_SSH_COMMAND") == "" {
 		env = append(env, "GIT_SSH_COMMAND=ssh -oBatchMode=yes -oStrictHostKeyChecking=accept-new")
 	}
-	cmd.Env = env
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("git ls-remote: %w (output: %s)", err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	_, err := git.RunEnv("", env, "ls-remote", "--heads", "--", url)
+	return err
 }
 
 // SaveMeta writes the meta sidecar.
@@ -283,26 +278,21 @@ func Clone(url, name string) error {
 	}
 	// "--" terminates options so a url beginning with "-" can't be parsed as a
 	// git flag (argument injection); url and dest are strictly positional.
-	cmd := exec.Command("git", "clone", "--no-checkout", "--config", "gc.auto=0", "--", url, dest)
-	out, err := cmd.CombinedOutput()
+	out, err := git.Run("", "clone", "--no-checkout", "--config", "gc.auto=0", "--", url, dest)
 	if err != nil {
 		// Race: another process created the dir between our stat and clone.
 		if strings.Contains(string(out), "already exists") {
 			return nil
 		}
-		return fmt.Errorf("git clone: %w (output: %s)", err, strings.TrimSpace(string(out)))
+		return err
 	}
 	return nil
 }
 
 // Fetch runs `git fetch --all --prune --tags` in the cache repo.
 func Fetch(name string) error {
-	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name), "fetch", "--all", "--prune", "--tags")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("git fetch: %w (output: %s)", err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	_, err := git.Run(paths.CacheRepoPath(name), "fetch", "--all", "--prune", "--tags")
+	return err
 }
 
 // CheckoutDetachedHEAD runs `git checkout --detach --force origin/HEAD` so
@@ -321,13 +311,10 @@ func Fetch(name string) error {
 // each sync, and a single missing object (e.g. pruned from the server)
 // would fail the whole sync.
 func CheckoutDetachedHEAD(name string) error {
-	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name), "checkout", "--detach", "--force", "origin/HEAD")
-	cmd.Env = append(os.Environ(), "GIT_LFS_SKIP_SMUDGE=1")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("git checkout: %w (output: %s)", err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	_, err := git.RunEnv(paths.CacheRepoPath(name),
+		append(os.Environ(), "GIT_LFS_SKIP_SMUDGE=1"),
+		"checkout", "--detach", "--force", "origin/HEAD")
+	return err
 }
 
 // RemoteHEADResolves reports whether refs/remotes/origin/HEAD points at a

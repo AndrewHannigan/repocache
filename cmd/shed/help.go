@@ -17,7 +17,7 @@ func newHelpCmd() *cobra.Command {
 		Long: `help prints prose documentation for a command or concept.
 With no topic, prints an overview.
 
-Topics: ` + strings.Join(topicList(), ", "),
+Topics: ` + strings.Join(helpTopicNames(), ", "),
 		Args:               cobra.MaximumNArgs(1),
 		DisableFlagParsing: false,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -37,6 +37,12 @@ func runHelp(topic string) error {
 			topic, strings.Join(topicList(), ", "))
 	}
 	fmt.Print(text)
+	// The overview closes with the list of help topics. It is rendered here
+	// rather than baked into the text so it can never fall out of sync with the
+	// actual set of topics — a newly added topic appears automatically.
+	if topic == "overview" {
+		fmt.Printf("\nTopics: %s\n", strings.Join(helpTopicNames(), ", "))
+	}
 	return nil
 }
 
@@ -47,6 +53,19 @@ func topicList() []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// helpTopicNames returns the topics worth advertising to a reader: every
+// documented topic except "overview" itself, which is the default and would be
+// self-referential in a "Topics:" list. Sorted, like topicList.
+func helpTopicNames() []string {
+	var out []string
+	for _, t := range topicList() {
+		if t != "overview" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 var helpTopics = map[string]string{
@@ -74,8 +93,6 @@ Commands:
   sync          fetch tracked repos and re-apply read-only chmod
   uninstall     reverse agent integration (--purge also deletes data + config)
   workspace     {new,ls,path,rm} of writable workspaces
-
-Topics: agents, auth, concepts, history, init, library, locking, owner, prune, sync, workspace
 `,
 
 	"concepts": `Concepts

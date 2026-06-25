@@ -56,8 +56,8 @@ type Owner struct {
 	Exclude []string `toml:"exclude,omitempty"`
 }
 
-// Name returns the effective name for a repo: the explicit Name field if
-// set, else the default derived from URL.
+// ResolvedName returns the effective name for a repo: the explicit Name field
+// if set, else the default derived from URL.
 func (r Repo) ResolvedName() (string, error) {
 	if r.Name != "" {
 		return r.Name, nil
@@ -213,24 +213,34 @@ func (c *Config) ReposForOwner(owner string) []string {
 	return names
 }
 
-// Resolve finds the config entry matching name, per SPEC §5.0: an exact
-// match on the resolved name wins; otherwise an unambiguous suffix match
-// on path-segment ("/") boundaries is used. Returns an errs.Coded with
-// NotFound when nothing matches or when a suffix matches more than one
-// repo (the message lists the candidates so the user can disambiguate).
-func (c *Config) Resolve(name string) (*Repo, error) {
-	if r := c.FindByName(name); r != nil {
-		return r, nil
+// resolvable is satisfied by both Repo and Owner: anything that resolves to a
+// name. It lets Resolve and ResolveOwner share one matching implementation.
+type resolvable interface {
+	ResolvedName() (string, error)
+}
+
+// resolveEntry finds the entry in entries matching name, per SPEC §5.0: an
+// exact match on the resolved name wins; otherwise an unambiguous suffix match
+// on path-segment ("/") boundaries is used. kind names the entry type
+// ("repo"/"owner") in the messages. Returns an errs.Coded with NotFound when
+// nothing matches or when a suffix matches more than one entry (the message
+// lists the candidates so the user can disambiguate). The result points into
+// entries, so callers may mutate the matched entry in place.
+func resolveEntry[T resolvable](entries []T, kind, name string) (*T, error) {
+	for i := range entries {
+		if n, err := entries[i].ResolvedName(); err == nil && n == name {
+			return &entries[i], nil
+		}
 	}
-	var matches []*Repo
+	var matches []*T
 	var candidates []string
-	for i := range c.Repos {
-		n, err := c.Repos[i].ResolvedName()
+	for i := range entries {
+		n, err := entries[i].ResolvedName()
 		if err != nil {
 			continue
 		}
 		if strings.HasSuffix(n, "/"+name) {
-			matches = append(matches, &c.Repos[i])
+			matches = append(matches, &entries[i])
 			candidates = append(candidates, n)
 		}
 	}
@@ -238,42 +248,21 @@ func (c *Config) Resolve(name string) (*Repo, error) {
 	case 1:
 		return matches[0], nil
 	case 0:
-		return nil, errs.New(errs.NotFound, "repo %q is not in the config", name)
+		return nil, errs.New(errs.NotFound, "%s %q is not in the config", kind, name)
 	default:
 		return nil, errs.New(errs.NotFound,
-			"repo %q is ambiguous; matches: %s", name, strings.Join(candidates, ", "))
+			"%s %q is ambiguous; matches: %s", kind, name, strings.Join(candidates, ", "))
 	}
 }
 
-// ResolveOwner finds the owner entry matching name using the same rule as
-// Resolve (exact resolved-name match, else unambiguous suffix match on "/"
-// boundaries). Returns an errs.Coded with NotFound when nothing matches or
-// when a suffix matches more than one owner.
+// Resolve finds the repo entry matching name; see resolveEntry for the rule.
+func (c *Config) Resolve(name string) (*Repo, error) {
+	return resolveEntry(c.Repos, "repo", name)
+}
+
+// ResolveOwner finds the owner entry matching name; see resolveEntry for the rule.
 func (c *Config) ResolveOwner(name string) (*Owner, error) {
-	if o := c.FindOwnerByName(name); o != nil {
-		return o, nil
-	}
-	var matches []*Owner
-	var candidates []string
-	for i := range c.Owners {
-		n, err := c.Owners[i].ResolvedName()
-		if err != nil {
-			continue
-		}
-		if strings.HasSuffix(n, "/"+name) {
-			matches = append(matches, &c.Owners[i])
-			candidates = append(candidates, n)
-		}
-	}
-	switch len(matches) {
-	case 1:
-		return matches[0], nil
-	case 0:
-		return nil, errs.New(errs.NotFound, "owner %q is not in the config", name)
-	default:
-		return nil, errs.New(errs.NotFound,
-			"owner %q is ambiguous; matches: %s", name, strings.Join(candidates, ", "))
-	}
+	return resolveEntry(c.Owners, "owner", name)
 }
 
 // EmptyTemplate returns the contents of an empty config file with a
