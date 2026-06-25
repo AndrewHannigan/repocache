@@ -26,17 +26,21 @@ func mkMeta(t *testing.T, name string, m cache.Meta) {
 }
 
 func TestLikelyCause(t *testing.T) {
-	cases := []struct{ name, err, want string }{
-		{"auth", "git fetch: exit status 128 (output: fatal: could not read Username for 'https://github.com')", "gh auth login"},
-		{"notfound", "git fetch: exit status 128 (output: ERROR: Repository not found.)", "shed rm"},
-		{"network", "git fetch: exit status 128 (output: fatal: unable to access: Could not resolve host: github.com)", "network"},
-		{"locked", "locked", "lock"},
-		{"disk", "fatal: write error: No space left on device", "disk full"},
-		{"unknown", "git fetch: exit status 1 (output: something unexpected)", "see the full output"},
+	const https = "https://github.com/acme/widget"
+	const ssh = "git@github.com:acme/widget.git"
+	cases := []struct{ name, err, url, want string }{
+		{"auth-https", "git fetch: exit status 128 (output: fatal: could not read Username for 'https://github.com')", https, "gh auth login"},
+		{"auth-ssh", "git fetch: exit status 128 (output: git@github.com: Permission denied (publickey).)", ssh, "ssh-add"},
+		{"auth-ssh-hostkey", "git fetch: exit status 128 (output: Host key verification failed.)", ssh, "SSH auth"},
+		{"notfound", "git fetch: exit status 128 (output: ERROR: Repository not found.)", https, "shed rm"},
+		{"network", "git fetch: exit status 128 (output: fatal: unable to access: Could not resolve host: github.com)", https, "network"},
+		{"locked", "locked", https, "lock"},
+		{"disk", "fatal: write error: No space left on device", https, "disk full"},
+		{"unknown", "git fetch: exit status 1 (output: something unexpected)", https, "see the full output"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := likelyCause(tc.err, "github.com/acme/widget")
+			got := likelyCause(tc.err, "github.com/acme/widget", tc.url)
 			if !strings.Contains(got, tc.want) {
 				t.Fatalf("likelyCause(%q) = %q, want substring %q", tc.err, got, tc.want)
 			}
@@ -123,5 +127,38 @@ func TestWrapIndent(t *testing.T) {
 		if !strings.HasPrefix(l, "  ") {
 			t.Fatalf("line missing indent: %q", l)
 		}
+	}
+}
+
+// TestCollectSyncFailuresIncludesFirstSyncErrors verifies a repo that failed
+// its very first clone (no cache dir, so no meta sidecar) still shows up as a
+// failure — the chain that feeds both `shed status` and the staleness banner.
+// Without it, onboarding a private repo before auth is configured would be
+// reported as "synced cleanly".
+func TestCollectSyncFailuresIncludesFirstSyncErrors(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	const name = "github.com/acme/private"
+	if err := cache.RecordFirstSyncError(name, "fatal: Authentication failed"); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &config.Config{Repos: []config.Repo{{URL: "https://github.com/acme/private"}}}
+	fails := collectSyncFailures(c)
+	if len(fails) != 1 || fails[0].Name != name {
+		t.Fatalf("expected first-sync failure surfaced, got %+v", fails)
+	}
+	// A never-succeeded repo has a zero LastSyncAt, which the banner renders as
+	// "never synced successfully".
+	if !fails[0].LastSyncAt.IsZero() {
+		t.Fatalf("expected zero LastSyncAt for never-synced repo, got %v", fails[0].LastSyncAt)
+	}
+
+	// Once it syncs successfully the standalone record is cleared, so it no
+	// longer counts as a failure.
+	cache.ClearFirstSyncError(name)
+	if fails := collectSyncFailures(c); len(fails) != 0 {
+		t.Fatalf("expected no failures after clear, got %+v", fails)
 	}
 }

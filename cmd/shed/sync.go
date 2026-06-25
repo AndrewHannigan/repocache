@@ -375,6 +375,9 @@ func syncOne(name, url string, ifOlderThan time.Duration) syncResult {
 	if err := cache.SaveMeta(name, &cache.Meta{LastSyncAt: time.Now().UTC()}); err != nil {
 		return finishErr(r, start, fmt.Errorf("write meta: %w", err))
 	}
+	// Success: drop any standalone first-sync failure record from an earlier
+	// failed clone so it doesn't keep showing up as stale.
+	cache.ClearFirstSyncError(name)
 
 	r.Status = "ok"
 	if !hasHEAD {
@@ -391,10 +394,9 @@ func finishErr(r syncResult, start time.Time, err error) syncResult {
 	r.Status = "error"
 	r.Error = err.Error()
 	r.DurationMs = time.Since(start).Milliseconds()
-	// Persist the failure so `ls` (and the session-context snapshot)
+	// Persist the failure so `ls`, `status`, and the session-context snapshot
 	// can surface it. Best-effort: keep the prior LastSyncAt so the table
-	// still shows the last *successful* sync. Skipped when the cache dir is
-	// absent (a failed first clone) since there's nowhere to write the meta.
+	// still shows the last *successful* sync.
 	if cache.Exists(r.Name) {
 		m, _ := cache.LoadMeta(r.Name)
 		if m == nil {
@@ -403,6 +405,12 @@ func finishErr(r syncResult, start time.Time, err error) syncResult {
 		m.LastError = err.Error()
 		m.LastErrorAt = time.Now().UTC()
 		_ = cache.SaveMeta(r.Name, m)
+	} else {
+		// A failed first clone leaves no cache dir, so there's no meta sidecar
+		// to write. Record the error in the standalone store instead — without
+		// it, status would report "synced cleanly" and the staleness banner
+		// would stay silent, the worst outcome during onboarding.
+		_ = cache.RecordFirstSyncError(r.Name, err.Error())
 	}
 	return r
 }

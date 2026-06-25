@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 	"github.com/AndrewHannigan/shed/pkg/forge"
@@ -76,6 +78,12 @@ func runRepoAddOne(url, overrideName string) error {
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
+	// Preflight auth while the user is here interactively. If the chosen
+	// transport can't authenticate but the other one can, store the working
+	// URL instead — this is the common "shorthand expands to HTTPS but I only
+	// have SSH set up" case. The name is transport-independent, so swapping the
+	// URL never changes effectiveName below.
+	url = reachableURL(url)
 	effectiveName := defaultName
 	if overrideName != "" {
 		effectiveName = overrideName
@@ -139,4 +147,42 @@ func runOwnerAdd(url, overrideName string) error {
 	// Discover and fetch the owner's repos right away. Scoped to this owner,
 	// runSync reconciles it (adding newly discovered repos) and syncs them.
 	return runSync([]string{effectiveName}, syncDefaultJobs, 0, false)
+}
+
+// reachableURL returns a clone URL that authenticates with the user's current
+// setup, given the one they asked for. If url works as-is (the common case,
+// including public repos that need no auth) it is returned unchanged. If url
+// fails specifically on authentication and the other transport (SSH↔HTTPS)
+// works, the working URL is returned with a note. Otherwise url is returned
+// unchanged — add never blocks: the entry is saved regardless and the
+// subsequent sync reports any remaining problem with a protocol-aware fix.
+func reachableURL(url string) string {
+	if cache.RequireGit() != nil {
+		return url // no git to probe with; sync will report it.
+	}
+	err := cache.Reachable(url)
+	if err == nil {
+		return url
+	}
+	// Only a credential failure is worth switching transports for. Network or
+	// not-found errors would fail the same way over either protocol.
+	if !isAuthError(strings.ToLower(err.Error())) {
+		return url
+	}
+	if alt := paths.AlternateProtocolURL(url); alt != "" && cache.Reachable(alt) == nil {
+		fmt.Printf("note: %s could not authenticate, but %s works — adding it over %s instead.\n",
+			url, alt, transportLabel(alt))
+		return alt
+	}
+	fmt.Fprintf(os.Stderr, "warning: could not authenticate to %s.\n  %s\n  Adding it anyway; fix auth and run `shed sync`.\n",
+		url, authFixHint(url))
+	return url
+}
+
+// transportLabel names the transport a URL uses, for human-facing notes.
+func transportLabel(url string) string {
+	if paths.IsSSHURL(url) {
+		return "SSH"
+	}
+	return "HTTPS"
 }

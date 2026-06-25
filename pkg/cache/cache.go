@@ -70,6 +70,79 @@ func LoadMeta(name string) (*Meta, error) {
 	return &m, nil
 }
 
+// RecordFirstSyncError persists errText for a repo that failed before its
+// cache dir (and meta sidecar) ever existed — i.e. a failed first clone.
+// Without it the failure would vanish: LoadMeta has nothing to read, so
+// `shed status` would report the repo healthy and the session-context banner
+// would stay silent. The record lives in a standalone file outside ReposDir
+// so it never makes Exists() or Clone() mistake it for a populated cache.
+func RecordFirstSyncError(name, errText string) error {
+	m := &Meta{LastError: errText, LastErrorAt: time.Now().UTC()}
+	data, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	p := paths.SyncErrorFile(name)
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(p, data, 0644)
+}
+
+// LoadFirstSyncError reads a standalone first-sync failure record written by
+// RecordFirstSyncError, or (nil, nil) when none exists.
+func LoadFirstSyncError(name string) (*Meta, error) {
+	data, err := os.ReadFile(paths.SyncErrorFile(name))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var m Meta
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+// ClearFirstSyncError removes any standalone first-sync failure record for
+// name (best effort), pruning now-empty parent dirs. Called after a
+// successful sync and on Remove so a stale record can't outlive the
+// condition it described.
+func ClearFirstSyncError(name string) {
+	p := paths.SyncErrorFile(name)
+	if err := os.Remove(p); err != nil {
+		return
+	}
+	paths.PruneEmptyDirs(filepath.Dir(p), paths.SyncErrorDir())
+}
+
+// Reachable probes whether git can authenticate to and read from url without
+// any interactive prompt. It runs `git ls-remote` with terminal and SSH
+// prompts disabled, so a missing or wrong credential fails fast instead of
+// blocking on stdin (which would hang an `add` or a session-start hook). A nil
+// return means the remote is reachable with the credentials currently
+// configured for whatever transport url names. A non-nil error wraps git's
+// output so callers can classify it (auth vs. network vs. not-found).
+func Reachable(url string) error {
+	cmd := exec.Command("git", "ls-remote", "--heads", "--", url)
+	// GIT_TERMINAL_PROMPT=0 stops HTTPS from prompting for username/password.
+	// BatchMode=yes does the same for SSH (no passphrase/password prompt);
+	// accept-new avoids hanging on an unknown host key the first time.
+	// Respect a user's own GIT_SSH_COMMAND if they've set one.
+	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	if os.Getenv("GIT_SSH_COMMAND") == "" {
+		env = append(env, "GIT_SSH_COMMAND=ssh -oBatchMode=yes -oStrictHostKeyChecking=accept-new")
+	}
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git ls-remote: %w (output: %s)", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // SaveMeta writes the meta sidecar.
 func SaveMeta(name string, m *Meta) error {
 	data, err := json.Marshal(m)
@@ -193,6 +266,8 @@ func Remove(name string, timeout time.Duration) error {
 		return err
 	}
 	paths.PruneEmptyDirs(filepath.Dir(p), paths.ReposDir())
+	// Drop any standalone first-sync failure record so a re-add starts clean.
+	ClearFirstSyncError(name)
 	return nil
 }
 
