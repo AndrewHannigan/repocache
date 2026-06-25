@@ -13,6 +13,7 @@ import (
 	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 func newStatusCmd() *cobra.Command {
@@ -56,19 +57,34 @@ func collectSyncFailures(c *config.Config) []syncFailure {
 		if err != nil {
 			continue
 		}
-		meta, err := cache.LoadMeta(name)
-		if err != nil || meta == nil || meta.LastError == "" {
+		m := loadRepoFailure(name)
+		if m == nil {
 			continue
 		}
 		out = append(out, syncFailure{
 			Name:        name,
-			LastSyncAt:  meta.LastSyncAt,
-			LastErrorAt: meta.LastErrorAt,
-			LastError:   meta.LastError,
+			LastSyncAt:  m.LastSyncAt,
+			LastErrorAt: m.LastErrorAt,
+			LastError:   m.LastError,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].LastErrorAt.After(out[j].LastErrorAt) })
 	return out
+}
+
+// loadRepoFailure returns the active failure for a repo — from the meta
+// sidecar when the cache exists, or from the standalone first-sync store when
+// a failed first clone left no cache dir — or nil when the last attempt was
+// clean. The two stores are mutually exclusive in practice: meta exists only
+// once the cache does, and a successful sync clears the standalone record.
+func loadRepoFailure(name string) *cache.Meta {
+	if m, _ := cache.LoadMeta(name); m != nil && m.LastError != "" {
+		return m
+	}
+	if m, _ := cache.LoadFirstSyncError(name); m != nil && m.LastError != "" {
+		return m
+	}
+	return nil
 }
 
 func runStatusSummary(c *config.Config) error {
@@ -100,6 +116,13 @@ func runStatusRepo(c *config.Config, arg string) error {
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
+	// A failed first clone leaves no cache dir (hence no meta); its error
+	// lives in the standalone store. Surface that as the active failure.
+	if meta == nil {
+		if fe, _ := cache.LoadFirstSyncError(name); fe != nil && fe.LastError != "" {
+			meta = fe
+		}
+	}
 
 	fmt.Println(name)
 	if meta == nil {
@@ -119,7 +142,7 @@ func runStatusRepo(c *config.Config, arg string) error {
 	for _, line := range wrapIndent(meta.LastError, "    ", 76) {
 		fmt.Println(line)
 	}
-	fmt.Printf("  likely cause: %s\n", likelyCause(meta.LastError, name))
+	fmt.Printf("  likely cause: %s\n", likelyCause(meta.LastError, name, r.URL))
 	return nil
 }
 
@@ -143,12 +166,14 @@ func stampLine(t time.Time) string {
 
 // likelyCause maps a captured sync error to a one-line suggested fix. Pure
 // string heuristics over git's output — best-effort, never authoritative.
-func likelyCause(errText, name string) string {
+// url is the repo's configured URL, used to tailor the auth remedy to the
+// transport (SSH key vs. HTTPS credential).
+func likelyCause(errText, name, url string) string {
 	low := strings.ToLower(errText)
 	sync := fmt.Sprintf("`shed sync %s`", name)
 	switch {
-	case containsAny(low, "could not read username", "authentication failed", "permission denied", "403 forbidden", "terminal prompts disabled", "invalid credentials"):
-		return "authentication — run `gh auth login`, then " + sync
+	case isAuthError(low):
+		return authFixHint(url) + ", then " + sync
 	case containsAny(low, "repository not found", "not found", "404", "does not exist"):
 		return fmt.Sprintf("repo may be renamed or deleted upstream — verify it exists, or remove it with `shed rm %s`", name)
 	case containsAny(low, "could not resolve host", "connection refused", "connection timed out", "timed out", "network is unreachable", "temporary failure in name resolution"):
@@ -160,6 +185,30 @@ func likelyCause(errText, name string) string {
 	default:
 		return "re-run " + sync + "; see the full output above"
 	}
+}
+
+// isAuthError reports whether git's (already-lowercased) output looks like an
+// authentication or authorization failure, over either HTTPS or SSH. Shared
+// by status reporting and the `add` preflight so both classify identically.
+func isAuthError(low string) bool {
+	return containsAny(low,
+		"could not read username", "could not read password",
+		"authentication failed", "permission denied",
+		"403 forbidden", "terminal prompts disabled",
+		"invalid credentials", "host key verification failed",
+	)
+}
+
+// authFixHint gives a protocol-aware remedy for an auth failure: SSH-key
+// guidance for git@/ssh:// remotes, credential/token guidance for HTTPS. The
+// gh suggestion only makes sense for HTTPS (it configures git's credential
+// helper), so steering SSH users to it — as the old single message did —
+// would have sent them down a dead end.
+func authFixHint(url string) string {
+	if paths.IsSSHURL(url) {
+		return "SSH auth — ensure your key is loaded (`ssh-add -l`) and authorized for the host"
+	}
+	return "HTTPS auth — run `gh auth login` or configure a git credential helper/token"
 }
 
 func containsAny(s string, subs ...string) bool {

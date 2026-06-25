@@ -36,6 +36,18 @@ func LogsDir() string       { return filepath.Join(DataDir(), "logs") }
 func BgSyncLockFile() string { return filepath.Join(DataDir(), ".bg-sync.lock") }
 func BgSyncLogFile() string  { return filepath.Join(LogsDir(), "bg-sync.log") }
 
+// SyncErrorDir holds standalone failure records for repos that failed their
+// very first sync — before a cache dir (and thus its .git/shed.meta sidecar)
+// ever existed. Kept outside ReposDir so a record can never be mistaken for a
+// populated cache by Exists() or Clone().
+func SyncErrorDir() string { return filepath.Join(DataDir(), ".sync-errors") }
+
+// SyncErrorFile is the JSON failure record for a repo whose first sync failed,
+// keyed by repo name (e.g. "github.com/foo/bar" → ".sync-errors/github.com/foo/bar.json").
+func SyncErrorFile(name string) string {
+	return filepath.Join(SyncErrorDir(), filepath.FromSlash(name)+".json")
+}
+
 // HistoryFile is the JSON-Lines log of recent shed commands (one event
 // per line). HistoryTrimMarkerFile holds the RFC3339 timestamp of the last
 // trim check, used to debounce truncation of the history file.
@@ -186,6 +198,34 @@ func isSCPLike(s string) bool {
 		return strings.Contains(s[at+1:], ":")
 	}
 	return false
+}
+
+// IsSSHURL reports whether a git URL uses SSH transport — either an explicit
+// ssh:// scheme or the scp-style git@host:path form. HTTPS, HTTP, and git://
+// URLs are not SSH.
+func IsSSHURL(rawURL string) bool {
+	return strings.HasPrefix(rawURL, "ssh://") || isSCPLike(rawURL)
+}
+
+// AlternateProtocolURL returns the same repo addressed over the other
+// transport: an HTTPS URL becomes scp-style SSH (git@host:owner/repo.git), and
+// an SSH/scp URL becomes HTTPS (https://host/owner/repo). It returns "" when
+// rawURL cannot be parsed or uses a scheme with no obvious counterpart (e.g.
+// git://), so callers can simply skip the swap. Used by `add` to recover when
+// the chosen protocol can't authenticate but the other one can.
+func AlternateProtocolURL(rawURL string) string {
+	host, path, err := ParseURL(rawURL)
+	if err != nil {
+		return ""
+	}
+	switch {
+	case IsSSHURL(rawURL):
+		return "https://" + host + "/" + path
+	case strings.HasPrefix(rawURL, "https://"), strings.HasPrefix(rawURL, "http://"):
+		return "git@" + host + ":" + path + ".git"
+	default:
+		return ""
+	}
 }
 
 // ParseURL extracts (host, path) from a git URL. Handles both standard

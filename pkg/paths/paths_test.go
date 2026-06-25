@@ -143,3 +143,47 @@ func TestWriteFileAtomicPreservesMode(t *testing.T) {
 		t.Fatalf("temp file %q.tmp should not exist", p)
 	}
 }
+
+func TestIsSSHURL(t *testing.T) {
+	ssh := []string{
+		"git@github.com:foo/bar.git",
+		"ssh://git@github.com/foo/bar",
+		"user@host.example:team/repo",
+	}
+	notSSH := []string{
+		"https://github.com/foo/bar",
+		"http://example.com/foo/bar",
+		"git://github.com/foo/bar",
+	}
+	for _, u := range ssh {
+		if !IsSSHURL(u) {
+			t.Errorf("IsSSHURL(%q) = false, want true", u)
+		}
+	}
+	for _, u := range notSSH {
+		if IsSSHURL(u) {
+			t.Errorf("IsSSHURL(%q) = true, want false", u)
+		}
+	}
+}
+
+func TestAlternateProtocolURL(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"https://github.com/foo/bar", "git@github.com:foo/bar.git"},
+		{"https://github.com/foo/bar.git", "git@github.com:foo/bar.git"},
+		{"git@github.com:foo/bar.git", "https://github.com/foo/bar"},
+		{"ssh://git@github.com/foo/bar", "https://github.com/foo/bar"},
+		{"https://gitlab.com/foo/bar", "git@gitlab.com:foo/bar.git"},
+		{"git://github.com/foo/bar", ""}, // no obvious counterpart
+		{"not a url", ""},
+	}
+	for _, tc := range cases {
+		if got := AlternateProtocolURL(tc.in); got != tc.want {
+			t.Errorf("AlternateProtocolURL(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	// Round-trip: https -> ssh -> https returns an equivalent URL.
+	if got := AlternateProtocolURL(AlternateProtocolURL("https://github.com/foo/bar")); got != "https://github.com/foo/bar" {
+		t.Errorf("round-trip https->ssh->https = %q, want original", got)
+	}
+}

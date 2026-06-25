@@ -53,16 +53,35 @@ func TestFinishErrPersistsFailure(t *testing.T) {
 	}
 }
 
-// TestFinishErrNoCacheDirIsNoop verifies a failure before the cache exists
-// (e.g. a failed first clone) does not create a meta sidecar.
-func TestFinishErrNoCacheDirIsNoop(t *testing.T) {
+// TestFinishErrFirstCloneRecordsStandalone verifies a failure before the cache
+// exists (a failed first clone) writes no meta sidecar — there's no cache dir
+// for one — but does record the error in the standalone first-sync store so
+// status and the staleness banner still surface it instead of reporting the
+// repo healthy.
+func TestFinishErrFirstCloneRecordsStandalone(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	const name = "github.com/acme/never-cloned"
-	finishErr(syncResult{Name: name}, time.Now(), errors.New("clone failed"))
+	finishErr(syncResult{Name: name}, time.Now(), errors.New("authentication failed"))
+
+	// No cache dir means no meta sidecar.
 	if m, _ := cache.LoadMeta(name); m != nil {
 		t.Fatalf("expected no meta written when cache dir absent, got %+v", m)
+	}
+	// The standalone store must hold the failure.
+	fe, err := cache.LoadFirstSyncError(name)
+	if err != nil || fe == nil {
+		t.Fatalf("load first-sync error: %v (record=%+v)", err, fe)
+	}
+	if fe.LastError == "" || fe.LastErrorAt.IsZero() {
+		t.Fatalf("expected first-sync error recorded with a timestamp, got %+v", fe)
+	}
+
+	// A later successful sync clears the standalone record.
+	cache.ClearFirstSyncError(name)
+	if fe, _ := cache.LoadFirstSyncError(name); fe != nil {
+		t.Fatalf("expected first-sync error cleared, got %+v", fe)
 	}
 }
 
