@@ -219,8 +219,8 @@ Reversing integration ('shed init --uninstall')
 
 These are also grouped under a 'repo' noun (mirroring 'workspace'):
 'shed repo add' and 'shed repo rm' are the same as 'shed add'/'shed rm',
-and 'shed repo ls' lists just the library (Owners + Repos) — where plain
-'shed ls' also includes Workspaces.
+and 'shed repo ls' lists just the repos — where plain 'shed ls' also
+includes the Owners and Workspaces sections.
 `,
 
 	"owner": `owner — track a whole user or org
