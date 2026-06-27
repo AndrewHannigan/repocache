@@ -262,22 +262,57 @@ func runWorkspacePath(name string) error {
 func newWorkspaceRmCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "rm <name>",
-		Short: "Delete a workspace by name (refuses if dirty or unpushed unless --force)",
-		Long: `rm deletes the workspace with the given name.
+		Use:   "rm <name>...",
+		Short: "Delete one or more workspaces by name (refuses if dirty or unpushed unless --force)",
+		Long: `rm deletes the workspaces with the given names.
 
-Workspace names are unique across every repo (enforced at creation), so the
+Workspace names are unique across every repo (enforced at creation), so a
 name alone identifies exactly one workspace — no <repo> is needed.
+
+Several names may be given at once (e.g. "shed ws rm a b c"); each is removed
+independently, so a failure on one (a typo, or a workspace with unsaved work)
+is reported but does not stop the rest from being removed.
 
 Refuses to delete a workspace with uncommitted or unpushed changes unless
 --force is given.`,
-		Args: cobra.ExactArgs(1),
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWorkspaceRm(args[0], force)
+			return runWorkspaceRmMany(args, force)
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "delete even if there are uncommitted or unpushed changes")
 	return cmd
+}
+
+// runWorkspaceRmMany removes each named workspace in turn. Each name is handled
+// independently: a failure on one (a typo, or a workspace with unsaved work) is
+// reported to stderr but does not stop the rest from being removed, so
+// `shed ws rm a b c` removes whatever it can.
+//
+// A single name behaves exactly as a plain removal: its error propagates
+// untouched to main for the "error:" line and the matching exit code. Duplicate
+// names are collapsed so the same workspace isn't removed (and then reported as
+// already-gone) twice.
+func runWorkspaceRmMany(names []string, force bool) error {
+	names = dedupeStrings(names)
+	if len(names) == 1 {
+		return runWorkspaceRm(names[0], force)
+	}
+	var failed []error
+	for _, name := range names {
+		if err := runWorkspaceRm(name, force); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			failed = append(failed, err)
+		}
+	}
+	if len(failed) == 0 {
+		return nil
+	}
+	// The per-name errors were already printed above; return a concise summary
+	// so main adds one closing line and exits non-zero. The exit code is the
+	// shared code when every failure used the same one, else the generic config
+	// code (the batch failed for mixed reasons).
+	return errs.New(rmBatchExitCode(failed), "%s could not be removed", pluralize(len(failed), "workspace"))
 }
 
 func runWorkspaceRm(name string, force bool) error {

@@ -308,9 +308,11 @@ sharing object storage but with independent refs. Edits happen here.
     Print absolute workspace path. Names are globally unique, so the
     name alone identifies the workspace. Exit 2 if missing.
 
-  shed workspace rm <name> [--force]
-    Delete the named workspace dir (names are globally unique). Refuses
-    with exit 4 if dirty or unpushed unless --force.
+  shed workspace rm <name>... [--force]
+    Delete the named workspace dirs (names are globally unique). Several
+    names may be given at once; each is removed independently, so a failure
+    on one doesn't stop the rest. Refuses with exit 4 if dirty or unpushed
+    unless --force.
 
 The workspace's origin remote points at the upstream URL, not the store,
 so 'git push' works normally. New branches have no upstream until your
