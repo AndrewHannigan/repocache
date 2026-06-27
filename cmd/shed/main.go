@@ -67,8 +67,10 @@ func newRootCmd() *cobra.Command {
 		newPruneCmd(),
 		newHistoryCmd(),
 		newSessionContextCmd(),
+		newOnToolCallCmd(),
 		newBgSyncCmd(),
 		newWelcomeTourCmd(),
+		newResumeCmd(),
 	)
 	return cmd
 }

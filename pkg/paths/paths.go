@@ -74,6 +74,29 @@ func WorkspacePath(name, branch string) string {
 	return filepath.Join(WorkspacesDir(), filepath.FromSlash(name), filepath.FromSlash(branch))
 }
 
+// WorkspaceSessionFile returns the session-link sidecar path inside a
+// workspace's .git dir. It records which agent session created the workspace
+// so `shed resume` can reopen it. Living inside the workspace means it is
+// removed automatically when the workspace is — the link never outlives or
+// endangers its workspace.
+func WorkspaceSessionFile(name, branch string) string {
+	return filepath.Join(WorkspacePath(name, branch), ".git", "shed.session")
+}
+
+// SessionsPendingDir holds short-lived session→workspace intents recorded by
+// the pre-exec hook before `workspace new` runs. `workspace new` finalizes the
+// matching intent into a WorkspaceSessionFile and removes it. Kept under
+// DataDir so it is local state, never confused with a repo or workspace.
+func SessionsPendingDir() string { return filepath.Join(DataDir(), ".sessions-pending") }
+
+// SessionPendingFile is the pending-intent record keyed by the (globally
+// unique) workspace name. The name is the unambiguous join key between the
+// hook (which parsed it from the command) and `workspace new` (which has it as
+// an argument).
+func SessionPendingFile(workspaceName string) string {
+	return filepath.Join(SessionsPendingDir(), filepath.FromSlash(workspaceName)+".json")
+}
+
 // checkSafeRelPath verifies p is a relative, slash-separated path that cannot
 // escape a base directory once joined into one: no absolute prefix, no Windows
 // volume/backslash, and no ".." or empty segment. Repo names and branches are

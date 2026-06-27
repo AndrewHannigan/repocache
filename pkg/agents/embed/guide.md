@@ -11,8 +11,12 @@ You have a local library of git repos managed by `shed`.
 - **Stale store?** If a repo is marked failing (or you see a STALE STORE banner above),
   treat what you read from it as possibly out of date and tell the user. Run
   `shed status <repo>` for the error and the suggested fix.
-- **Edit a repo**: `shed workspace new <repo> <branch>` creates a writable workspace
+- **Edit a repo**: `shed workspace new <repo> <name>` creates a writable workspace
   and prints its path. Make changes there, then commit, push, open PR as normal.
+  `<name>` is the workspace's identity (it seeds the initial branch) and must be unique
+  across all repos, so pick a distinct, task-descriptive name (e.g. `fix-readme-link`),
+  not `main`. You don't pass your session id — shed links the workspace to your session
+  automatically so it can be resumed later.
   **Prefer this over any other checkout of the repo you happen to find on disk.** Library
   repos are kept up to date automatically, so a fresh workspace is guaranteed current; a
   stray clone sitting elsewhere on disk — a sibling, or a child of your working directory —

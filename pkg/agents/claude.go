@@ -13,6 +13,31 @@ const BgSyncCommand = "shed __bg-sync"
 // the output shape that agent expects.
 const SessionContextCommand = "shed __session-context"
 
+// OnToolCallCommand is the base pre-tool hook subcommand. Installed into each
+// agent's before-tool-execution hook with --agent <key> appended (see
+// onToolCallCommand), it links a workspace to the session that created it.
+const OnToolCallCommand = "shed __on-tool-call"
+
+// onToolCallCommand is the pre-tool hook command installed for an agent: the
+// base __on-tool-call subcommand plus --agent <key>, so it parses that agent's
+// hook JSON shape.
+func onToolCallCommand(agentKey string) string {
+	return OnToolCallCommand + " --agent " + agentKey
+}
+
+// onToolCallHookCommand is what actually gets installed into the before-tool
+// hook of a stdin-JSON agent (Claude, Cursor). It is a small POSIX-shell
+// snippet that reads the hook's JSON from stdin and only pipes it to shed when
+// the command looks like a `shed workspace new` / `ws new`. This keeps the shed
+// binary OUT of the hot path: the overwhelming majority of tool calls are
+// filtered out by the shell `case` and never spawn shed at all. A false
+// positive (the phrase appears in some unrelated command) is harmless — shed
+// just finds no workspace-new to link and exits.
+func onToolCallHookCommand(agentKey string) string {
+	return `in=$(cat); case "$in" in *'workspace new'*|*'ws new'*) printf '%s' "$in" | ` +
+		onToolCallCommand(agentKey) + `;; esac`
+}
+
 // Claude implements Agent for Claude Code.
 type Claude struct {
 	dir string // ~/.claude
@@ -42,6 +67,22 @@ func claudeHookEntry(command string) map[string]any {
 	}
 }
 
+// claudeOnToolCallEntry builds the PreToolUse entry that links a workspace to
+// its session. The matcher ("Bash") only filters on tool name, so each inner
+// hook adds an `if` permission-rule that filters on the command *content* —
+// Claude evaluates these natively and never runs the hook (or spawns shed) on a
+// non-matching call. One `if` per accepted invocation form (`workspace new` and
+// the `ws` alias).
+func claudeOnToolCallEntry(command string) map[string]any {
+	return map[string]any{
+		"matcher": "Bash",
+		"hooks": []any{
+			map[string]any{"type": "command", "if": "Bash(shed workspace new *)", "command": command},
+			map[string]any{"type": "command", "if": "Bash(shed ws new *)", "command": command},
+		},
+	}
+}
+
 func (c *Claude) Install(opts InstallOptions) (Installed, error) {
 	if err := os.MkdirAll(c.dir, 0755); err != nil {
 		return Installed{}, err
@@ -58,6 +99,19 @@ func (c *Claude) Install(opts InstallOptions) (Installed, error) {
 	if err != nil {
 		return Installed{}, err
 	}
+	// PreToolUse hook that links a workspace to its session when the model runs
+	// `shed workspace new`. The `if` permission-rules gate it natively to that
+	// command, so shed is never spawned on ordinary tool calls. Separate event
+	// from SessionStart, so it is installed directly rather than via installHooks.
+	onToolCall := onToolCallCommand(c.Key())
+	added, err := ensureHookEntry(loadJSONC, saveJSON, c.settingsFile(),
+		"PreToolUse", claudeOnToolCallEntry(onToolCall), onToolCall)
+	if err != nil {
+		return Installed{}, err
+	}
+	if added {
+		hooks = append(hooks, onToolCall)
+	}
 	return Installed{AddedPaths: paths, AddedHooks: hooks}, nil
 }
 
@@ -69,7 +123,13 @@ func (c *Claude) Uninstall(prev Installed) error {
 		}
 	}
 	for _, hookCmd := range prev.AddedHooks {
+		// A recorded command may live under SessionStart (session-context,
+		// bg-sync) or PreToolUse (on-tool-call). removeHookEntry is a no-op for
+		// an event the command isn't under, so try both.
 		if err := removeSessionStartHook(loadJSONC, saveJSON, c.settingsFile(), hookCmd); err != nil {
+			return err
+		}
+		if err := removeHookEntry(loadJSONC, saveJSON, c.settingsFile(), "PreToolUse", hookCmd); err != nil {
 			return err
 		}
 	}
