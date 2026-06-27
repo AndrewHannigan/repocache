@@ -2,22 +2,23 @@
 
 ![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Stop letting your coding agent clone into `/tmp`.**
+**Stop your coding agents from stepping on each other.**
 
-Your terminal coding agent keeps re-cloning repos into `/tmp`, editing your reference copies by accident, and losing them between sessions. **shed** gives it a persistent, always-fresh, read-only repo catalog it already knows how to use.
+Run Claude Code, Cursor, and opencode against the same repos and they clobber each other's checkouts, pile up stale workspaces, and quietly branch off out-of-date code. **shed** is one standard system all your agents share to manage git repos and workspaces — read-only reference repos, isolated writable workspaces, every one built from the latest code.
 
-<!-- TODO(visual hook): drop a demo GIF/asciinema here — `shed init` → run `claude` →
-     agent reads from the catalog instead of cloning to /tmp, then `shed workspace new`
-     to make an edit. This is the "10-second, read-no-text" hook; keep it above the fold. -->
+<!-- TODO(visual hook): drop a demo GIF/asciinema here — two agents working the same
+     repo through shed: each gets its own fresh `shed workspace new`, neither touches the
+     read-only cache, then `shed prune` cleans up. This is the "10-second, read-no-text"
+     hook; keep it above the fold. -->
 <!-- ![shed in action](docs/demo.gif) -->
 
-- 📦 **No more `/tmp` re-clones** — the catalog is cached once in `~/.shed` and reused across every session, never re-cloned.
-- 🔒 **No more clobbered reference repos** — every repo is read-only (`chmod a-w`) and impossible for an agent to edit by accident.
-- 🔄 **No more stale checkouts** — repos refresh in the background at session start, so the agent always reads current code.
-- ✍️ **Edits without the risk** — when the agent needs to write, `shed workspace new` spins up a throwaway writable workspace off the pristine copy.
-- 🤝 **Zero agent setup** — one `shed init` wires up Claude Code, Cursor, or opencode to use shed automatically — no path hallucinations.
+- 🤝 **One system, every agent** — Claude Code, Cursor, and opencode all manage repos and workspaces the same way, so parallel agents never step on each other in the same repo.
+- ✍️ **Isolated writable workspaces** — `shed workspace new` gives each task its own clone off the pristine repo; agents edit there, never in your reference copy or each other's.
+- 🌱 **Never a stale branch** — every workspace is created from the freshly-synced repo, so an agent never unintentionally works on out-of-date code.
+- 🧹 **One-command cleanup** — workspaces pile up fast; `shed prune` reclaims the ones whose work has already landed (merged PR or merged into the default branch) and leaves anything unpushed untouched.
+- 🔒 **Reference repos, cached once and never clobbered** — every repo lives read-only in `~/.shed` (`chmod a-w`), refreshed in the background and reused across sessions instead of re-cloned into `/tmp`.
 - 🧰 **Searchable out of the box** — agents run `rg`, `grep`, `git`, and `gh` across the entire catalog directly.
-- 🌐 **Multi-repo PRs in one session** — spin up writable workspaces on demand across repos.
+- ⚙️ **Zero agent setup** — one `shed init` wires up each agent to use shed automatically — no path hallucinations.
 
 ---
 
@@ -45,13 +46,19 @@ shed add octocat/Hello-World
 # now run claude, cursor-agent, or opencode — your agent knows how to use it
 ```
 
-That's it. Now when you ask your agent to work with a tracked repo, it reads from the shared catalog instead of cloning into `/tmp` — and creates an isolated workspace the moment it needs to make changes:
+That's it. Now any of your agents work the same tracked repos through one shared catalog — reading the read-only copy, and carving off an isolated, up-to-date workspace the moment they need to make changes:
 
 ```text
 You:   "Fix the broken link in octocat/Hello-World's README"
 Agent: reads ~/.shed/repos/github.com/octocat/Hello-World   (read-only, always fresh)
-       → shed workspace new                                 (isolated, writable)
-       → edits there, opens a PR                            (your reference copy untouched)
+       → shed workspace new                                 (isolated, off the latest)
+       → edits there, opens a PR                            (cache + other agents untouched)
+```
+
+Once branches land, reclaim the workspaces they left behind:
+
+```bash
+shed prune          # remove workspaces whose work is already merged
 ```
 
 ---
