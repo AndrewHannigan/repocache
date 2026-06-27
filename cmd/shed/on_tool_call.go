@@ -1,0 +1,160 @@
+package main
+
+import (
+	"encoding/json"
+	"io"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/workspace"
+)
+
+// __on-tool-call is the pre-execution hook shed installs into each agent
+// (Claude PreToolUse, Cursor beforeShellExecution, opencode plugin
+// tool.execute.before). The agent hands it the session id, cwd, and the
+// command about to run — all in one event. When that command is a
+// `shed workspace new`, shed records a pending session→workspace intent keyed
+// by the (unique) workspace name, which `shed workspace new` then finalizes
+// into a link sidecar. This is how a workspace gets tied to its session
+// without the agent ever needing to know its own id.
+//
+// It is best-effort and MUST NOT break the agent: it always exits 0 and emits
+// nothing on stdout (a silent PreToolUse hook is "allow"). Any parse failure
+// just means the workspace is created unlinked.
+func newOnToolCallCmd() *cobra.Command {
+	var agentKey string
+	cmd := &cobra.Command{
+		Use:    "__on-tool-call",
+		Short:  "(internal) Pre-tool hook: link a workspace to its agent session",
+		Hidden: true,
+		Args:   cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			recordPendingFromHook(cmd.InOrStdin(), agentKey)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&agentKey, "agent", "", "agent whose hook JSON shape to parse (claude, cursor, opencode)")
+	return cmd
+}
+
+// hookInput is the union of the fields the three agents' pre-exec hooks deliver.
+// Each agent populates a different subset (see normalize()).
+type hookInput struct {
+	// Claude PreToolUse
+	SessionID string `json:"session_id"`
+	CWD       string `json:"cwd"`
+	ToolInput struct {
+		Command string `json:"command"`
+	} `json:"tool_input"`
+	// Cursor beforeShellExecution
+	ConversationID string   `json:"conversation_id"`
+	Command        string   `json:"command"`
+	WorkspaceRoots []string `json:"workspace_roots"`
+	// opencode (shed's plugin constructs this shape itself)
+	SessionIDCamel string `json:"sessionID"`
+}
+
+// recordPendingFromHook reads the hook JSON, and if the command is a
+// `shed workspace new`, records a pending session→workspace intent.
+func recordPendingFromHook(stdin io.Reader, agentKey string) {
+	data, err := io.ReadAll(io.LimitReader(stdin, 1<<20))
+	if err != nil || len(data) == 0 {
+		return
+	}
+	var in hookInput
+	if err := json.Unmarshal(data, &in); err != nil {
+		return
+	}
+	sessionID, command, cwd := in.normalize()
+	if sessionID == "" || command == "" {
+		return
+	}
+	wsName, ok := parseWorkspaceNewName(command)
+	if !ok {
+		return
+	}
+	if agentKey == "" {
+		agentKey = "claude" // default mirrors __session-context
+	}
+	_ = workspace.WritePending(wsName, workspace.SessionLink{
+		Agent:     agentKey,
+		SessionID: sessionID,
+		CWD:       cwd,
+	})
+}
+
+// normalize collapses the per-agent field names into (sessionID, command, cwd).
+func (in hookInput) normalize() (sessionID, command, cwd string) {
+	sessionID = firstNonEmpty(in.SessionID, in.ConversationID, in.SessionIDCamel)
+	command = firstNonEmpty(in.ToolInput.Command, in.Command)
+	cwd = in.CWD
+	if cwd == "" && len(in.WorkspaceRoots) > 0 {
+		cwd = in.WorkspaceRoots[0]
+	}
+	return sessionID, command, cwd
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// parseWorkspaceNewName extracts the workspace name (the second positional
+// argument) from a `shed workspace new <repo> <name>` command. It tokenizes on
+// whitespace — tolerant of shell wrappers like `cd x && FOO=1 shed ws new a b`
+// — locates a `shed` token followed by `workspace`/`ws` then `new`, and returns
+// the second positional after `new` (skipping flags and the value of --base).
+// Returns ok=false when the command isn't a recognizable workspace-new.
+func parseWorkspaceNewName(command string) (string, bool) {
+	toks := strings.Fields(command)
+	newIdx := -1
+	for i := 0; i+2 < len(toks); i++ {
+		if isShedToken(toks[i]) && (toks[i+1] == "workspace" || toks[i+1] == "ws") && toks[i+2] == "new" {
+			newIdx = i + 2
+			break
+		}
+	}
+	if newIdx == -1 {
+		return "", false
+	}
+	var positionals []string
+	for i := newIdx + 1; i < len(toks); i++ {
+		t := toks[i]
+		if t == "--" {
+			continue
+		}
+		if strings.HasPrefix(t, "-") {
+			// --base takes a value; skip it too. Other flags here are boolean.
+			if t == "--base" {
+				i++
+			}
+			continue
+		}
+		positionals = append(positionals, t)
+		if len(positionals) == 2 {
+			break
+		}
+	}
+	if len(positionals) < 2 {
+		return "", false
+	}
+	name := positionals[1]
+	// Reject anything that wouldn't be a valid workspace name, so a malformed
+	// command never writes a bogus pending file.
+	if err := paths.ValidateBranch(name); err != nil {
+		return "", false
+	}
+	return name, true
+}
+
+// isShedToken reports whether a token is the shed binary invocation: bare
+// "shed" or a path ending in "/shed".
+func isShedToken(t string) bool {
+	return t == "shed" || strings.HasSuffix(t, "/shed")
+}

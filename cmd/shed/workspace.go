@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -34,14 +35,19 @@ func newWorkspaceCmd() *cobra.Command {
 func newWorkspaceNewCmd() *cobra.Command {
 	var base string
 	cmd := &cobra.Command{
-		Use:   "new <repo> <branch>",
+		Use:   "new <repo> <name>",
 		Short: "Create a workspace via `git clone --reference`",
 		Long: `new creates a writable clone of the stored repo at
-~/.shed/workspaces/<repo>/<branch>/ using
+~/.shed/workspaces/<repo>/<name>/ using
 'git clone --reference' so it shares object storage with the store.
 
-If <branch> exists on origin, checks it out. Otherwise creates it off
-origin/HEAD (or --base). Prints the workspace path on stdout.`,
+<name> is the workspace's identity: it is the directory shed owns, it must be
+unique across every repo (so 'shed resume <name>' is unambiguous), and it
+seeds an initial git branch of the same name. The git branch is then yours to
+rename or switch — shed keys on the workspace name, not the live branch.
+
+If a branch named <name> exists on origin, checks it out. Otherwise creates it
+off origin/HEAD (or --base). Prints the workspace path on stdout.`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWorkspaceNew(args[0], args[1], base)
@@ -81,6 +87,12 @@ func runWorkspaceNew(name, branch, base string) error {
 	if workspace.Exists(name, branch) {
 		return errs.New(errs.Exists, "workspace already exists at %s", workspace.PathFor(name, branch))
 	}
+	// Workspace names are unique across the entire shed, so `shed resume <name>`
+	// is unambiguous. Reject a name already taken under a *different* repo.
+	if other, _, found := workspace.LocateByName(repoNames(c), branch); found && other != name {
+		return errs.New(errs.Exists,
+			"workspace name %q already exists for repo %s; pick a distinct name", branch, other)
+	}
 	// Refresh the store first so the workspace forks from up-to-date code.
 	// syncOne clones the repo if it isn't stored yet. If the sync fails but a
 	// store already exists, fall back to it (so `new` still works offline);
@@ -102,8 +114,67 @@ func runWorkspaceNew(name, branch, base string) error {
 		}
 		return errs.Wrap(errs.Network, err)
 	}
+	// Best-effort: link this workspace to the agent session that created it, so
+	// `shed resume <name>` can reopen it. The session comes from the
+	// SHED_SESSION_* env override (headless) or the pending intent the pre-exec
+	// hook recorded. A failure here never fails the create — resume is just
+	// unavailable for an unlinked workspace.
+	finalizeSessionLink(name, branch)
 	fmt.Println(path)
 	return nil
+}
+
+// repoNames returns the resolved names of every repo in the config, skipping
+// any that fail to resolve.
+func repoNames(c *config.Config) []string {
+	names := make([]string, 0, len(c.Repos))
+	for _, r := range c.Repos {
+		if n, err := r.ResolvedName(); err == nil {
+			names = append(names, n)
+		}
+	}
+	return names
+}
+
+// finalizeSessionLink writes the session-link sidecar for a just-created
+// workspace, sourcing the session from (in order) the SHED_SESSION_* env
+// override or the pending intent recorded by the pre-exec hook for this
+// workspace name. It clears the pending intent in passing. Best-effort: any
+// problem (no session info, write error) leaves the workspace unlinked.
+func finalizeSessionLink(repo, wsName string) {
+	link, ok := sessionFromEnv()
+	if !ok {
+		p, err := workspace.TakePending(wsName)
+		if err != nil || p == nil {
+			return
+		}
+		link = *p
+	}
+	if link.CWD == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			link.CWD = cwd
+		}
+	}
+	if link.LinkedAt.IsZero() {
+		link.LinkedAt = time.Now().UTC()
+	}
+	_ = workspace.WriteLink(repo, wsName, link)
+}
+
+// sessionFromEnv reads a SHED_SESSION_* override. Both id and agent are
+// required; cwd is optional (defaulted by the caller). Returns ok=false when no
+// override is present.
+func sessionFromEnv() (workspace.SessionLink, bool) {
+	id := os.Getenv("SHED_SESSION_ID")
+	agent := os.Getenv("SHED_SESSION_AGENT")
+	if id == "" || agent == "" {
+		return workspace.SessionLink{}, false
+	}
+	return workspace.SessionLink{
+		Agent:     agent,
+		SessionID: id,
+		CWD:       os.Getenv("SHED_SESSION_CWD"),
+	}, true
 }
 
 // resolveWorkspaceName maps a possibly-shorthand repo name to the name a
@@ -177,10 +248,10 @@ func runWorkspaceList(jsonOut bool) error {
 		return nil
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "REPO\tBRANCH\tDIRTY\tUNPUSHED\tAGE\tPATH")
+	fmt.Fprintln(w, "NAME\tREPO\tDIRTY\tUNPUSHED\tAGE\tPATH")
 	for _, i := range infos {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			i.Name, i.Branch, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))
+			i.Branch, i.Name, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))
 	}
 	return w.Flush()
 }

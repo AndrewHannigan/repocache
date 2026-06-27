@@ -12,8 +12,8 @@ import (
 // with FLAT command entries ({"command": "..."}) rather than Claude's
 // PascalCase `hooks.SessionStart` with nested {"hooks":[{"type","command"}]}
 // entries, and it requires a top-level "version": 1. So Cursor uses its own
-// hook helpers below (ensure/removeCursorSessionStartHook) instead of the
-// shared ensure/removeSessionStartHook.
+// hook helpers below (ensure/removeCursorHook) instead of the shared
+// ensure/removeHookEntry.
 //
 // Like opencode, Cursor has no documented per-directory access allowlist (its
 // cli-config.json permissions are shell/tool patterns, not filesystem roots),
@@ -43,29 +43,53 @@ func (c *Cursor) Install(opts InstallOptions) (Installed, error) {
 		return Installed{}, err
 	}
 	hooks, err := installHooks(opts, sessionContextCommand(c.Key()), BgSyncCommand, func(command string) (bool, error) {
-		return ensureCursorSessionStartHook(c.hooksFile(), command)
+		return ensureCursorHook(c.hooksFile(), "sessionStart", map[string]any{"command": command}, command)
 	})
 	if err != nil {
 		return Installed{}, err
 	}
+	// beforeShellExecution hook that links a workspace to its session when the
+	// model runs `shed workspace new`. Cursor's per-hook `matcher` runs against
+	// the shell command string, so it natively gates this to workspace-new
+	// commands — shed is never spawned on ordinary shell calls. (shed re-parses
+	// the command defensively, so a loose matcher just no-ops on a false match.)
+	onToolCall := onToolCallCommand(c.Key())
+	added, err := ensureCursorHook(c.hooksFile(), "beforeShellExecution",
+		map[string]any{"command": onToolCall, "matcher": cursorOnToolCallMatcher}, onToolCall)
+	if err != nil {
+		return Installed{}, err
+	}
+	if added {
+		hooks = append(hooks, onToolCall)
+	}
 	return Installed{AddedHooks: hooks}, nil
 }
 
+// cursorOnToolCallMatcher gates the beforeShellExecution hook to shed
+// workspace-new commands. Cursor matches it (regex-style) against the command
+// string.
+const cursorOnToolCallMatcher = "shed (workspace|ws) new"
+
 func (c *Cursor) Uninstall(prev Installed) error {
 	for _, hookCmd := range prev.AddedHooks {
-		if err := removeCursorSessionStartHook(c.hooksFile(), hookCmd); err != nil {
+		// A recorded command may live under sessionStart (session-context,
+		// bg-sync) or beforeShellExecution (on-tool-call); try both.
+		if err := removeCursorHook(c.hooksFile(), "sessionStart", hookCmd); err != nil {
+			return err
+		}
+		if err := removeCursorHook(c.hooksFile(), "beforeShellExecution", hookCmd); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// ensureCursorSessionStartHook adds a flat {"command": command} entry to
-// hooks.sessionStart in Cursor's hooks.json, creating the file, the nested
-// structure, and the required top-level "version": 1 if missing. Idempotent: if
-// an entry with the same command already exists, it is a no-op. Returns true if
-// an entry was added this call.
-func ensureCursorSessionStartHook(filePath, command string) (bool, error) {
+// ensureCursorHook adds `entry` (a flat object with at least a "command", and
+// optionally a "matcher") to hooks.<event> in Cursor's hooks.json, creating the
+// file, the nested structure, and the required top-level "version": 1 if
+// missing. Idempotent: if an entry with the same command already exists under
+// that event, it is a no-op. Returns true if an entry was added this call.
+func ensureCursorHook(filePath, event string, entry map[string]any, command string) (bool, error) {
 	root, err := loadJSONC(filePath)
 	if err != nil {
 		return false, err
@@ -81,20 +105,21 @@ func ensureCursorSessionStartHook(filePath, command string) (bool, error) {
 		hooks = map[string]any{}
 		root["hooks"] = hooks
 	}
-	sessionStart, _ := hooks["sessionStart"].([]any)
-	for _, e := range sessionStart {
+	entries, _ := hooks[event].([]any)
+	for _, e := range entries {
 		if em, ok := e.(map[string]any); ok && em["command"] == command {
 			return false, nil
 		}
 	}
-	sessionStart = append(sessionStart, map[string]any{"command": command})
-	hooks["sessionStart"] = sessionStart
+	entries = append(entries, entry)
+	hooks[event] = entries
 	return true, saveJSON(filePath, root)
 }
 
-// removeCursorSessionStartHook removes every hooks.sessionStart entry whose
-// command equals command. Missing file or keys are no-ops.
-func removeCursorSessionStartHook(filePath, command string) error {
+// removeCursorHook removes every hooks.<event> entry whose command equals
+// command. Missing file or keys are no-ops, so it is safe to call for an event
+// the command was never under.
+func removeCursorHook(filePath, event, command string) error {
 	root, err := loadJSONC(filePath)
 	if err != nil {
 		return err
@@ -106,17 +131,17 @@ func removeCursorSessionStartHook(filePath, command string) error {
 	if hooks == nil {
 		return nil
 	}
-	sessionStart, _ := hooks["sessionStart"].([]any)
-	if sessionStart == nil {
+	entries, _ := hooks[event].([]any)
+	if entries == nil {
 		return nil
 	}
-	kept := sessionStart[:0]
-	for _, e := range sessionStart {
+	kept := entries[:0]
+	for _, e := range entries {
 		if em, ok := e.(map[string]any); ok && em["command"] == command {
 			continue
 		}
 		kept = append(kept, e)
 	}
-	hooks["sessionStart"] = kept
+	hooks[event] = kept
 	return saveJSON(filePath, root)
 }

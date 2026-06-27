@@ -4,16 +4,27 @@ package agents
 // constructs its own outer entry with the matcher/extras it wants and
 // passes the canonical command string used for idempotency + cleanup.
 
-// ensureSessionStartHook adds `entry` to hooks.SessionStart (creating
-// the nested structure if missing). Idempotent — if any existing entry
-// contains an inner hook whose command equals `command`, no-op.
-// Returns true if added this call.
-//
-// Entry must be a map with a "hooks" key holding []any of command
-// objects (each with "type" and "command" at minimum). The entry may
-// carry other fields like "matcher", "name", "timeout", etc., which
-// are passed through verbatim.
+// ensureSessionStartHook adds `entry` to hooks.SessionStart. See
+// ensureHookEntry; this is the SessionStart-specific wrapper.
 func ensureSessionStartHook(load loadFn, save saveFn, filePath string, entry map[string]any, command string) (bool, error) {
+	return ensureHookEntry(load, save, filePath, "SessionStart", entry, command)
+}
+
+// removeSessionStartHook removes SessionStart entries matching `command`.
+func removeSessionStartHook(load loadFn, save saveFn, filePath, command string) error {
+	return removeHookEntry(load, save, filePath, "SessionStart", command)
+}
+
+// ensureHookEntry adds `entry` to hooks.<eventName> (creating the nested
+// structure if missing). Idempotent — if any existing entry under that event
+// contains an inner hook whose command equals `command`, no-op. Returns true
+// if added this call.
+//
+// Entry must be a map with a "hooks" key holding []any of command objects
+// (each with "type" and "command" at minimum). The entry may carry other
+// fields like "matcher", "name", "timeout", etc., which are passed through
+// verbatim.
+func ensureHookEntry(load loadFn, save saveFn, filePath, eventName string, entry map[string]any, command string) (bool, error) {
 	root, err := load(filePath)
 	if err != nil {
 		return false, err
@@ -26,8 +37,8 @@ func ensureSessionStartHook(load loadFn, save saveFn, filePath string, entry map
 		hooks = map[string]any{}
 		root["hooks"] = hooks
 	}
-	sessionStart, _ := hooks["SessionStart"].([]any)
-	for _, e := range sessionStart {
+	event, _ := hooks[eventName].([]any)
+	for _, e := range event {
 		em, ok := e.(map[string]any)
 		if !ok {
 			continue
@@ -36,15 +47,16 @@ func ensureSessionStartHook(load loadFn, save saveFn, filePath string, entry map
 			return false, nil
 		}
 	}
-	sessionStart = append(sessionStart, entry)
-	hooks["SessionStart"] = sessionStart
+	event = append(event, entry)
+	hooks[eventName] = event
 	return true, save(filePath, root)
 }
 
-// removeSessionStartHook removes any SessionStart entries whose inner
-// hooks contain a command matching `command`. If an outer entry's
-// inner hooks become empty after removal, the outer entry is dropped.
-func removeSessionStartHook(load loadFn, save saveFn, filePath, command string) error {
+// removeHookEntry removes any hooks.<eventName> entries whose inner hooks
+// contain a command matching `command`. If an outer entry's inner hooks become
+// empty after removal, the outer entry is dropped. Missing file/keys are
+// no-ops, so it is safe to call for an event the command was never under.
+func removeHookEntry(load loadFn, save saveFn, filePath, eventName, command string) error {
 	root, err := load(filePath)
 	if err != nil {
 		return err
@@ -56,7 +68,7 @@ func removeSessionStartHook(load loadFn, save saveFn, filePath, command string) 
 	if hooks == nil {
 		return nil
 	}
-	sessionStart, _ := hooks["SessionStart"].([]any)
+	sessionStart, _ := hooks[eventName].([]any)
 	if sessionStart == nil {
 		return nil
 	}
@@ -83,7 +95,7 @@ func removeSessionStartHook(load loadFn, save saveFn, filePath, command string) 
 		em["hooks"] = innerKept
 		kept = append(kept, em)
 	}
-	hooks["SessionStart"] = kept
+	hooks[eventName] = kept
 	return save(filePath, root)
 }
 
