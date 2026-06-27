@@ -338,7 +338,7 @@ func confirmOwnerRemoval(ownerName string, managed []string, workspaces []worksp
 		fmt.Fprintln(os.Stderr, "non-interactive: keeping the repos (untied from the owner); pass --force to delete them.")
 		return false
 	}
-	fmt.Fprint(os.Stderr, "Delete them? [y/N]  (n keeps the repos, untied from the owner) ")
+	fmt.Fprint(os.Stderr, "Delete them? [y/N] ")
 	return readYes()
 }
 
