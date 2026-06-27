@@ -146,9 +146,18 @@ pattern on stored repos:
 
 All three fields are always recorded — `cwd` included for every agent (the hook
 supplies it authoritatively; the env override defaults it), since resume always
-`cd`s to it regardless of agent. Last writer wins (a workspace re-touched by a
-newer session points at the newer one). `shed prune` drops the link when it
-prunes the workspace.
+`cd`s to it regardless of agent. `shed prune` drops the link when it prunes the
+workspace.
+
+**Cardinality (settled):**
+
+- *Multiple workspaces per session* — fine, no special handling. Each
+  `shed workspace new` makes a distinct (uniquely-named) workspace with its own
+  link record pointing at the same session id; resuming any of them lands in
+  that one session. It just works because the link lives per-workspace.
+- *Multiple sessions per workspace* — **most-recent-session-wins.** A workspace
+  re-touched by a newer session has its single link overwritten to point at the
+  newer one (last writer wins). No link history; keep it straightforward.
 
 ### 4. Workspace name is the identity (not the git branch)
 
@@ -282,9 +291,7 @@ of `--help`.)
 3. **Claude cwd semantics**: the `PreToolUse` `cwd` should be the session's
    project dir (= the resume dir). Confirm it doesn't drift if the model `cd`s
    mid-session.
-4. **Multiple workspaces per session / multiple sessions per workspace**: v1 is
-   last-writer-wins. Decide if a small link history is worth it.
-5. **Lifecycle**: prune stale links (transcript gone, session too old) — fold
+4. **Lifecycle**: prune stale links (transcript gone, session too old) — fold
    into `shed prune`.
 
 ## Implementation sequence
