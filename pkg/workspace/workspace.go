@@ -295,35 +295,75 @@ func parseReflogUnix(selector string) time.Time {
 // branch. This catches merge- and rebase-merged work even when no PR is
 // associated (e.g. a direct push or a local merge).
 //
-// The second return value is the default branch's short name (e.g. "main") for
-// use in messages. landed is false when the default branch can't be resolved
-// (treated conservatively as "not landed", so a stale or missing origin/HEAD
-// never causes a deletion) or when the branch is itself the default branch (so
-// a checkout of main is never pruned just for containing itself).
+// hasOwnCommits distinguishes a branch whose own commits landed (a real merge)
+// from one that never committed anything: a freshly created workspace whose tip
+// is still a commit on the default branch's first-parent mainline has not
+// "merged" anything, it simply never diverged. It is only meaningful when
+// landed is true. Callers use it to phrase the reason ("merged into main" vs
+// "no commits beyond main").
+//
+// defaultBranch is the default branch's short name (e.g. "main") for use in
+// messages. landed is false when the default branch can't be resolved (treated
+// conservatively as "not landed", so a stale or missing origin/HEAD never
+// causes a deletion) or when the branch is itself the default branch (so a
+// checkout of main is never pruned just for containing itself).
 //
 // Comparing against the last-fetched origin/HEAD means staleness only ever
 // makes this more conservative: an out-of-date default branch yields a false
 // negative (keep), never a false positive (delete).
-func LandedInDefault(path, branch string) (landed bool, defaultBranch string, err error) {
+func LandedInDefault(path, branch string) (landed, hasOwnCommits bool, defaultBranch string, err error) {
 	def, err := defaultBranchShortName(path)
 	if err != nil {
 		// Can't resolve the default branch — stay conservative and keep.
-		return false, "", nil
+		return false, false, "", nil
 	}
 	if def == branch {
-		return false, def, nil
+		return false, false, def, nil
 	}
 	cmd := exec.Command("git", "-C", path,
 		"merge-base", "--is-ancestor", "HEAD", "refs/remotes/origin/HEAD")
 	err = cmd.Run()
 	if err == nil {
-		return true, def, nil
+		// Contained in the default branch. A branch that merged work in sits
+		// off the default branch's first-parent mainline (its tip is a merge
+		// commit's second parent); a branch that never committed has a tip that
+		// is itself a mainline commit. If we can't tell, assume it had commits
+		// so we never wrongly claim "no commits" — the worst case is the old,
+		// broader "merged" wording.
+		onMainline, mlErr := tipOnDefaultMainline(path)
+		if mlErr != nil {
+			return true, true, def, nil
+		}
+		return true, !onMainline, def, nil
 	}
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-		return false, def, nil
+		return false, false, def, nil
 	}
-	return false, def, err
+	return false, false, def, err
+}
+
+// tipOnDefaultMainline reports whether the workspace's HEAD is itself one of the
+// default branch's commits — reachable by following refs/remotes/origin/HEAD's
+// first parents only. Used to tell a real merge apart from a branch that never
+// committed once HEAD is known to be contained in the default branch.
+func tipOnDefaultMainline(path string) (bool, error) {
+	headOut, err := exec.Command("git", "-C", path, "rev-parse", "HEAD").Output()
+	if err != nil {
+		return false, err
+	}
+	head := strings.TrimSpace(string(headOut))
+	out, err := exec.Command("git", "-C", path,
+		"rev-list", "--first-parent", "refs/remotes/origin/HEAD").Output()
+	if err != nil {
+		return false, err
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == head {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // defaultBranchShortName resolves the workspace's remote default branch to its

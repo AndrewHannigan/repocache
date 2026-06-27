@@ -104,17 +104,17 @@ func runPrune(dryRun, force, yes bool, ifOlderThan time.Duration) error {
 		// Only consult git when there's no merged PR: a found PR is the
 		// stronger signal and gives the clearer message, and the ancestor
 		// check is redundant once we know it merged.
-		var landed bool
+		var landed, hasOwnCommits bool
 		var defaultBranch string
 		if pr == 0 {
-			landed, defaultBranch, err = workspace.LandedInDefault(i.Path, i.Branch)
+			landed, hasOwnCommits, defaultBranch, err = workspace.LandedInDefault(i.Path, i.Branch)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "warning: %s %s: could not check default-branch status: %v\n", repo, i.Branch, err)
 			}
 		}
 		expired := ifOlderThan > 0 && !i.Age.IsZero() && now.Sub(i.Age) > ifOlderThan
 		prunable := pr != 0 || landed || expired
-		reason := pruneReason(pr, landed, defaultBranch, expired, now.Sub(i.Age))
+		reason := pruneReason(pr, landed, hasOwnCommits, defaultBranch, expired, now.Sub(i.Age))
 		switch decidePrune(prunable, i.Dirty, i.Unpushed, force) {
 		case pruneKeep:
 			kept++
@@ -198,11 +198,19 @@ func decidePrune(prunable, dirty bool, unpushed int, force bool) pruneAction {
 
 // pruneReason describes why a workspace is being pruned, for status messages.
 // Reasons are reported in priority order: a merged PR is the clearest signal,
-// then containment in the default branch, then age.
-func pruneReason(prNumber int, landed bool, defaultBranch string, expired bool, inactive time.Duration) string {
+// then containment in the default branch, then age. A landed branch that never
+// committed anything (hasOwnCommits is false) is reported as "no commits beyond
+// <default>" rather than "merged", since nothing was actually merged — its tip
+// is still the default branch.
+func pruneReason(prNumber int, landed, hasOwnCommits bool, defaultBranch string, expired bool, inactive time.Duration) string {
 	switch {
 	case prNumber != 0:
 		return fmt.Sprintf("PR #%d merged", prNumber)
+	case landed && !hasOwnCommits:
+		if defaultBranch != "" {
+			return fmt.Sprintf("no commits beyond %s", defaultBranch)
+		}
+		return "no commits beyond the default branch"
 	case landed:
 		if defaultBranch != "" {
 			return fmt.Sprintf("merged into %s", defaultBranch)

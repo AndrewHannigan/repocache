@@ -40,22 +40,25 @@ func TestPruneReason(t *testing.T) {
 		name          string
 		prNumber      int
 		landed        bool
+		hasOwnCommits bool
 		defaultBranch string
 		expired       bool
 		inactive      time.Duration
 		want          string
 	}{
-		{"merged PR wins", 12, true, "main", true, 100 * 24 * time.Hour, "PR #12 merged"},
-		{"landed into named default", 0, true, "main", false, 0, "merged into main"},
-		{"landed, default unknown", 0, true, "", false, 0, "merged into default branch"},
-		{"expired only", 0, false, "main", true, 100 * 24 * time.Hour, "inactive for 100 days"},
-		{"nothing", 0, false, "main", false, 0, ""},
+		{"merged PR wins", 12, true, true, "main", true, 100 * 24 * time.Hour, "PR #12 merged"},
+		{"landed with own commits", 0, true, true, "main", false, 0, "merged into main"},
+		{"landed with own commits, default unknown", 0, true, true, "", false, 0, "merged into default branch"},
+		{"landed, no own commits", 0, true, false, "main", false, 0, "no commits beyond main"},
+		{"landed, no own commits, default unknown", 0, true, false, "", false, 0, "no commits beyond the default branch"},
+		{"expired only", 0, false, false, "main", true, 100 * 24 * time.Hour, "inactive for 100 days"},
+		{"nothing", 0, false, false, "main", false, 0, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := pruneReason(tt.prNumber, tt.landed, tt.defaultBranch, tt.expired, tt.inactive); got != tt.want {
-				t.Errorf("pruneReason(%d, %v, %q, %v, %v) = %q, want %q",
-					tt.prNumber, tt.landed, tt.defaultBranch, tt.expired, tt.inactive, got, tt.want)
+			if got := pruneReason(tt.prNumber, tt.landed, tt.hasOwnCommits, tt.defaultBranch, tt.expired, tt.inactive); got != tt.want {
+				t.Errorf("pruneReason(%d, %v, %v, %q, %v, %v) = %q, want %q",
+					tt.prNumber, tt.landed, tt.hasOwnCommits, tt.defaultBranch, tt.expired, tt.inactive, got, tt.want)
 			}
 		})
 	}
