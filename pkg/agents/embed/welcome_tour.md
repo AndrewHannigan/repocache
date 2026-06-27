@@ -27,7 +27,7 @@ continue. The tour only moves forward when the user says so.
   so plainly, explain what it would have shown, and continue.
 - **Clean up at the end** and tell the user what you removed.
 
-Open with one or two sentences of framing: shed keeps a **read-only mirror** of
+Open with one or two sentences of framing: shed keeps a **read-only store** of
 your git repos and hands you **isolated, writable workspaces** to make changes
 in — so your coding agents can share the same repos without stepping on each
 other. Mention it'll take a few minutes and they can stop or ask anything at any
@@ -46,18 +46,18 @@ shed add octocat/Hello-World
 ```
 
 Then say, briefly:
-- The repo is fetched right away and now lives in a **read-only cache** under
+- The repo is fetched right away and now lives in a **read-only store** under
   `~/.shed/repos/…` — a pristine copy that's always there and safe to read.
 
-Now prove it's read-only: find a file in that cache (e.g. the `README`) and
+Now prove it's read-only: find a file in that store (e.g. the `README`) and
 **try to edit it in place** — append a line or `touch` it. It **fails with a
 permission error.** Show the user the actual error.
 
-Then explain *why* this is the design, briefly: the cache is locked down so it
+Then explain *why* this is the design, briefly: the store is locked down so it
 stays a clean, always-current baseline — never half-edited or stuck on some
 branch an agent forgot to leave. That's what makes it safe to read across many
 repos, and it means every change starts from a known-good copy. To actually make
-changes, you don't touch the cache — you open an isolated *workspace*, which is
+changes, you don't touch the store — you open an isolated *workspace*, which is
 next. (Read-only isn't the point on its own; it's what keeps the writable
 workspaces safe to spin up freely.)
 
@@ -116,7 +116,7 @@ once without colliding.
 ## Wrap-up — recap, what's next, clean up
 
 Recap what the three steps showed, briefly:
-- **Read-only mirror** — a pristine baseline that's impossible to clobber.
+- **Read-only store** — a pristine baseline that's impossible to clobber.
 - **Isolated workspaces** — edit many things at once, always off the latest code,
   without collisions.
 

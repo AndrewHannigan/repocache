@@ -1,4 +1,4 @@
-package cache
+package repostore
 
 import (
 	"os"
@@ -13,11 +13,11 @@ func TestSetConfig(t *testing.T) {
 	if err := RequireGit(); err != nil {
 		t.Skipf("git not on PATH: %v", err)
 	}
-	// Redirect the data dir (and thus the cache path) to a temp HOME.
+	// Redirect the data dir (and thus the store path) to a temp HOME.
 	t.Setenv("HOME", t.TempDir())
 
 	name := "github.com/foo/bar"
-	repoPath := paths.CacheRepoPath(name)
+	repoPath := paths.RepoStorePath(name)
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		t.Fatal(err)
 	}

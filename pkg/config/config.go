@@ -47,7 +47,7 @@ type Repo struct {
 
 // Owner is a tracked user or org. On each sync, shed lists the owner's
 // repos (via `gh`) and materializes any new ones as Source-tagged Repo
-// entries, so the rest of shed treats them as ordinary cache repos.
+// entries, so the rest of shed treats them as ordinary stored repos.
 type Owner struct {
 	URL             string `toml:"url"`
 	Name            string `toml:"name,omitempty"`

@@ -7,20 +7,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 )
 
-// mkMeta creates a cache repo dir and writes its meta sidecar. Requires an
+// mkMeta creates a stored repo dir and writes its meta sidecar. Requires an
 // isolated HOME (t.Setenv) so it never touches the real library.
-func mkMeta(t *testing.T, name string, m cache.Meta) {
+func mkMeta(t *testing.T, name string, m repostore.Meta) {
 	t.Helper()
-	if err := os.MkdirAll(paths.CacheRepoPath(name), 0o755); err != nil {
+	if err := os.MkdirAll(paths.RepoStorePath(name), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := cache.SaveMeta(name, &m); err != nil {
+	if err := repostore.SaveMeta(name, &m); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -71,10 +71,10 @@ func TestCollectSyncFailuresOrdersNewestFirst(t *testing.T) {
 		{URL: "https://github.com/acme/old-fail"},
 		{URL: "https://github.com/acme/new-fail"},
 	}}
-	mkMeta(t, "github.com/acme/ok", cache.Meta{LastSyncAt: time.Now()})
-	mkMeta(t, "github.com/acme/old-fail", cache.Meta{
+	mkMeta(t, "github.com/acme/ok", repostore.Meta{LastSyncAt: time.Now()})
+	mkMeta(t, "github.com/acme/old-fail", repostore.Meta{
 		LastSyncAt: time.Now().Add(-48 * time.Hour), LastError: "boom", LastErrorAt: time.Now().Add(-10 * time.Hour)})
-	mkMeta(t, "github.com/acme/new-fail", cache.Meta{
+	mkMeta(t, "github.com/acme/new-fail", repostore.Meta{
 		LastSyncAt: time.Now().Add(-2 * time.Hour), LastError: "boom", LastErrorAt: time.Now().Add(-1 * time.Hour)})
 
 	got := collectSyncFailures(c)
@@ -97,17 +97,17 @@ func TestSyncHealthBanner(t *testing.T) {
 	if err := config.Save(c); err != nil {
 		t.Fatal(err)
 	}
-	mkMeta(t, "github.com/acme/ok", cache.Meta{LastSyncAt: time.Now()})
-	mkMeta(t, "github.com/acme/broken", cache.Meta{LastSyncAt: time.Now()})
+	mkMeta(t, "github.com/acme/ok", repostore.Meta{LastSyncAt: time.Now()})
+	mkMeta(t, "github.com/acme/broken", repostore.Meta{LastSyncAt: time.Now()})
 
 	if b := syncHealthBanner(); b != "" {
 		t.Fatalf("expected no banner when all healthy, got:\n%s", b)
 	}
 
-	mkMeta(t, "github.com/acme/broken", cache.Meta{
+	mkMeta(t, "github.com/acme/broken", repostore.Meta{
 		LastSyncAt: time.Now().Add(-3 * time.Hour), LastError: "git fetch: boom", LastErrorAt: time.Now()})
 	b := syncHealthBanner()
-	if !strings.Contains(b, "STALE CACHE") || !strings.Contains(b, "1 of 2") {
+	if !strings.Contains(b, "STALE STORE") || !strings.Contains(b, "1 of 2") {
 		t.Fatalf("banner missing expected summary:\n%s", b)
 	}
 	if !strings.Contains(b, "github.com/acme/broken") {
@@ -131,7 +131,7 @@ func TestWrapIndent(t *testing.T) {
 }
 
 // TestCollectSyncFailuresIncludesFirstSyncErrors verifies a repo that failed
-// its very first clone (no cache dir, so no meta sidecar) still shows up as a
+// its very first clone (no store dir, so no meta sidecar) still shows up as a
 // failure — the chain that feeds both `shed status` and the staleness banner.
 // Without it, onboarding a private repo before auth is configured would be
 // reported as "synced cleanly".
@@ -140,7 +140,7 @@ func TestCollectSyncFailuresIncludesFirstSyncErrors(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	const name = "github.com/acme/private"
-	if err := cache.RecordFirstSyncError(name, "fatal: Authentication failed"); err != nil {
+	if err := repostore.RecordFirstSyncError(name, "fatal: Authentication failed"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -157,7 +157,7 @@ func TestCollectSyncFailuresIncludesFirstSyncErrors(t *testing.T) {
 
 	// Once it syncs successfully the standalone record is cleared, so it no
 	// longer counts as a failure.
-	cache.ClearFirstSyncError(name)
+	repostore.ClearFirstSyncError(name)
 	if fails := collectSyncFailures(c); len(fails) != 0 {
 		t.Fatalf("expected no failures after clear, got %+v", fails)
 	}

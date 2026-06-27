@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
 
@@ -17,7 +17,7 @@ func newRmCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
 		Use:   "rm <name>",
-		Short: "Remove a repository: config entry, cache on disk, and its workspaces",
+		Short: "Remove a repository: config entry, store on disk, and its workspaces",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRepoRm(args[0], force)
@@ -87,7 +87,7 @@ func runRepoRmOne(r *config.Repo, force bool) error {
 	if len(workspaces) > 0 {
 		fmt.Printf(", %s", pluralize(len(workspaces), "workspace"))
 	}
-	fmt.Println(", cache on disk)")
+	fmt.Println(", store on disk)")
 	return nil
 }
 
@@ -142,7 +142,7 @@ func rmOwnedRepo(r *config.Repo, resolved string, force bool, workspaces []works
 	if len(workspaces) > 0 {
 		fmt.Printf(", %s", pluralize(len(workspaces), "workspace"))
 	}
-	fmt.Println(", cache on disk)")
+	fmt.Println(", store on disk)")
 	fmt.Printf("  note: %s was auto-added by owner %s — it has been added\n", resolved, ownerName)
 	fmt.Printf("        to that owner's exclude list so it won't be re-added on sync.\n")
 	return nil
@@ -197,7 +197,7 @@ func runOwnerRm(o *config.Owner, force bool) error {
 	if len(workspaces) > 0 {
 		fmt.Printf(", %s", pluralize(len(workspaces), "workspace"))
 	}
-	fmt.Println(", caches on disk)")
+	fmt.Println(", stores on disk)")
 	return nil
 }
 
@@ -220,15 +220,15 @@ func blockedWorkspaces(workspaces []workspace.Info) []string {
 	return blocked
 }
 
-// removeRepoArtifacts deletes a repo's workspaces and cache from disk (but not
+// removeRepoArtifacts deletes a repo's workspaces and store from disk (but not
 // its config entry). On-disk artifacts are removed before config so a failure
 // partway through leaves the entry as a record of remaining cleanup.
 func removeRepoArtifacts(resolved string) error {
 	if err := workspace.RemoveAllForRepo(resolved); err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
-	if err := cache.Remove(resolved, configLockTimeout); err != nil {
-		if errors.Is(err, cache.ErrLocked) {
+	if err := repostore.Remove(resolved, configLockTimeout); err != nil {
+		if errors.Is(err, repostore.ErrLocked) {
 			return errs.Wrap(errs.Locked, err)
 		}
 		return errs.Wrap(errs.Config, err)

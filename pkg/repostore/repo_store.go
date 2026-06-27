@@ -1,6 +1,6 @@
-// Package cache inspects on-disk state of cache repos: existence, size,
+// Package repostore inspects on-disk state of stored repos: existence, size,
 // and the .git/shed.meta sidecar.
-package cache
+package repostore
 
 import (
 	"context"
@@ -19,11 +19,11 @@ import (
 	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
-// ErrLocked is returned when a cache repo's lock cannot be acquired in time.
-var ErrLocked = errors.New("cache repo locked by another process")
+// ErrLocked is returned when a stored repo's lock cannot be acquired in time.
+var ErrLocked = errors.New("stored repo locked by another process")
 
 // ErrGitMissing is returned by RequireGit when the git binary is not on PATH.
-// git is shed's one hard dependency — every cache and workspace operation
+// git is shed's one hard dependency — every store and workspace operation
 // shells out to it (clone, fetch, checkout) — so it is the one thing we cannot
 // degrade around the way we do for gh (see pkg/forge).
 var ErrGitMissing = errors.New("git not found on PATH — shed requires git (install from https://git-scm.com/downloads)")
@@ -39,7 +39,7 @@ func RequireGit() error {
 	return nil
 }
 
-// Meta is the JSON sidecar written at <cache>/.git/shed.meta after a
+// Meta is the JSON sidecar written at <store>/.git/shed.meta after a
 // sync. LastSyncAt records the last *successful* sync; LastError/LastErrorAt
 // record the most recent failed attempt (cleared on the next success).
 type Meta struct {
@@ -48,16 +48,16 @@ type Meta struct {
 	LastErrorAt time.Time `json:"last_error_at,omitempty"`
 }
 
-// Exists returns true if the cache repo dir is present on disk.
+// Exists returns true if the stored repo dir is present on disk.
 func Exists(name string) bool {
-	s, err := os.Stat(paths.CacheRepoPath(name))
+	s, err := os.Stat(paths.RepoStorePath(name))
 	return err == nil && s.IsDir()
 }
 
 // LoadMeta reads the meta sidecar. Returns (nil, nil) if absent (the
 // repo hasn't been synced yet).
 func LoadMeta(name string) (*Meta, error) {
-	data, err := os.ReadFile(paths.CacheRepoMetaFile(name))
+	data, err := os.ReadFile(paths.RepoStoreMetaFile(name))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
@@ -72,11 +72,11 @@ func LoadMeta(name string) (*Meta, error) {
 }
 
 // RecordFirstSyncError persists errText for a repo that failed before its
-// cache dir (and meta sidecar) ever existed — i.e. a failed first clone.
+// store dir (and meta sidecar) ever existed — i.e. a failed first clone.
 // Without it the failure would vanish: LoadMeta has nothing to read, so
 // `shed status` would report the repo healthy and the session-context banner
 // would stay silent. The record lives in a standalone file outside ReposDir
-// so it never makes Exists() or Clone() mistake it for a populated cache.
+// so it never makes Exists() or Clone() mistake it for a populated store.
 func RecordFirstSyncError(name, errText string) error {
 	m := &Meta{LastError: errText, LastErrorAt: time.Now().UTC()}
 	data, err := json.Marshal(m)
@@ -150,22 +150,22 @@ func SaveMeta(name string, m *Meta) error {
 	if err != nil {
 		return err
 	}
-	p := paths.CacheRepoMetaFile(name)
+	p := paths.RepoStoreMetaFile(name)
 	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
 		return err
 	}
 	return os.WriteFile(p, data, 0644)
 }
 
-// Size returns the total on-disk size of the cache repo in bytes. Walks
+// Size returns the total on-disk size of the stored repo in bytes. Walks
 // the tree and sums file sizes; errors on individual files are ignored.
-// Returns 0 if the cache does not exist.
+// Returns 0 if the store does not exist.
 func Size(name string) (int64, error) {
 	if !Exists(name) {
 		return 0, nil
 	}
 	var total int64
-	err := filepath.Walk(paths.CacheRepoPath(name), func(_ string, info os.FileInfo, err error) error {
+	err := filepath.Walk(paths.RepoStorePath(name), func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -177,13 +177,13 @@ func Size(name string) (int64, error) {
 	return total, err
 }
 
-// Lock acquires a flock on the cache repo's lockfile. exclusive=true for
+// Lock acquires a flock on the stored repo's lockfile. exclusive=true for
 // sync, false (shared) for workspace creation. Caller must Unlock on
 // release. Returns ErrLocked on timeout.
 type Lock struct{ inner *flock.Flock }
 
 func AcquireLock(name string, exclusive bool, timeout time.Duration) (*Lock, error) {
-	p := paths.CacheRepoLockFile(name)
+	p := paths.RepoStoreLockFile(name)
 	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
 		return nil, err
 	}
@@ -210,13 +210,13 @@ func AcquireLock(name string, exclusive bool, timeout time.Duration) (*Lock, err
 
 func (l *Lock) Unlock() error { return l.inner.Unlock() }
 
-// LockTree applies chmod -R a-w to the cache working tree, excluding .git/.
+// LockTree applies chmod -R a-w to the store working tree, excluding .git/.
 // The owner can always re-chmod to restore write later.
-func LockTree(name string) error { return chmodTree(paths.CacheRepoPath(name), false) }
+func LockTree(name string) error { return chmodTree(paths.RepoStorePath(name), false) }
 
-// UnlockTree applies chmod -R u+w to the cache working tree, excluding
+// UnlockTree applies chmod -R u+w to the store working tree, excluding
 // .git/, so a subsequent git checkout can write tracked files.
-func UnlockTree(name string) error { return chmodTree(paths.CacheRepoPath(name), true) }
+func UnlockTree(name string) error { return chmodTree(paths.RepoStorePath(name), true) }
 
 func chmodTree(root string, writable bool) error {
 	gitDir := filepath.Join(root, ".git")
@@ -245,11 +245,11 @@ func chmodTree(root string, writable bool) error {
 	})
 }
 
-// Remove deletes the cache repo directory from disk. It first restores
+// Remove deletes the stored repo directory from disk. It first restores
 // write permissions on the working tree (sync leaves it chmod a-w, which
 // would block os.RemoveAll from unlinking entries in read-only dirs),
 // then takes the exclusive lock so a concurrent sync can't race the
-// delete. Returns nil if the cache is already absent.
+// delete. Returns nil if the store is already absent.
 func Remove(name string, timeout time.Duration) error {
 	if !Exists(name) {
 		return nil
@@ -262,7 +262,7 @@ func Remove(name string, timeout time.Duration) error {
 	if err := UnlockTree(name); err != nil {
 		return err
 	}
-	p := paths.CacheRepoPath(name)
+	p := paths.RepoStorePath(name)
 	if err := os.RemoveAll(p); err != nil {
 		return err
 	}
@@ -275,7 +275,7 @@ func Remove(name string, timeout time.Duration) error {
 // Clone runs `git clone --no-checkout --config gc.auto=0 <url> <path>`.
 // If the destination exists, treats it as success (race with another sync).
 func Clone(url, name string) error {
-	dest := paths.CacheRepoPath(name)
+	dest := paths.RepoStorePath(name)
 	if _, err := os.Stat(dest); err == nil {
 		return nil
 	}
@@ -296,7 +296,7 @@ func Clone(url, name string) error {
 	return nil
 }
 
-// SetConfig writes the given git config key/value pairs into the cache repo's
+// SetConfig writes the given git config key/value pairs into the stored repo's
 // local .git/config via `git config`. It is idempotent and set/update only:
 // it overwrites an existing value but never unsets a key dropped from the map,
 // so removing a key from config does not retroactively clear it (re-add the
@@ -312,7 +312,7 @@ func SetConfig(name string, kv map[string]string) error {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	path := paths.CacheRepoPath(name)
+	path := paths.RepoStorePath(name)
 	for _, k := range keys {
 		cmd := exec.Command("git", "-C", path, "config", k, kv[k])
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -322,9 +322,9 @@ func SetConfig(name string, kv map[string]string) error {
 	return nil
 }
 
-// Fetch runs `git fetch --all --prune --tags` in the cache repo.
+// Fetch runs `git fetch --all --prune --tags` in the stored repo.
 func Fetch(name string) error {
-	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name), "fetch", "--all", "--prune", "--tags")
+	cmd := exec.Command("git", "-C", paths.RepoStorePath(name), "fetch", "--all", "--prune", "--tags")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git fetch: %w (output: %s)", err, strings.TrimSpace(string(out)))
@@ -333,22 +333,22 @@ func Fetch(name string) error {
 }
 
 // CheckoutDetachedHEAD runs `git checkout --detach --force origin/HEAD` so
-// the cache tree always reflects the default branch's tip without owning a
+// the store tree always reflects the default branch's tip without owning a
 // local branch.
 //
-// --force makes the checkout self-healing: the cache is a read-only mirror
+// --force makes the checkout self-healing: the store is a read-only store
 // the user never edits, so there are no local changes worth preserving.
 // Without it, a tree left in a dirty state by an interrupted prior sync
 // (stale index entries, untracked files in the way) would wedge every
 // subsequent sync; --force discards that and resets to origin/HEAD.
 //
-// GIT_LFS_SKIP_SMUDGE=1 keeps the read-only mirror from invoking the LFS
-// smudge filter: a cache only needs the committed pointer files, not the
+// GIT_LFS_SKIP_SMUDGE=1 keeps the read-only store from invoking the LFS
+// smudge filter: a store only needs the committed pointer files, not the
 // resolved blobs. Without it, checkout would fetch every LFS object on
 // each sync, and a single missing object (e.g. pruned from the server)
 // would fail the whole sync.
 func CheckoutDetachedHEAD(name string) error {
-	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name), "checkout", "--detach", "--force", "origin/HEAD")
+	cmd := exec.Command("git", "-C", paths.RepoStorePath(name), "checkout", "--detach", "--force", "origin/HEAD")
 	cmd.Env = append(os.Environ(), "GIT_LFS_SKIP_SMUDGE=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -362,7 +362,7 @@ func CheckoutDetachedHEAD(name string) error {
 // `git checkout --detach origin/HEAD` would fail because origin/HEAD does
 // not resolve to a commit-ish.
 func RemoteHEADResolves(name string) (bool, error) {
-	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name),
+	cmd := exec.Command("git", "-C", paths.RepoStorePath(name),
 		"rev-parse", "--verify", "--quiet", "origin/HEAD")
 	err := cmd.Run()
 	if err == nil {

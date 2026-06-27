@@ -10,11 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 	"github.com/AndrewHannigan/shed/pkg/forge"
 	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 )
 
 const syncLockTimeout = 5 * time.Minute
@@ -31,10 +31,10 @@ func newSyncCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "sync [<name>...]",
-		Short: "Fetch tracked repos and refresh their cache working trees",
+		Short: "Fetch tracked repos and refresh their read-only working trees",
 		Long: `sync fetches each tracked repo (or the named subset), checks out
 origin/HEAD detached, and re-applies chmod -R a-w on the working tree
-so the cache stays read-only.
+so the store stays read-only.
 
 With --if-older-than, skip repos synced within the given duration.
 Runs in parallel up to --jobs.`,
@@ -56,7 +56,7 @@ type syncResult struct {
 	Note       string `json:"note,omitempty"`
 	SizeBytes  int64  `json:"size_bytes,omitempty"`
 
-	// locked marks an error caused by a cache-lock timeout (vs a network
+	// locked marks an error caused by a store-lock timeout (vs a network
 	// failure), so callers can classify it without matching on Error text.
 	// Not serialized — the message in Error carries the user-facing detail.
 	locked bool
@@ -68,7 +68,7 @@ type syncTarget struct {
 }
 
 func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) error {
-	if err := cache.RequireGit(); err != nil {
+	if err := repostore.RequireGit(); err != nil {
 		return errs.Wrap(errs.MissingDep, err)
 	}
 	if jobs < 1 {
@@ -323,26 +323,26 @@ func syncOne(name, url string, git map[string]string, ifOlderThan time.Duration)
 	start := time.Now()
 	r := syncResult{Name: name}
 
-	if !cache.Exists(name) {
-		if err := cache.Clone(url, name); err != nil {
+	if !repostore.Exists(name) {
+		if err := repostore.Clone(url, name); err != nil {
 			return finishErr(r, start, err)
 		}
 	}
 
-	lock, err := cache.AcquireLock(name, true, syncLockTimeout)
+	lock, err := repostore.AcquireLock(name, true, syncLockTimeout)
 	if err != nil {
-		if errors.Is(err, cache.ErrLocked) {
+		if errors.Is(err, repostore.ErrLocked) {
 			r.locked = true
 			return finishErr(r, start, fmt.Errorf(
 				"locked: could not acquire %s within %s (held by another shed process)",
-				paths.CacheRepoLockFile(name), syncLockTimeout))
+				paths.RepoStoreLockFile(name), syncLockTimeout))
 		}
 		return finishErr(r, start, err)
 	}
 	defer lock.Unlock()
 
 	if ifOlderThan > 0 {
-		if meta, err := cache.LoadMeta(name); err == nil && meta != nil {
+		if meta, err := repostore.LoadMeta(name); err == nil && meta != nil {
 			if d := time.Since(meta.LastSyncAt); d < ifOlderThan {
 				r.Status = "skipped"
 				r.Note = fmt.Sprintf("synced %s ago", relDuration(d))
@@ -354,44 +354,44 @@ func syncOne(name, url string, git map[string]string, ifOlderThan time.Duration)
 
 	// Re-enable write before fetch + checkout (prior sync left the tree chmod a-w).
 	// Empty tree (first sync) is fine; UnlockTree is a no-op then.
-	if err := cache.UnlockTree(name); err != nil {
+	if err := repostore.UnlockTree(name); err != nil {
 		return finishErr(r, start, fmt.Errorf("chmod u+w: %w", err))
 	}
-	if err := cache.Fetch(name); err != nil {
+	if err := repostore.Fetch(name); err != nil {
 		return finishErr(r, start, err)
 	}
-	// Reconcile per-repo git config into the cache's .git/config so options
+	// Reconcile per-repo git config into the store's .git/config so options
 	// added to config after the initial clone take effect on the next sync.
-	if err := cache.SetConfig(name, git); err != nil {
+	if err := repostore.SetConfig(name, git); err != nil {
 		return finishErr(r, start, err)
 	}
 	// An empty remote (no commits pushed) has no origin/HEAD to check out;
 	// leave the tree empty and record a successful, "empty" sync rather than
 	// failing every time. A later push makes origin/HEAD resolve normally.
-	hasHEAD, err := cache.RemoteHEADResolves(name)
+	hasHEAD, err := repostore.RemoteHEADResolves(name)
 	if err != nil {
 		return finishErr(r, start, err)
 	}
 	if hasHEAD {
-		if err := cache.CheckoutDetachedHEAD(name); err != nil {
+		if err := repostore.CheckoutDetachedHEAD(name); err != nil {
 			return finishErr(r, start, err)
 		}
 	}
-	if err := cache.LockTree(name); err != nil {
+	if err := repostore.LockTree(name); err != nil {
 		return finishErr(r, start, fmt.Errorf("chmod a-w: %w", err))
 	}
-	if err := cache.SaveMeta(name, &cache.Meta{LastSyncAt: time.Now().UTC()}); err != nil {
+	if err := repostore.SaveMeta(name, &repostore.Meta{LastSyncAt: time.Now().UTC()}); err != nil {
 		return finishErr(r, start, fmt.Errorf("write meta: %w", err))
 	}
 	// Success: drop any standalone first-sync failure record from an earlier
 	// failed clone so it doesn't keep showing up as stale.
-	cache.ClearFirstSyncError(name)
+	repostore.ClearFirstSyncError(name)
 
 	r.Status = "ok"
 	if !hasHEAD {
 		r.Note = "empty"
 	}
-	if size, err := cache.Size(name); err == nil {
+	if size, err := repostore.Size(name); err == nil {
 		r.SizeBytes = size
 	}
 	r.DurationMs = time.Since(start).Milliseconds()
@@ -405,20 +405,20 @@ func finishErr(r syncResult, start time.Time, err error) syncResult {
 	// Persist the failure so `ls`, `status`, and the session-context snapshot
 	// can surface it. Best-effort: keep the prior LastSyncAt so the table
 	// still shows the last *successful* sync.
-	if cache.Exists(r.Name) {
-		m, _ := cache.LoadMeta(r.Name)
+	if repostore.Exists(r.Name) {
+		m, _ := repostore.LoadMeta(r.Name)
 		if m == nil {
-			m = &cache.Meta{}
+			m = &repostore.Meta{}
 		}
 		m.LastError = err.Error()
 		m.LastErrorAt = time.Now().UTC()
-		_ = cache.SaveMeta(r.Name, m)
+		_ = repostore.SaveMeta(r.Name, m)
 	} else {
-		// A failed first clone leaves no cache dir, so there's no meta sidecar
+		// A failed first clone leaves no store dir, so there's no meta sidecar
 		// to write. Record the error in the standalone store instead — without
 		// it, status would report "synced cleanly" and the staleness banner
 		// would stay silent, the worst outcome during onboarding.
-		_ = cache.RecordFirstSyncError(r.Name, err.Error())
+		_ = repostore.RecordFirstSyncError(r.Name, err.Error())
 	}
 	return r
 }

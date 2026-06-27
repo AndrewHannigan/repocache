@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 )
 
 func newStatusCmd() *cobra.Command {
@@ -23,7 +23,7 @@ func newStatusCmd() *cobra.Command {
 		Long: `Report which tracked repos failed their most recent sync.
 
 With no argument, lists every repo whose last sync attempt failed (their
-cached copies are stale). With a repo, prints the full captured error, when
+stored copies are stale). With a repo, prints the full captured error, when
 it happened, and a suggested fix.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -73,15 +73,15 @@ func collectSyncFailures(c *config.Config) []syncFailure {
 }
 
 // loadRepoFailure returns the active failure for a repo — from the meta
-// sidecar when the cache exists, or from the standalone first-sync store when
-// a failed first clone left no cache dir — or nil when the last attempt was
+// sidecar when the store exists, or from the standalone first-sync store when
+// a failed first clone left no store dir — or nil when the last attempt was
 // clean. The two stores are mutually exclusive in practice: meta exists only
-// once the cache does, and a successful sync clears the standalone record.
-func loadRepoFailure(name string) *cache.Meta {
-	if m, _ := cache.LoadMeta(name); m != nil && m.LastError != "" {
+// once the store does, and a successful sync clears the standalone record.
+func loadRepoFailure(name string) *repostore.Meta {
+	if m, _ := repostore.LoadMeta(name); m != nil && m.LastError != "" {
 		return m
 	}
-	if m, _ := cache.LoadFirstSyncError(name); m != nil && m.LastError != "" {
+	if m, _ := repostore.LoadFirstSyncError(name); m != nil && m.LastError != "" {
 		return m
 	}
 	return nil
@@ -112,14 +112,14 @@ func runStatusRepo(c *config.Config, arg string) error {
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
-	meta, err := cache.LoadMeta(name)
+	meta, err := repostore.LoadMeta(name)
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
-	// A failed first clone leaves no cache dir (hence no meta); its error
+	// A failed first clone leaves no store dir (hence no meta); its error
 	// lives in the standalone store. Surface that as the active failure.
 	if meta == nil {
-		if fe, _ := cache.LoadFirstSyncError(name); fe != nil && fe.LastError != "" {
+		if fe, _ := repostore.LoadFirstSyncError(name); fe != nil && fe.LastError != "" {
 			meta = fe
 		}
 	}

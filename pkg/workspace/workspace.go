@@ -1,5 +1,5 @@
 // Package workspace handles creation, inspection, and removal of
-// writable workspaces derived from cache repos.
+// writable workspaces derived from stored repos.
 package workspace
 
 import (
@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 )
 
-const cacheLockTimeout = 2 * time.Second
+const storeLockTimeout = 2 * time.Second
 
 // Info is a single workspace's state for listing.
 type Info struct {
@@ -45,7 +45,7 @@ func Exists(name, branch string) bool {
 // New creates a new workspace via `git clone --reference`. Returns the
 // absolute workspace path on success.
 //
-// If branch exists on the cache's origin refs, checks it out. Otherwise
+// If branch exists on the store's origin refs, checks it out. Otherwise
 // clones starting from base (or origin/HEAD if base is empty) and
 // creates a new local branch named branch.
 //
@@ -69,15 +69,15 @@ func New(name, branch, base, url string, gitConfig map[string]string) (string, e
 			return "", err
 		}
 	}
-	if !cache.Exists(name) {
-		return "", fmt.Errorf("cache repo not present; run `shed sync %s` first", name)
+	if !repostore.Exists(name) {
+		return "", fmt.Errorf("stored repo not present; run `shed sync %s` first", name)
 	}
 	wsPath := PathFor(name, branch)
 	if _, err := os.Stat(wsPath); err == nil {
 		return "", fmt.Errorf("workspace already exists at %s", wsPath)
 	}
 
-	lock, err := cache.AcquireLock(name, false, cacheLockTimeout)
+	lock, err := repostore.AcquireLock(name, false, storeLockTimeout)
 	if err != nil {
 		return "", err
 	}
@@ -92,9 +92,9 @@ func New(name, branch, base, url string, gitConfig map[string]string) (string, e
 		return "", err
 	}
 
-	cachePath := paths.CacheRepoPath(name)
+	storePath := paths.RepoStorePath(name)
 	if branchExists {
-		if err := runGitClone(cachePath, url, branch, wsPath, gitConfig); err != nil {
+		if err := runGitClone(storePath, url, branch, wsPath, gitConfig); err != nil {
 			return "", err
 		}
 	} else {
@@ -105,7 +105,7 @@ func New(name, branch, base, url string, gitConfig map[string]string) (string, e
 				return "", err
 			}
 		}
-		if err := runGitClone(cachePath, url, baseBranch, wsPath, gitConfig); err != nil {
+		if err := runGitClone(storePath, url, baseBranch, wsPath, gitConfig); err != nil {
 			return "", err
 		}
 		if err := runGit(wsPath, "checkout", "-b", branch); err != nil {
@@ -157,7 +157,7 @@ func runGit(dir string, args ...string) error {
 }
 
 func refExists(name, ref string) (bool, error) {
-	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name),
+	cmd := exec.Command("git", "-C", paths.RepoStorePath(name),
 		"show-ref", "--verify", "--quiet", ref)
 	err := cmd.Run()
 	if err == nil {
@@ -171,7 +171,7 @@ func refExists(name, ref string) (bool, error) {
 }
 
 func defaultBranch(name string) (string, error) {
-	cmd := exec.Command("git", "-C", paths.CacheRepoPath(name),
+	cmd := exec.Command("git", "-C", paths.RepoStorePath(name),
 		"symbolic-ref", "refs/remotes/origin/HEAD")
 	out, err := cmd.Output()
 	if err != nil {

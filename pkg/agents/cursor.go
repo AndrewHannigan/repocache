@@ -38,24 +38,10 @@ func (c *Cursor) Detected() bool {
 
 func (c *Cursor) hooksFile() string { return filepath.Join(c.dir, "hooks.json") }
 
-// legacyPluginDir is the hand-rolled plugin some pre-first-class setups dropped
-// at ~/.cursor/plugins/local/repocache/ (a .cursor-plugin manifest + a
-// sessionStart script that shelled back to the old `repocache __session-context
-// --agent cursor`). First-class support uses ~/.cursor/hooks.json instead;
-// install removes the plugin so the guide isn't injected twice once
-// `--agent cursor` becomes valid. Best-effort, mirroring the other agents'
-// legacy migrations.
-func (c *Cursor) legacyPluginDir() string {
-	return filepath.Join(c.dir, "plugins", "local", "repocache")
-}
-
 func (c *Cursor) Install(opts InstallOptions) (Installed, error) {
 	if err := os.MkdirAll(c.dir, 0755); err != nil {
 		return Installed{}, err
 	}
-	// Migrate off the hand-rolled plugin prototype if present. Best-effort.
-	_ = os.RemoveAll(c.legacyPluginDir())
-
 	hooks, err := installHooks(opts, sessionContextCommand(c.Key()), BgSyncCommand, func(command string) (bool, error) {
 		return ensureCursorSessionStartHook(c.hooksFile(), command)
 	})
@@ -66,8 +52,6 @@ func (c *Cursor) Install(opts InstallOptions) (Installed, error) {
 }
 
 func (c *Cursor) Uninstall(prev Installed) error {
-	// Best-effort cleanup of the hand-rolled plugin prototype, if any.
-	_ = os.RemoveAll(c.legacyPluginDir())
 	for _, hookCmd := range prev.AddedHooks {
 		if err := removeCursorSessionStartHook(c.hooksFile(), hookCmd); err != nil {
 			return err
