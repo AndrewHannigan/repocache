@@ -1,17 +1,43 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 	"github.com/AndrewHannigan/shed/pkg/paths"
 	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
+
+// `workspace ls` lists workspaces most-recently-active first, so the one a user
+// just touched sits at the top — matching the Workspaces section of `shed ls`.
+func TestWriteWorkspaceListTableSortsByAge(t *testing.T) {
+	now := time.Now()
+	infos := []workspace.Info{
+		{Name: "github.com/acme/widget", Branch: "old", Path: "/w/old", Age: now.Add(-3 * time.Hour)},
+		{Name: "github.com/acme/widget", Branch: "new", Path: "/w/new", Age: now.Add(-1 * time.Minute)},
+		{Name: "github.com/octo/hello", Branch: "mid", Path: "/w/mid", Age: now.Add(-1 * time.Hour)},
+	}
+
+	var buf bytes.Buffer
+	if err := writeWorkspaceListTable(&buf, infos); err != nil {
+		t.Fatalf("writeWorkspaceListTable: %v", err)
+	}
+	out := buf.String()
+
+	iNew := strings.Index(out, "new")
+	iMid := strings.Index(out, "mid")
+	iOld := strings.Index(out, "old")
+	if !(iNew < iMid && iMid < iOld) {
+		t.Errorf("expected newest→oldest order (new, mid, old), got:\n%s", out)
+	}
+}
 
 // makeWorkspaceDir creates a minimal workspace dir (with a .git subdir) so
 // workspace.Exists / LocateByName treat it as a real workspace.
