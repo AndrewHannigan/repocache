@@ -222,11 +222,6 @@ the pre-exec hook may not fire. They are not the primary path.
    last-writer-wins. Decide if a small link history is worth it.
 5. **Lifecycle**: prune stale links (transcript gone, session too old) — fold
    into `shed prune`.
-6. **Unique-branch migration**: the invariant is enforced at *creation*, so
-   pre-existing duplicate-branch workspaces (if any) keep working; only a *new*
-   `workspace new` for a colliding branch is rejected. `shed resume <branch>`
-   must handle a legacy duplicate by erroring with the candidates rather than
-   guessing. Decide whether to detect/report existing duplicates on upgrade.
 
 ## Implementation sequence
 
