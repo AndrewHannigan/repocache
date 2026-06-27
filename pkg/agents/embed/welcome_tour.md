@@ -27,11 +27,11 @@ continue. The tour only moves forward when the user says so.
   so plainly, explain what it would have shown, and continue.
 - **Clean up at the end** and tell the user what you removed.
 
-Open with one or two sentences of framing: shed keeps a **read-only store** of
-your git repos and hands you **isolated, writable workspaces** to make changes
-in — so your coding agents can share the same repos without stepping on each
-other. Mention it'll take a few minutes and they can stop or ask anything at any
-point. Then begin.
+Open with one or two sentences of framing: shed is a tool for your coding
+agents. It keeps a **read-only store** of your git repos and hands those agents
+**isolated, writable workspaces** to make changes in — so they can share the
+same repos without stepping on each other. Mention it'll take a few minutes and
+they can stop or ask anything at any point. Then begin.
 
 ---
 
@@ -53,20 +53,21 @@ Now prove it's read-only: find a file in that store (e.g. the `README`) and
 **try to edit it in place** — append a line or `touch` it. It **fails with a
 permission error.** Show the user the actual error.
 
-Then explain *why* this is the design, briefly: the store is locked down so it
-stays a clean, always-current baseline — never half-edited or stuck on some
-branch an agent forgot to leave. That's what makes it safe to read across many
-repos, and it means every change starts from a known-good copy. To actually make
-changes, you don't touch the store — you open an isolated *workspace*, which is
-next. (Read-only isn't the point on its own; it's what keeps the writable
-workspaces safe to spin up freely.)
+Then explain *why* this is the design, briefly: the store is locked down so your
+agent can't clobber it — it stays a clean, always-current baseline, never
+half-edited or stuck on some branch an agent forgot to leave. That's what makes
+it safe for agents to read across many repos, and it means every change starts
+from a known-good copy. To actually make changes, your agent doesn't touch the
+store — it opens an isolated *workspace*, which is next. (Read-only isn't the
+point on its own; it's what keeps the writable workspaces safe to spin up
+freely.)
 
 **→ Pause. Ask if they have questions, and wait before continuing.**
 
 ## Step 2 — Your first workspace
 
-> "When you want to change something, you ask shed for a workspace: an isolated,
-> writable clone."
+> "When your agent needs to change something, it asks shed for a workspace: an
+> isolated, writable clone."
 
 Run:
 
@@ -117,13 +118,13 @@ once without colliding.
 
 Recap what the three steps showed, briefly:
 - **Read-only store** — a pristine baseline that's impossible to clobber.
-- **Isolated workspaces** — edit many things at once, always off the latest code,
-  without collisions.
+- **Isolated workspaces** — your agents edit many things at once, always off the
+  latest code, without collisions.
 
 Then mention — in a line or two each, no need to run them — where to go next:
-- **Ship it:** from a workspace you'd `git push -u origin tour-feature-a` and open
-  a PR like normal; each workspace pushes independently, so you get clean separate
-  PRs. (Against this public demo repo a push would be rejected — that's expected.)
+- **Ship it:** from a workspace your agent would `git push -u origin tour-feature-a`
+  and open a PR like normal; each workspace pushes independently, so you get clean
+  separate PRs. (Against this public demo repo a push would be rejected — that's expected.)
 - **Track a whole owner:** `shed add octocat` tracks an entire user/org and
   auto-discovers its repos.
 - **Tidy up later:** `shed prune` removes workspaces whose work has already landed.
