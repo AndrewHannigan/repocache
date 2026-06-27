@@ -63,7 +63,7 @@ func TestHelpPathsConsistent(t *testing.T) {
 // `shed help <command>` should resolve a command name to the topic that
 // documents it (e.g. add → library), not error out.
 func TestHelpCommandAliases(t *testing.T) {
-	for _, cmd := range []string{"add", "rm", "ls", "new", "path"} {
+	for _, cmd := range []string{"add", "rm", "ls", "repo", "new", "path"} {
 		out := captureStdout(t, func() { runShed("help", cmd) })
 		if strings.Contains(out, "unknown topic") || strings.TrimSpace(out) == "" {
 			t.Errorf("`shed help %s` should resolve to a topic, got:\n%s", cmd, out)
