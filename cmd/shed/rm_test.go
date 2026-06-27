@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"testing"
 
 	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/errs"
 )
 
 // rmTestEnv points config + data dirs at temp dirs so rm can mutate them, and
@@ -146,6 +148,78 @@ func TestRepoRmNoWorkspacesRemovesWithoutConfirm(t *testing.T) {
 
 	if err := runRepoRm("github.com/acme/z", false); err != nil {
 		t.Fatalf("runRepoRm: %v", err)
+	}
+
+	c := loadConfig(t)
+	if len(c.Repos) != 0 {
+		t.Fatalf("repo should be removed, got %+v", c.Repos)
+	}
+}
+
+// rm accepts several names at once and removes each of them.
+func TestRepoRmManyRemovesAll(t *testing.T) {
+	rmTestEnv(t)
+	saveConfig(t, &config.Config{
+		Repos: []config.Repo{
+			{URL: "https://github.com/acme/a"},
+			{URL: "https://github.com/acme/b"},
+			{URL: "https://github.com/acme/c"},
+		},
+	})
+
+	if err := runRepoRmMany([]string{"github.com/acme/a", "github.com/acme/c"}, false); err != nil {
+		t.Fatalf("runRepoRmMany: %v", err)
+	}
+
+	c := loadConfig(t)
+	if len(c.Repos) != 1 {
+		t.Fatalf("expected only one repo to remain, got %+v", c.Repos)
+	}
+	if _, ok := sourceOf(t, c, "github.com/acme/b"); !ok {
+		t.Fatalf("unnamed repo b should survive")
+	}
+}
+
+// A failure on one name does not stop the others from being removed, and rm
+// reports the failure with a non-zero (NotFound) exit code.
+func TestRepoRmManyContinuesPastFailure(t *testing.T) {
+	rmTestEnv(t)
+	saveConfig(t, &config.Config{
+		Repos: []config.Repo{
+			{URL: "https://github.com/acme/a"},
+			{URL: "https://github.com/acme/b"},
+		},
+	})
+
+	// "nope" doesn't resolve to anything; a and b do.
+	err := runRepoRmMany([]string{"github.com/acme/a", "nope", "github.com/acme/b"}, false)
+	if err == nil {
+		t.Fatalf("expected an error when a name can't be removed")
+	}
+	var coded *errs.Coded
+	if !errors.As(err, &coded) {
+		t.Fatalf("expected a coded error, got %T", err)
+	}
+	if coded.Code != errs.NotFound {
+		t.Fatalf("expected NotFound exit code, got %d", coded.Code)
+	}
+
+	c := loadConfig(t)
+	if len(c.Repos) != 0 {
+		t.Fatalf("the resolvable repos should still be removed, got %+v", c.Repos)
+	}
+}
+
+// Duplicate names are collapsed so a target isn't removed (then reported as
+// already-gone) twice — `shed rm a a` succeeds and removes a once.
+func TestRepoRmManyDeduplicates(t *testing.T) {
+	rmTestEnv(t)
+	saveConfig(t, &config.Config{
+		Repos: []config.Repo{{URL: "https://github.com/acme/a"}},
+	})
+
+	if err := runRepoRmMany([]string{"github.com/acme/a", "github.com/acme/a"}, false); err != nil {
+		t.Fatalf("runRepoRmMany with a duplicate name: %v", err)
 	}
 
 	c := loadConfig(t)
