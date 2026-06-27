@@ -13,12 +13,6 @@ const BgSyncCommand = "shed __bg-sync"
 // the output shape that agent expects.
 const SessionContextCommand = "shed __session-context"
 
-// legacySessionContextCommand is the original public subcommand
-// (`repocache session-context`, under the old binary name) before it became
-// the internal `__session-context`. Install strips any stale entry so the
-// now-unknown subcommand doesn't error every session.
-const legacySessionContextCommand = "repocache session-context"
-
 // Claude implements Agent for Claude Code.
 type Claude struct {
 	dir string // ~/.claude
@@ -37,9 +31,8 @@ func (c *Claude) Detected() bool {
 	return err == nil && s.IsDir()
 }
 
-func (c *Claude) legacyDocFile() string { return filepath.Join(c.dir, "REPOCACHE.md") }
-func (c *Claude) memoryFile() string    { return filepath.Join(c.dir, "CLAUDE.md") }
-func (c *Claude) settingsFile() string  { return filepath.Join(c.dir, "settings.json") }
+func (c *Claude) memoryFile() string   { return filepath.Join(c.dir, "CLAUDE.md") }
+func (c *Claude) settingsFile() string { return filepath.Join(c.dir, "settings.json") }
 
 func claudeHookEntry(command string) map[string]any {
 	return map[string]any{
@@ -53,16 +46,6 @@ func (c *Claude) Install(opts InstallOptions) (Installed, error) {
 	if err := os.MkdirAll(c.dir, 0755); err != nil {
 		return Installed{}, err
 	}
-	// Migrate off the legacy @REPOCACHE.md import + on-disk doc that older
-	// shed versions installed; context now comes from the
-	// session-context hook. Best-effort.
-	_ = removeImportLine(c.memoryFile(), "REPOCACHE.md")
-	_ = os.Remove(c.legacyDocFile())
-	// Strip superseded session-context hook commands (the pre-rename public
-	// subcommand and the pre-per-agent bare form) so they don't run or error
-	// on every session start. Best-effort.
-	removeLegacySessionContextHooks(loadJSONC, saveJSON, c.settingsFile())
-
 	paths, err := ensureArrayEntries(loadJSONC, saveJSON, c.settingsFile(),
 		[]string{"permissions", "additionalDirectories"}, PathsToRegister())
 	if err != nil {
@@ -79,11 +62,6 @@ func (c *Claude) Install(opts InstallOptions) (Installed, error) {
 }
 
 func (c *Claude) Uninstall(prev Installed) error {
-	// Legacy cleanup: older versions added an @import + on-disk doc.
-	if err := removeImportLine(c.memoryFile(), "REPOCACHE.md"); err != nil {
-		return err
-	}
-	_ = os.Remove(c.legacyDocFile())
 	if len(prev.AddedPaths) > 0 {
 		if err := removeArrayEntries(loadJSONC, saveJSON, c.settingsFile(),
 			[]string{"permissions", "additionalDirectories"}, prev.AddedPaths); err != nil {

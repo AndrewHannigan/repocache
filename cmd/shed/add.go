@@ -9,15 +9,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 	"github.com/AndrewHannigan/shed/pkg/forge"
 	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 )
 
 // configLockTimeout bounds how long a config-mutating command waits for the
-// config (and per-repo cache) lock before giving up. Shared by add, rm, and
+// config (and per-repo store) lock before giving up. Shared by add, rm, and
 // sync.
 const configLockTimeout = 2 * time.Second
 
@@ -106,7 +106,7 @@ func runRepoAddOne(url, overrideName string) error {
 		return errs.EnsureCoded(err, errs.Config)
 	}
 	fmt.Printf("added %s\n", effectiveName)
-	// Fetch the new repo right away so the cache is populated without a
+	// Fetch the new repo right away so the store is populated without a
 	// separate `shed sync`. Scoped to just this repo.
 	return runSync([]string{effectiveName}, syncDefaultJobs, 0, false)
 }
@@ -157,10 +157,10 @@ func runOwnerAdd(url, overrideName string) error {
 // unchanged — add never blocks: the entry is saved regardless and the
 // subsequent sync reports any remaining problem with a protocol-aware fix.
 func reachableURL(url string) string {
-	if cache.RequireGit() != nil {
+	if repostore.RequireGit() != nil {
 		return url // no git to probe with; sync will report it.
 	}
-	err := cache.Reachable(url)
+	err := repostore.Reachable(url)
 	if err == nil {
 		return url
 	}
@@ -169,7 +169,7 @@ func reachableURL(url string) string {
 	if !isAuthError(strings.ToLower(err.Error())) {
 		return url
 	}
-	if alt := paths.AlternateProtocolURL(url); alt != "" && cache.Reachable(alt) == nil {
+	if alt := paths.AlternateProtocolURL(url); alt != "" && repostore.Reachable(alt) == nil {
 		fmt.Printf("note: %s could not authenticate, but %s works — adding it over %s instead.\n",
 			url, alt, transportLabel(alt))
 		return alt

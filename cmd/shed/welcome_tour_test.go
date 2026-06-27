@@ -27,7 +27,7 @@ func TestPrintWelcomeTour(t *testing.T) {
 	for _, want := range []string{
 		"shed add octocat/Hello-World", // single repo
 		"shed add octocat",             // whole owner
-		"read-only",                    // cache is immutable
+		"read-only",                    // store is immutable
 		"shed workspace new octocat/Hello-World tour-feature-a",
 		"shed workspace new octocat/Hello-World tour-feature-b",
 		"git push -u origin tour-feature-a",

@@ -11,10 +11,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
 
@@ -29,7 +29,7 @@ func newLsCmd() *cobra.Command {
   Repos       read-only reference copies your agents read from
   Workspaces  isolated writable clones where agents make and push changes
 
-A repo's "⚠ sync failing" marker means its last fetch failed, so its cached
+A repo's "⚠ sync failing" marker means its last fetch failed, so its stored
 copy is stale — run 'shed status <repo>' for the error and the fix.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRepoList(jsonOut)
@@ -85,11 +85,11 @@ func runRepoList(jsonOut bool) error {
 }
 
 // collectRepoList gathers the repo and owner rows behind `ls`, probing the
-// cache for each tracked repo's last-sync time. The probes are deliberately
-// cheap (a stat and a small metadata read, no size walk or git subprocess) so
-// this is safe to run on the session-context hot path, where the repo count
-// can be large (a tracked owner may pull in dozens). Workspace state is
-// gathered separately by collectWorkspaces.
+// repo store for each tracked repo's last-sync time. The probes are
+// deliberately cheap (a stat and a small metadata read, no size walk or git
+// subprocess) so this is safe to run on the session-context hot path, where the
+// repo count can be large (a tracked owner may pull in dozens). Workspace state
+// is gathered separately by collectWorkspaces.
 func collectRepoList(c *config.Config) ([]repoRow, []ownerRow, error) {
 	rows := make([]repoRow, 0, len(c.Repos))
 	for _, r := range c.Repos {
@@ -98,9 +98,9 @@ func collectRepoList(c *config.Config) ([]repoRow, []ownerRow, error) {
 			return nil, nil, errs.Wrap(errs.Config, err)
 		}
 		row := repoRow{Name: name, URL: r.URL, Source: r.Source, LastSyncAt: nil}
-		if cache.Exists(name) {
-			row.Path = paths.CacheRepoPath(name)
-			if meta, err := cache.LoadMeta(name); err == nil && meta != nil {
+		if repostore.Exists(name) {
+			row.Path = paths.RepoStorePath(name)
+			if meta, err := repostore.LoadMeta(name); err == nil && meta != nil {
 				row.LastSyncAt = meta.LastSyncAt.UTC().Format(time.RFC3339)
 				row.LastError = meta.LastError
 			}
@@ -211,7 +211,7 @@ func writeReposSection(out io.Writer, repos []repoRow) {
 }
 
 // lastSyncLabel renders a repo's last-sync cell: a relative time (or "never"),
-// annotated when the most recent fetch failed so its cache is known stale.
+// annotated when the most recent fetch failed so its stored copy is known stale.
 func lastSyncLabel(r repoRow) string {
 	last := "never"
 	if ts, ok := r.LastSyncAt.(string); ok {

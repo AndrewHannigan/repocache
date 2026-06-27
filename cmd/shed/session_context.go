@@ -100,7 +100,7 @@ func sessionContextBody() string {
 }
 
 // syncHealthBanner returns a prominent callout when one or more tracked repos
-// failed their most recent sync, so the agent treats their cached copies as
+// failed their most recent sync, so the agent treats their stored copies as
 // possibly stale rather than asserting on out-of-date code. Best-effort: any
 // failure to read the library yields "" and the body is emitted unchanged.
 func syncHealthBanner() string {
@@ -113,8 +113,8 @@ func syncHealthBanner() string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "> ⚠️ STALE CACHE — %d of %d repos failed their most recent sync.\n", len(fails), len(c.Repos))
-	b.WriteString("> Their cached copies are NOT current; treat anything you read from them as\n")
+	fmt.Fprintf(&b, "> ⚠️ STALE STORE — %d of %d repos failed their most recent sync.\n", len(fails), len(c.Repos))
+	b.WriteString("> Their stored copies are NOT current; treat anything you read from them as\n")
 	b.WriteString("> possibly out of date, and tell the user:\n")
 	for _, f := range fails {
 		if f.LastSyncAt.IsZero() {
@@ -135,7 +135,7 @@ func syncHealthBanner() string {
 //
 // Best-effort: any failure (not in a git repo, no origin, unreadable config)
 // yields "" and the body is emitted unchanged. A cwd inside shed's own
-// data dir (a workspace, or the read-only cache) shares the upstream origin
+// data dir (a workspace, or the read-only store) shares the upstream origin
 // and is the intended place to edit, so it never warns there.
 func cwdCollisionWarning() string {
 	cwd, err := os.Getwd()
