@@ -85,17 +85,19 @@ func runRepoList(jsonOut bool) error {
 	return writeLibrary(os.Stdout, owners, rows, workspaces, true)
 }
 
-// runRepoOnlyList backs `shed repo ls`: the repo library only — the tracked
-// owners and read-only repos your agents read from — without the Workspaces
-// section that top-level `shed ls` adds. Workspaces are the writable side of the
-// shed and have their own `shed workspace ls`; keeping `repo ls` to the library
-// is the same split `workspace ls` makes from the other direction.
+// runRepoOnlyList backs `shed repo ls`: the read-only repos only — the
+// reference copies your agents read from — without the Owners section or the
+// Workspaces section that top-level `shed ls` adds. Owners are listed by
+// `shed ls`, and workspaces have their own `shed workspace ls`; keeping
+// `repo ls` to the repos is the same split `workspace ls` makes from the other
+// direction.
 func runRepoOnlyList(jsonOut bool) error {
 	c, err := config.Load()
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
-	rows, owners, err := collectRepoList(c)
+	// Owners are intentionally dropped here; this view is repos only.
+	rows, _, err := collectRepoList(c)
 	if err != nil {
 		return err
 	}
@@ -103,13 +105,12 @@ func runRepoOnlyList(jsonOut bool) error {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(struct {
-			Owners []ownerRow `json:"owners"`
-			Repos  []repoRow  `json:"repos"`
-		}{owners, rows})
+			Repos []repoRow `json:"repos"`
+		}{rows})
 	}
-	// workspaces=nil with workspaceHint=false renders Owners + Repos only,
-	// omitting the Workspaces section (and its creation hint) entirely.
-	return writeLibrary(os.Stdout, owners, rows, nil, false)
+	// owners=nil and workspaces=nil (with workspaceHint=false) leave only the
+	// Repos section; the Owners and Workspaces sections are omitted entirely.
+	return writeLibrary(os.Stdout, nil, rows, nil, false)
 }
 
 // collectRepoList gathers the repo and owner rows behind `ls`, probing the

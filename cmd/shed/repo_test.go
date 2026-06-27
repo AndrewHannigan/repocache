@@ -16,10 +16,10 @@ func repoTestEnv(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 }
 
-// `shed repo ls` lists the library (owners + repos) but never the Workspaces
-// section that top-level `shed ls` adds — that split is the whole reason the
-// command exists.
-func TestRepoOnlyListOmitsWorkspaces(t *testing.T) {
+// `shed repo ls` lists the repos only — never the Owners or Workspaces sections
+// that top-level `shed ls` adds. That split is the whole reason the command
+// exists.
+func TestRepoOnlyListShowsReposOnly(t *testing.T) {
 	repoTestEnv(t)
 	saveConfig(t, &config.Config{
 		Repos:  []config.Repo{{URL: "https://github.com/acme/widget"}},
@@ -32,13 +32,15 @@ func TestRepoOnlyListOmitsWorkspaces(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"Owners", "acme", "Repos", "github.com/acme/widget"} {
+	for _, want := range []string{"Repos", "github.com/acme/widget"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("repo ls output missing %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "Workspaces") {
-		t.Errorf("repo ls must not render the Workspaces section:\n%s", out)
+	for _, unwanted := range []string{"Owners", "Workspaces"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("repo ls must not render the %s section:\n%s", unwanted, out)
+		}
 	}
 }
 
@@ -58,12 +60,13 @@ func TestRepoOnlyListEmpty(t *testing.T) {
 	}
 }
 
-// `shed repo ls --json` emits owners + repos and, unlike top-level `ls --json`,
-// no workspaces key.
-func TestRepoOnlyListJSONHasNoWorkspaces(t *testing.T) {
+// `shed repo ls --json` emits repos only — unlike top-level `ls --json`, with
+// no owners or workspaces keys.
+func TestRepoOnlyListJSONReposOnly(t *testing.T) {
 	repoTestEnv(t)
 	saveConfig(t, &config.Config{
-		Repos: []config.Repo{{URL: "https://github.com/acme/widget"}},
+		Repos:  []config.Repo{{URL: "https://github.com/acme/widget"}},
+		Owners: []config.Owner{{URL: "https://github.com/acme"}},
 	})
 
 	out := captureStdout(t, func() {
@@ -75,13 +78,13 @@ func TestRepoOnlyListJSONHasNoWorkspaces(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("repo ls --json is not valid JSON: %v\n%s", err, out)
 	}
-	for _, key := range []string{"owners", "repos"} {
-		if _, ok := got[key]; !ok {
-			t.Errorf("repo ls --json missing %q key:\n%s", key, out)
-		}
+	if _, ok := got["repos"]; !ok {
+		t.Errorf("repo ls --json missing \"repos\" key:\n%s", out)
 	}
-	if _, ok := got["workspaces"]; ok {
-		t.Errorf("repo ls --json must not include a workspaces key:\n%s", out)
+	for _, key := range []string{"owners", "workspaces"} {
+		if _, ok := got[key]; ok {
+			t.Errorf("repo ls --json must not include a %q key:\n%s", key, out)
+		}
 	}
 }
 

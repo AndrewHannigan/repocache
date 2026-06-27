@@ -83,7 +83,7 @@ re-explaining it.
 | `shed add <repo\|owner>` | Add a repo — or a whole user/org — to the library |
 | `shed rm <name>…` | Remove tracked repos or owners (and their stores/workspaces) |
 | `shed ls` | List owners, repos, and workspaces — everything shed manages |
-| `shed repo ls` | List just the repo library (owners + repos), without workspaces |
+| `shed repo ls` | List just the read-only repos (no owners or workspaces) |
 | `shed repo add <repo\|owner>` | Same as `shed add` (grouped under the `repo` noun) |
 | `shed repo rm <name>…` | Same as `shed rm` (grouped under the `repo` noun) |
 | `shed sync [<name>…]` | Fetch tracked repos and re-apply the read-only chmod (usually automatic) |

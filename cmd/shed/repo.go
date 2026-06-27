@@ -11,8 +11,8 @@ import (
 // `repo add` and `repo rm` are the same commands as top-level `shed add` /
 // `shed rm` — the operations are repo-scoped already, so the grouped form just
 // reuses them. `repo ls` is deliberately *not* the same as top-level `shed ls`:
-// it lists only the library (owners + repos), where `shed ls` also includes the
-// writable workspaces.
+// it lists only the repos, where `shed ls` also includes the tracked owners and
+// the writable workspaces.
 func newRepoCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "repo",
@@ -33,16 +33,14 @@ func newRepoLsCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "ls",
-		Short: "List the repo library: tracked owners and read-only repos",
-		Long: `ls shows the repo library — the read-only side of the shed:
+		Short: "List the read-only repos in your library",
+		Long: `ls lists the read-only repos in your library — the reference copies
+your agents read from — with each repo's last-sync time.
 
-  Owners  whole GitHub users/orgs you track; sync auto-adds their repos
-  Repos   read-only reference copies your agents read from, with last sync
-
-Unlike 'shed ls', this omits workspaces (the writable side) — run
-'shed workspace ls' for those. A repo's "⚠ sync failing" marker means its
-last fetch failed, so its stored copy is stale — run 'shed status <repo>'
-for the error and the fix.`,
+Unlike 'shed ls', this shows only the repos: no owners, no workspaces. Run
+'shed ls' for the full picture, or 'shed workspace ls' for workspaces.
+A repo's "⚠ sync failing" marker means its last fetch failed, so its stored
+copy is stale — run 'shed status <repo>' for the error and the fix.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRepoOnlyList(jsonOut)
 		},
