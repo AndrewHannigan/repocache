@@ -86,7 +86,7 @@ func runWorkspaceNew(name, branch, base string) error {
 	// cache already exists, fall back to it (so `new` still works offline);
 	// only hard-fail when there is nothing cached to fork from.
 	fmt.Fprintf(os.Stderr, "syncing %s...\n", name)
-	if res := syncOne(name, repo.URL, 0); res.Status == "error" {
+	if res := syncOne(name, repo.URL, repo.Git, 0); res.Status == "error" {
 		if !cache.Exists(name) {
 			if res.locked {
 				return errs.New(errs.Locked, "could not sync %s: %s", name, res.Error)
@@ -95,7 +95,7 @@ func runWorkspaceNew(name, branch, base string) error {
 		}
 		fmt.Fprintf(os.Stderr, "warning: could not refresh %s (%s); using existing cache\n", name, res.Error)
 	}
-	path, err := workspace.New(name, branch, base, repo.URL)
+	path, err := workspace.New(name, branch, base, repo.URL, repo.Git)
 	if err != nil {
 		if errors.Is(err, cache.ErrLocked) {
 			return errs.Wrap(errs.Locked, err)

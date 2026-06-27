@@ -111,6 +111,12 @@ url = "https://github.com/octocat/Hello-World"
 url = "git@github.com:foo/bar.git"
 name = "myorg/bar"   # optional override; default derived from URL
 
+# Per-repo git config. Reconciled into the cache on every sync and seeded into
+# new workspaces at clone time — forwarded verbatim, so any git option works.
+[[repo]]
+url = "https://github.com/myorg/widgets"
+git = { "user.email" = "me@work.com", "core.hooksPath" = ".githooks" }
+
 # Track a whole user/org. sync discovers its repos via gh and adds new ones
 # automatically (as [[repo]] entries tagged with source = this owner).
 [[owner]]

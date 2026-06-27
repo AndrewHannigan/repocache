@@ -62,7 +62,10 @@ type syncResult struct {
 	locked bool
 }
 
-type syncTarget struct{ name, url string }
+type syncTarget struct {
+	name, url string
+	git       map[string]string
+}
 
 func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) error {
 	if err := cache.RequireGit(); err != nil {
@@ -119,7 +122,7 @@ func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) 
 		go func(t syncTarget) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			r := syncOne(t.name, t.url, ifOlderThan)
+			r := syncOne(t.name, t.url, t.git, ifOlderThan)
 			mu.Lock()
 			results = append(results, r)
 			if jsonOut {
@@ -143,15 +146,15 @@ func resolveSyncTargets(c *config.Config, names []string) ([]syncTarget, error) 
 			if err != nil {
 				return nil, errs.Wrap(errs.Config, err)
 			}
-			out = append(out, syncTarget{n, r.URL})
+			out = append(out, syncTarget{n, r.URL, r.Git})
 		}
 		return out, nil
 	}
 	out := make([]syncTarget, 0, len(names))
 	seen := make(map[string]bool)
-	add := func(name, url string) {
+	add := func(name, url string, git map[string]string) {
 		if !seen[name] {
-			out = append(out, syncTarget{name, url})
+			out = append(out, syncTarget{name, url, git})
 			seen[name] = true
 		}
 	}
@@ -173,7 +176,7 @@ func resolveSyncTargets(c *config.Config, names []string) ([]syncTarget, error) 
 			if err != nil {
 				return nil, errs.Wrap(errs.Config, err)
 			}
-			add(n, r.URL)
+			add(n, r.URL, r.Git)
 		case ownerErr == nil:
 			on, err := o.ResolvedName()
 			if err != nil {
@@ -181,7 +184,7 @@ func resolveSyncTargets(c *config.Config, names []string) ([]syncTarget, error) 
 			}
 			for _, rn := range c.ReposForOwner(on) {
 				if rr := c.FindByName(rn); rr != nil {
-					add(rn, rr.URL)
+					add(rn, rr.URL, rr.Git)
 				}
 			}
 		default:
@@ -316,7 +319,7 @@ func warnSync(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "warning: "+format+"\n", a...)
 }
 
-func syncOne(name, url string, ifOlderThan time.Duration) syncResult {
+func syncOne(name, url string, git map[string]string, ifOlderThan time.Duration) syncResult {
 	start := time.Now()
 	r := syncResult{Name: name}
 
@@ -355,6 +358,11 @@ func syncOne(name, url string, ifOlderThan time.Duration) syncResult {
 		return finishErr(r, start, fmt.Errorf("chmod u+w: %w", err))
 	}
 	if err := cache.Fetch(name); err != nil {
+		return finishErr(r, start, err)
+	}
+	// Reconcile per-repo git config into the cache's .git/config so options
+	// added to config after the initial clone take effect on the next sync.
+	if err := cache.SetConfig(name, git); err != nil {
 		return finishErr(r, start, err)
 	}
 	// An empty remote (no commits pushed) has no origin/HEAD to check out;

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -291,6 +292,32 @@ func Clone(url, name string) error {
 			return nil
 		}
 		return fmt.Errorf("git clone: %w (output: %s)", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// SetConfig writes the given git config key/value pairs into the cache repo's
+// local .git/config via `git config`. It is idempotent and set/update only:
+// it overwrites an existing value but never unsets a key dropped from the map,
+// so removing a key from config does not retroactively clear it (re-add the
+// repo to fully reset). Keys are forwarded verbatim; callers validate them up
+// front (config.ValidateGitConfigKey) so a key can't be parsed as a git flag.
+// Keys are applied in sorted order for deterministic behavior.
+func SetConfig(name string, kv map[string]string) error {
+	if len(kv) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(kv))
+	for k := range kv {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	path := paths.CacheRepoPath(name)
+	for _, k := range keys {
+		cmd := exec.Command("git", "-C", path, "config", k, kv[k])
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("git config %s: %w (output: %s)", k, err, strings.TrimSpace(string(out)))
+		}
 	}
 	return nil
 }
