@@ -236,6 +236,26 @@ func lastSyncLabel(r repoRow) string {
 	return last
 }
 
+// sortWorkspacesByAge returns infos ordered most-recently-active first, so the
+// workspace a user just touched sits at the top of the `ls` Workspaces table.
+// It ranks by the same AGE field the table shows (reflog-based lastActivity),
+// breaking ties by repo name then branch so the order is deterministic. The
+// input is left untouched — a copy is sorted, since callers share the slice.
+func sortWorkspacesByAge(infos []workspace.Info) []workspace.Info {
+	sorted := make([]workspace.Info, len(infos))
+	copy(sorted, infos)
+	sort.Slice(sorted, func(a, b int) bool {
+		if sorted[a].Age.Equal(sorted[b].Age) {
+			if sorted[a].Name != sorted[b].Name {
+				return sorted[a].Name < sorted[b].Name
+			}
+			return sorted[a].Branch < sorted[b].Branch
+		}
+		return sorted[a].Age.After(sorted[b].Age)
+	})
+	return sorted
+}
+
 func writeWorkspacesSection(out io.Writer, infos []workspace.Info) {
 	fmt.Fprintln(out, "Workspaces")
 	if len(infos) == 0 {
@@ -244,7 +264,7 @@ func writeWorkspacesSection(out io.Writer, infos []workspace.Info) {
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "  NAME\tREPO\tDIRTY\tUNPUSHED\tAGE\tPATH")
-	for _, i := range infos {
+	for _, i := range sortWorkspacesByAge(infos) {
 		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
 			i.Branch, i.Name, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))
 	}

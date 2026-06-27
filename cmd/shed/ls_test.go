@@ -97,6 +97,42 @@ func TestWriteLibraryWorkspaceHint(t *testing.T) {
 	}
 }
 
+// The Workspaces section lists workspaces most-recently-active first, so the
+// one a user just touched sits at the top.
+func TestWriteWorkspacesSectionSortsByAge(t *testing.T) {
+	now := time.Now()
+	infos := []workspace.Info{
+		{Name: "github.com/acme/widget", Branch: "old", Path: "/w/old", Age: now.Add(-3 * time.Hour)},
+		{Name: "github.com/acme/widget", Branch: "new", Path: "/w/new", Age: now.Add(-1 * time.Minute)},
+		{Name: "github.com/octo/hello", Branch: "mid", Path: "/w/mid", Age: now.Add(-1 * time.Hour)},
+	}
+
+	var buf bytes.Buffer
+	writeWorkspacesSection(&buf, infos)
+	out := buf.String()
+
+	iNew := strings.Index(out, "new")
+	iMid := strings.Index(out, "mid")
+	iOld := strings.Index(out, "old")
+	if !(iNew < iMid && iMid < iOld) {
+		t.Errorf("expected newest→oldest order (new, mid, old), got:\n%s", out)
+	}
+}
+
+// sortWorkspacesByAge ranks newest-first without mutating the caller's slice.
+func TestSortWorkspacesByAgePure(t *testing.T) {
+	now := time.Now()
+	infos := []workspace.Info{
+		{Name: "r", Branch: "a", Age: now.Add(-2 * time.Hour)},
+		{Name: "r", Branch: "b", Age: now.Add(-1 * time.Hour)},
+	}
+	_ = sortWorkspacesByAge(infos)
+	// The original order is preserved; only the returned copy is sorted.
+	if infos[0].Branch != "a" || infos[1].Branch != "b" {
+		t.Errorf("input slice was mutated: %+v", infos)
+	}
+}
+
 // recentWorkspaceRepos collapses workspaces to one row per repo (keeping the
 // repo's newest workspace activity) and ranks them most-recent first.
 func TestRecentWorkspaceRepos(t *testing.T) {
