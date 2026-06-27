@@ -26,6 +26,7 @@ func newWorkspaceCmd() *cobra.Command {
 		newWorkspaceNewCmd(),
 		newWorkspaceLsCmd(),
 		newWorkspacePathCmd(),
+		newWorkspaceRenameCmd(),
 		newWorkspaceRmCmd(),
 	)
 	return cmd
@@ -200,6 +201,42 @@ func newWorkspacePathCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newWorkspaceRenameCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "rename <repo> <branch> <new-branch>",
+		Short: "Rename a workspace and its branch",
+		Long: `rename moves the workspace from <repo>/<branch> to <repo>/<new-branch>
+and renames the workspace's checked-out branch to <new-branch>, keeping the
+two in sync the way 'workspace new' first created them. Prints the new
+workspace path on stdout.`,
+		Args: cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runWorkspaceRename(args[0], args[1], args[2])
+		},
+	}
+}
+
+func runWorkspaceRename(name, branch, newBranch string) error {
+	// Reject an unsafe new branch up front with a clear message; workspace.Rename
+	// re-checks as the authoritative library-level guard.
+	if err := paths.ValidateBranch(newBranch); err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	name = resolveWorkspaceName(name, branch)
+	if !workspace.Exists(name, branch) {
+		return errs.New(errs.NotFound, "no workspace at %s", workspace.PathFor(name, branch))
+	}
+	if workspace.Exists(name, newBranch) {
+		return errs.New(errs.Exists, "workspace already exists at %s", workspace.PathFor(name, newBranch))
+	}
+	newPath, err := workspace.Rename(name, branch, newBranch)
+	if err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	fmt.Println(newPath)
+	return nil
 }
 
 func newWorkspaceRmCmd() *cobra.Command {

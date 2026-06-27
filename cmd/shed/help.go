@@ -300,6 +300,10 @@ sharing object storage but with independent refs. Edits happen here.
   shed workspace path <repo> <branch>
     Print absolute workspace path. Exit 2 if missing.
 
+  shed workspace rename <repo> <branch> <new-branch>
+    Move the workspace to <repo>/<new-branch> and rename its checked-out
+    branch to <new-branch>, keeping the two in sync. Prints the new path.
+
   shed workspace rm <repo> <branch> [--force]
     Delete workspace dir. Refuses with exit 4 if dirty or unpushed
     unless --force.
@@ -338,7 +342,7 @@ prune fails fast rather than degrade when gh can't report merge status.
 
 What's recorded
   Only "working" commands that change the library or workspaces are logged:
-  add, rm, prune, init, uninstall, and workspace new/rm. Read-only queries (ls,
+  add, rm, prune, init, uninstall, and workspace new/rename/rm. Read-only queries (ls,
   status, workspace ls/path), background syncs, and the plain 'sync' command
   are not recorded, and only commands that succeed are. Each entry is the
   command exactly as you typed it, with a timestamp.

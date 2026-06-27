@@ -326,6 +326,69 @@ func CheckClean(path string) (bool, int, error) {
 	return dirty, unpushed, nil
 }
 
+// Rename renames a workspace from oldBranch to newBranch: it renames the
+// workspace's currently checked-out branch (the branch you're working on) to
+// newBranch and moves the workspace directory from <repo>/<oldBranch> to
+// <repo>/<newBranch>, keeping the two in sync the way `New` first created them.
+// Returns the new absolute workspace path on success.
+//
+// The branch and directory move together so a renamed workspace stays
+// addressable by its branch name, exactly like one made by `New`. If the
+// directory move fails, the branch rename is rolled back so the workspace is
+// left untouched. The store is not involved, so no store lock is taken.
+func Rename(name, oldBranch, newBranch string) (string, error) {
+	// Guard newBranch the same way New guards its branch: it forms a path and
+	// becomes a git ref, so a traversing or option-looking name is rejected.
+	if err := paths.ValidateBranch(newBranch); err != nil {
+		return "", err
+	}
+	if oldBranch == newBranch {
+		return "", fmt.Errorf("new branch %q is the same as the current one", newBranch)
+	}
+	if !Exists(name, oldBranch) {
+		return "", fmt.Errorf("workspace not found at %s", PathFor(name, oldBranch))
+	}
+	oldPath := PathFor(name, oldBranch)
+	newPath := PathFor(name, newBranch)
+	if _, err := os.Stat(newPath); err == nil {
+		return "", fmt.Errorf("workspace already exists at %s", newPath)
+	}
+
+	// Capture the current branch so we can both rename it and roll back if the
+	// directory move fails.
+	cur, err := currentBranch(oldPath)
+	if err != nil {
+		return "", err
+	}
+	if err := runGit(oldPath, "branch", "-m", newBranch); err != nil {
+		return "", err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(newPath), 0755); err != nil {
+		_ = runGit(oldPath, "branch", "-m", cur)
+		return "", err
+	}
+	if err := os.Rename(oldPath, newPath); err != nil {
+		_ = runGit(oldPath, "branch", "-m", cur)
+		return "", err
+	}
+	// A slash-containing old branch leaves empty intermediate dirs behind;
+	// clean them up to RepoDir, mirroring how rm/prune tidy the tree.
+	paths.PruneEmptyDirs(filepath.Dir(oldPath), RepoDir(name))
+	return newPath, nil
+}
+
+// currentBranch returns the workspace's checked-out branch's short name. It
+// errors on a detached HEAD, since there is then no branch to rename.
+func currentBranch(path string) (string, error) {
+	cmd := exec.Command("git", "-C", path, "symbolic-ref", "--quiet", "--short", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("workspace is not on a branch (detached HEAD); check out a branch first")
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // Remove deletes the workspace dir.
 func Remove(name, branch string) error {
 	p := PathFor(name, branch)
