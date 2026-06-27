@@ -10,6 +10,10 @@ import (
 	"github.com/AndrewHannigan/shed/pkg/errs"
 )
 
+// overviewTopline is the first line of the curated overview, shared by
+// `shed help`, bare `shed`, and `shed --help`.
+const overviewTopline = "shed — git repo management for terminal coding agents"
+
 func newHelpCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "help [topic]",
@@ -31,6 +35,9 @@ Topics: ` + strings.Join(topicList(), ", "),
 }
 
 func runHelp(topic string) error {
+	if alias, ok := helpAliases[topic]; ok {
+		topic = alias
+	}
 	text, ok := helpTopics[topic]
 	if !ok {
 		return errs.New(errs.NotFound, "unknown topic %q (try: %s)",
@@ -38,6 +45,17 @@ func runHelp(topic string) error {
 	}
 	fmt.Print(text)
 	return nil
+}
+
+// helpAliases lets `shed help <command>` resolve to the topic that documents
+// it, even when several commands share one topic (e.g. add/rm/ls → library).
+// Without these, `shed help add` would error despite `add` being a real command.
+var helpAliases = map[string]string{
+	"add":  "library",
+	"rm":   "library",
+	"ls":   "library",
+	"new":  "workspace",
+	"path": "workspace",
 }
 
 func topicList() []string {
@@ -53,25 +71,31 @@ var helpTopics = map[string]string{
 
 	"overview": `shed — git repo management for terminal coding agents
 
+Keeps a read-only store of your git repos and hands your agents isolated,
+writable workspaces to change them in — so multiple agents can share the
+same repos without stepping on each other.
+
 The whole loop:
 
-    shed init                          # one-time: dirs + agent integration
-    shed add <git-url>                 # add a repo (or a user/org) to the library
-    shed sync                          # fetch + chmod a-w on the working tree
-    shed workspace new <repo> <branch>            # prints path to a writable clone
-    # ... edit there, commit, push ...
-    shed workspace rm <repo> <branch>  # tear down
+    shed init                            # one-time: dirs + agent integration
+    shed add <git-url>                   # add a repo (or a user/org) to the library
+    # ... your agent takes it from here: reads the store, and on demand ...
+    shed workspace new <repo> <branch>   # creates a writable clone, prints its path
+    # ... edits there, commits, pushes, opens a PR ...
+    shed workspace rm <repo> <branch>    # tear down (or 'shed prune' to bulk-clean)
+
+You curate the library ('add'/'rm'); let the agent manage workspaces on demand.
 
 Commands:
   add           add a repo (or a whole user/org) to the library
-  help <topic>  long-form docs
+  help <topic>  long-form docs (also accepts a command name, e.g. 'shed help add')
   history       show recent shed commands
   init          bootstrap + integrate with detected agents
   ls            list owners, repos, and workspaces (everything shed manages)
   prune         delete workspaces whose work has already landed
   rm            remove a tracked repo or owner
   status        report sync health; show a repo's error and the likely fix
-  sync          fetch tracked repos and re-apply read-only chmod
+  sync          fetch tracked repos and re-apply read-only chmod (usually automatic)
   uninstall     reverse agent integration (--purge also deletes data + config)
   workspace     {new,ls,path,rm} of writable workspaces
 
