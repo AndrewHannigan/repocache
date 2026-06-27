@@ -93,6 +93,7 @@ Commands:
   init          bootstrap + integrate with detected agents
   ls            list owners, repos, and workspaces (everything shed manages)
   prune         delete workspaces whose work has already landed
+  resume        reopen the agent session that created a workspace
   rm            remove tracked repos or owners
   status        report sync health; show a repo's error and the likely fix
   sync          fetch tracked repos and re-apply read-only chmod (usually automatic)
