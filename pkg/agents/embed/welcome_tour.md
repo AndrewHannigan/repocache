@@ -1,31 +1,43 @@
 # shed welcome tour — instructions for the agent
 
-You are giving the user a live, hands-on tour of `shed`. This document is the
-script. The user is watching. **Run the commands for real**, one step at a time,
-and narrate as you go: say what you're about to do and why, run it, then read
-back what happened before moving on. Keep it conversational — you're showing a
-colleague around, not reciting a manual.
+You are giving the user a short, live tour of `shed`. This document is the
+script. The user is watching, and **this is a conversation, not a lecture** —
+your job is to show three things, one at a time, and check in with the user
+after each one.
 
-A few rules for the whole tour:
+There are three short steps and a wrap-up. Don't rush through them.
 
-- **Run real commands.** Don't fabricate output. If a step fails (e.g. `gh`
-  isn't authenticated, or there's no network), say so plainly, explain what it
-  would have shown, and continue — the tour still makes sense.
-- **One step at a time.** Show the command, run it, summarize the result. Don't
-  dump every command at once.
-- **Clean up at the end** so the tour leaves no mess (see the last step), and
-  tell the user exactly what you removed.
-- The whole thing should take a few minutes. Keep the narration tight.
+## The most important rule: pause and wait
 
-Open with a one-line framing: shed keeps a read-only mirror of git repos and
-hands you isolated, writable workspaces to edit in — so an agent can search
-across many repos and safely make changes in several at once. Then begin.
+After each step, **stop and hand the conversation back to the user.** Briefly ask
+something like *"Make sense? Any questions, or should I keep going?"* — then
+**actually wait for their reply.** Do not run the next step until they answer.
+
+If they ask a question, answer it, then ask again whether they're ready to
+continue. The tour only moves forward when the user says so.
+
+## A few more rules
+
+- **Run real commands, one at a time.** Show the command, run it, say in a
+  sentence or two what happened. Never fabricate output.
+- **Keep narration tight.** One or two plain-language points per step — not every
+  detail. Deeper mechanics (`git clone --reference`, object sharing, the exact
+  `chmod`) are **only worth explaining if the user asks.**
+- **If a step fails** (`gh` not authenticated, no network, a push rejected), say
+  so plainly, explain what it would have shown, and continue.
+- **Clean up at the end** and tell the user what you removed.
+
+Open with one or two sentences of framing: shed keeps a **read-only mirror** of
+your git repos and hands you **isolated, writable workspaces** to make changes
+in — so your coding agents can share the same repos without stepping on each
+other. Mention it'll take a few minutes and they can stop or ask anything at any
+point. Then begin.
 
 ---
 
-## Step 1 — Add a single repo
+## Step 1 — A library you can't accidentally break
 
-> "Let's start by adding a repo to the library."
+> "First, let's add a repo to the library."
 
 Run:
 
@@ -33,61 +45,25 @@ Run:
 shed add octocat/Hello-World
 ```
 
-Point out as it runs:
-- The GitHub **shorthand** `owner/repo` is expanded to a full URL automatically
-  (a bare `owner` would be treated as a whole org — that's the next step).
-- `add` **fetches the repo immediately**, so it's usable right away — no
-  separate `shed sync` needed.
-- The repo now lives in the **read-only cache** under
-  `~/.shed/repos/github.com/octocat/Hello-World/`. We'll prove it's read-only in
-  Step 3.
+Then say, briefly:
+- The repo is fetched right away and now lives in a **read-only cache** under
+  `~/.shed/repos/…` — a pristine copy that's always there and safe to read.
 
-## Step 2 — Add a whole owner
+Now prove it's read-only: find a file in that cache (e.g. the `README`) and
+**try to edit it in place** — append a line or `touch` it. It **fails with a
+permission error.** Show the user the actual error.
 
-> "You don't have to add repos one at a time — you can track an entire user or
-> org, and shed discovers its repos for you."
+Then explain *why* this is the design, briefly: the cache is locked down so it
+stays a clean, always-current baseline — never half-edited or stuck on some
+branch an agent forgot to leave. That's what makes it safe to read across many
+repos, and it means every change starts from a known-good copy. To actually make
+changes, you don't touch the cache — you open an isolated *workspace*, which is
+next. (Read-only isn't the point on its own; it's what keeps the writable
+workspaces safe to spin up freely.)
 
-Run:
+**→ Pause. Ask if they have questions, and wait before continuing.**
 
-```
-shed add octocat
-```
-
-Point out:
-- A single path segment (`octocat`, no `/repo`) is tracked as an **owner**, not a
-  repo. On every sync, shed lists that owner's repos via `gh` and adds any new
-  ones automatically — so repos created upstream later get picked up without you
-  doing anything.
-- This is the one place shed uses `gh` (only for discovery). If `gh` isn't
-  installed/authenticated, the command still records the owner and warns that
-  expansion is skipped until `gh` is available — mention this if you see the
-  warning.
-
-Then show the library so the user sees what we've got:
-
-```
-shed ls
-```
-
-Narrate the table: tracked owners, then repos, with last-sync info.
-
-## Step 3 — Prove the cache is read-only
-
-> "Every repo in the library is a pristine, untouchable mirror. Let me show you
-> what happens if I try to edit one directly."
-
-Find a file in the cache (e.g. `~/.shed/repos/github.com/octocat/Hello-World/README`)
-and **attempt to modify it in place** — append a line, or `touch` it. It will
-**fail with a permission error**. Show the user the actual error.
-
-Explain why this is a feature:
-- shed runs `chmod -R a-w` on the cache working tree, so neither you nor the
-  agent can accidentally clobber the reference copy. It stays a clean baseline
-  that's safe to search and read across many repos.
-- So how do you make changes? You don't edit the cache — you open a **workspace**.
-  That's the next step.
-
-## Step 4 — Open the first workspace and edit
+## Step 2 — Your first workspace
 
 > "When you want to change something, you ask shed for a workspace: an isolated,
 > writable clone."
@@ -98,24 +74,21 @@ Run:
 shed workspace new octocat/Hello-World tour-feature-a
 ```
 
-Point out:
-- It **syncs the repo first**, so the workspace forks from up-to-date code.
-- It prints the **absolute path** to the new workspace. `cd` there.
-- Under the hood it's a `git clone --reference` against the cache, so it
-  **shares object storage** with the mirror — cheap on disk — but has its own
-  independent refs and working tree.
-
-In that workspace, make a small, obvious edit (e.g. add a line to the README),
-then commit it:
+Say, briefly:
+- It synced the repo first, so the workspace starts from the **latest** code.
+- It printed the **path** to a writable clone. `cd` there, make one small, obvious
+  edit (e.g. add a line to the README), and commit it:
 
 ```
 git add -A && git commit -m "Tour edit A"
 ```
 
-## Step 5 — Open a second workspace and edit differently
+**→ Pause. Ask if they have questions, and wait before continuing.**
 
-> "Now the important part — let me open a *second* workspace on the same repo and
-> make a *different* change."
+## Step 3 — Two workspaces, no collisions (the payoff)
+
+> "Here's the part that matters. Let me open a *second* workspace on the same repo
+> and make a *different* change."
 
 Run:
 
@@ -123,74 +96,45 @@ Run:
 shed workspace new octocat/Hello-World tour-feature-b
 ```
 
-`cd` into this second workspace and make a **different** edit (a different line,
-or a different file), then commit:
+`cd` into this one, make a **different** edit, and commit:
 
 ```
 git add -A && git commit -m "Tour edit B"
 ```
 
-## Step 6 — Show that the two don't step on each other
+Now show they're **isolated**: in workspace **b**, run `git log --oneline -2` —
+it has *Tour edit B* but **not** *Tour edit A*. Pop back to **a** and show the
+reverse.
 
-> "Here's the payoff: these two workspaces are completely isolated."
+Drive the point home in a sentence: two writable clones of the same repo, on
+different branches, that can't see each other's changes — which is exactly what
+lets multiple agents (or one agent juggling several tasks) work the same repo at
+once without colliding.
 
-Demonstrate it concretely:
-- In workspace **b**, run `git log --oneline -2` and `git status` — show that it
-  has *Tour edit B* but **not** *Tour edit A*, and a clean tree.
-- Pop back to workspace **a** and show the reverse — it has *Tour edit A*, not B.
+**→ Pause. Ask if they have questions, and wait before continuing.**
 
-Drive the point home:
-- Two writable clones of the same repo, on different branches, with **separate
-  working trees and refs** — changes in one are invisible to the other.
-- This is what lets an agent juggle several in-flight changes (even across
-  multiple repos) in one session without them colliding — and it's why this is
-  safer than checking out branches in a single shared clone.
-- They still share the underlying object store with the cache via `--reference`,
-  so all this isolation costs almost no extra disk.
+## Wrap-up — recap, what's next, clean up
 
-## Step 7 — Push both, open two PRs
-
-> "Each workspace pushes independently, so we get two clean, separate PRs."
-
-From each workspace, push its branch:
-
-```
-git push -u origin tour-feature-a      # from workspace a
-git push -u origin tour-feature-b      # from workspace b
-```
-
-Then open a PR for each (use the user's normal flow — `gh pr create`, or the
-GitHub MCP tools if that's how this session works). Note:
-- The workspace's `origin` points at the **upstream repo**, not the cache, so
-  `git push` and PR creation just work.
-- Two workspaces → two branches → two independent PRs, with no rebasing or
-  stashing between them.
-
-> ⚠️ octocat/Hello-World is a public demo repo you very likely can't push to.
-> If the push is rejected, that's expected — say so, explain that against a repo
-> the user owns it would push and open the PR cleanly, and move on. Don't force it.
-
-## Step 8 — Recap and clean up
-
-Recap the benefits the tour demonstrated, briefly:
+Recap what the three steps showed, briefly:
 - **Read-only mirror** — a pristine baseline that's impossible to clobber.
-- **Isolated workspaces** — edit many things at once without collisions.
-- **Cheap** — workspaces share object storage with the mirror.
-- **Always fresh** — `workspace new` syncs first; owners auto-discover new repos;
-  the cache refreshes in the background at session start.
-- **Multi-repo by design** — the same flow scales to changes across many repos in
-  a single session.
+- **Isolated workspaces** — edit many things at once, always off the latest code,
+  without collisions.
 
-Then clean up what the tour created, and tell the user what you're removing:
+Then mention — in a line or two each, no need to run them — where to go next:
+- **Ship it:** from a workspace you'd `git push -u origin tour-feature-a` and open
+  a PR like normal; each workspace pushes independently, so you get clean separate
+  PRs. (Against this public demo repo a push would be rejected — that's expected.)
+- **Track a whole owner:** `shed add octocat` tracks an entire user/org and
+  auto-discovers its repos.
+- **Tidy up later:** `shed prune` removes workspaces whose work has already landed.
+
+Now clean up what the tour created, and tell the user what you're removing:
 
 ```
 shed workspace rm octocat/Hello-World tour-feature-a --force
 shed workspace rm octocat/Hello-World tour-feature-b --force
 ```
 
-Ask whether they want to keep the `octocat/Hello-World` repo and the `octocat`
-owner in their library or remove them with `shed rm`. Leave that choice to them —
-don't remove their library entries without asking.
-
-Close by pointing them at `shed help` and `shed <cmd> --help` for anything they
-want to dig into next.
+Ask whether they want to keep `octocat/Hello-World` in their library or remove it
+with `shed rm` — leave that choice to them. Close by pointing them at
+`shed help` for anything they want to dig into.

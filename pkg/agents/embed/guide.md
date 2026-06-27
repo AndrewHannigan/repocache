@@ -33,10 +33,10 @@ You have a local library of git repos managed by `shed`.
 - **More details**: `shed help <topic>` or `shed <cmd> --help`.
 - **New to shed? Give the user a tour.** If the user asks for an intro, a tour, a
   demo, or "how does shed work?", run `shed __welcome-tour` and follow what it
-  prints: it's a script for a short, hands-on walkthrough you perform live
-  (adding a repo and an owner, showing the read-only cache, opening two isolated
-  workspaces, and pushing both as separate PRs). Carry out its steps for real and
-  narrate as you go.
+  prints: a script for a short, hands-on walkthrough you perform live — three
+  steps (the read-only cache, a workspace, then two isolated workspaces that don't
+  collide) plus a wrap-up. Carry out its steps for real, narrate briefly, and
+  **pause for the user's questions after each step** as the script instructs.
 
 `workspace new` syncs the repo first, so the workspace is always up to date
 (and an uncached repo is fetched on demand — no need to `sync` it yourself).
