@@ -208,9 +208,9 @@ func newWorkspaceRenameCmd() *cobra.Command {
 		Use:   "rename <repo> <branch> <new-branch>",
 		Short: "Rename a workspace and its branch",
 		Long: `rename moves the workspace from <repo>/<branch> to <repo>/<new-branch>
-and renames the workspace's checked-out branch to <new-branch>, keeping the
-two in sync the way 'workspace new' first created them. Prints the new
-workspace path on stdout.`,
+and renames its branch to <new-branch>, keeping the two in sync the way
+'workspace new' first created them. Refuses if <new-branch> already exists.
+Prints the new workspace path on stdout.`,
 		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWorkspaceRename(args[0], args[1], args[2])

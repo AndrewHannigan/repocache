@@ -104,6 +104,25 @@ func TestRenameErrors(t *testing.T) {
 			t.Fatal("want error for a traversing branch name")
 		}
 	})
+	t.Run("target name taken by a local branch", func(t *testing.T) {
+		// A second local branch in the "main" workspace, not a separate workspace.
+		runOrFail(t, PathFor(name, "main"), "branch", "other")
+		if _, err := Rename(name, "main", "other"); err == nil {
+			t.Fatal("want error when a local branch of the new name already exists")
+		}
+		if !Exists(name, "main") {
+			t.Fatal("source workspace should be untouched after a refused rename")
+		}
+	})
+	t.Run("directory branch missing", func(t *testing.T) {
+		// Directory named "drifted" but its checked-out branch renamed away, so no
+		// local branch matches the directory name: refuse rather than rename HEAD.
+		makeWorkspace(t, name, "drifted")
+		runOrFail(t, PathFor(name, "drifted"), "branch", "-m", "drifted", "elsewhere")
+		if _, err := Rename(name, "drifted", "whatever"); err == nil {
+			t.Fatal("want error when no local branch matches the directory name")
+		}
+	})
 }
 
 // makeWorkspace creates a real git workspace on disk at the (name, branch)

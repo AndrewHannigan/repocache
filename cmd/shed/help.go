@@ -301,8 +301,9 @@ sharing object storage but with independent refs. Edits happen here.
     Print absolute workspace path. Exit 2 if missing.
 
   shed workspace rename <repo> <branch> <new-branch>
-    Move the workspace to <repo>/<new-branch> and rename its checked-out
-    branch to <new-branch>, keeping the two in sync. Prints the new path.
+    Move the workspace to <repo>/<new-branch> and rename its branch to
+    <new-branch>, keeping the two in sync. Refuses if <new-branch> already
+    exists. Prints the new path.
 
   shed workspace rm <repo> <branch> [--force]
     Delete workspace dir. Refuses with exit 4 if dirty or unpushed

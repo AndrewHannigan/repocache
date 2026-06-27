@@ -327,13 +327,15 @@ func CheckClean(path string) (bool, int, error) {
 }
 
 // Rename renames a workspace from oldBranch to newBranch: it renames the
-// workspace's currently checked-out branch (the branch you're working on) to
-// newBranch and moves the workspace directory from <repo>/<oldBranch> to
-// <repo>/<newBranch>, keeping the two in sync the way `New` first created them.
-// Returns the new absolute workspace path on success.
+// workspace's branch to newBranch and moves the workspace directory from
+// <repo>/<oldBranch> to <repo>/<newBranch>, keeping the two in sync the way
+// `New` first created them. Returns the new absolute workspace path on success.
 //
-// The branch and directory move together so a renamed workspace stays
-// addressable by its branch name, exactly like one made by `New`. If the
+// It renames the local branch named oldBranch specifically — the one matching
+// the directory, the invariant `New` establishes — rather than whatever HEAD
+// happens to be, so a workspace whose checkout has drifted can never have an
+// unrelated branch renamed out from under it. The branch and directory move
+// together so a renamed workspace stays addressable by its branch name. If the
 // directory move fails, the branch rename is rolled back so the workspace is
 // left untouched. The store is not involved, so no store lock is taken.
 func Rename(name, oldBranch, newBranch string) (string, error) {
@@ -354,22 +356,25 @@ func Rename(name, oldBranch, newBranch string) (string, error) {
 		return "", fmt.Errorf("workspace already exists at %s", newPath)
 	}
 
-	// Capture the current branch so we can both rename it and roll back if the
-	// directory move fails.
-	cur, err := currentBranch(oldPath)
-	if err != nil {
-		return "", err
+	// Rename the branch that matches the directory, not HEAD, so the two stay in
+	// correspondence. Refuse up front (rather than surface a raw git error) when
+	// that branch is missing or the target name is already taken locally.
+	if !localBranchExists(oldPath, oldBranch) {
+		return "", fmt.Errorf("workspace has no local branch %q to rename", oldBranch)
 	}
-	if err := runGit(oldPath, "branch", "-m", newBranch); err != nil {
+	if localBranchExists(oldPath, newBranch) {
+		return "", fmt.Errorf("a local branch %q already exists in the workspace", newBranch)
+	}
+	if err := runGit(oldPath, "branch", "-m", oldBranch, newBranch); err != nil {
 		return "", err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(newPath), 0755); err != nil {
-		_ = runGit(oldPath, "branch", "-m", cur)
+		_ = runGit(oldPath, "branch", "-m", newBranch, oldBranch)
 		return "", err
 	}
 	if err := os.Rename(oldPath, newPath); err != nil {
-		_ = runGit(oldPath, "branch", "-m", cur)
+		_ = runGit(oldPath, "branch", "-m", newBranch, oldBranch)
 		return "", err
 	}
 	// A slash-containing old branch leaves empty intermediate dirs behind;
@@ -378,15 +383,11 @@ func Rename(name, oldBranch, newBranch string) (string, error) {
 	return newPath, nil
 }
 
-// currentBranch returns the workspace's checked-out branch's short name. It
-// errors on a detached HEAD, since there is then no branch to rename.
-func currentBranch(path string) (string, error) {
-	cmd := exec.Command("git", "-C", path, "symbolic-ref", "--quiet", "--short", "HEAD")
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("workspace is not on a branch (detached HEAD); check out a branch first")
-	}
-	return strings.TrimSpace(string(out)), nil
+// localBranchExists reports whether the workspace at path has a local branch
+// named branch.
+func localBranchExists(path, branch string) bool {
+	cmd := exec.Command("git", "-C", path, "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
+	return cmd.Run() == nil
 }
 
 // Remove deletes the workspace dir.
