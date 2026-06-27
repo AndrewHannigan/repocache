@@ -69,7 +69,7 @@ func TestCursorInstallAddsBeforeShellHook(t *testing.T) {
 		t.Fatalf("Install: %v", err)
 	}
 	data, _ := os.ReadFile(filepath.Join(home, ".cursor", "hooks.json"))
-	for _, want := range []string{"beforeShellExecution", "__on-tool-call --agent cursor"} {
+	for _, want := range []string{"beforeShellExecution", "__on-tool-call --agent cursor", "matcher", cursorOnToolCallMatcher} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("hooks.json missing %q\n%s", want, data)
 		}

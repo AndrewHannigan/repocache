@@ -43,17 +43,19 @@ func (c *Cursor) Install(opts InstallOptions) (Installed, error) {
 		return Installed{}, err
 	}
 	hooks, err := installHooks(opts, sessionContextCommand(c.Key()), BgSyncCommand, func(command string) (bool, error) {
-		return ensureCursorHook(c.hooksFile(), "sessionStart", command)
+		return ensureCursorHook(c.hooksFile(), "sessionStart", map[string]any{"command": command}, command)
 	})
 	if err != nil {
 		return Installed{}, err
 	}
 	// beforeShellExecution hook that links a workspace to its session when the
-	// model runs `shed workspace new`. The command is a shell snippet that only
-	// invokes shed on a workspace-new match (see onToolCallHookCommand), so it
-	// never spawns shed on ordinary shell calls.
-	onToolCall := onToolCallHookCommand(c.Key())
-	added, err := ensureCursorHook(c.hooksFile(), "beforeShellExecution", onToolCall)
+	// model runs `shed workspace new`. Cursor's per-hook `matcher` runs against
+	// the shell command string, so it natively gates this to workspace-new
+	// commands — shed is never spawned on ordinary shell calls. (shed re-parses
+	// the command defensively, so a loose matcher just no-ops on a false match.)
+	onToolCall := onToolCallCommand(c.Key())
+	added, err := ensureCursorHook(c.hooksFile(), "beforeShellExecution",
+		map[string]any{"command": onToolCall, "matcher": cursorOnToolCallMatcher}, onToolCall)
 	if err != nil {
 		return Installed{}, err
 	}
@@ -62,6 +64,11 @@ func (c *Cursor) Install(opts InstallOptions) (Installed, error) {
 	}
 	return Installed{AddedHooks: hooks}, nil
 }
+
+// cursorOnToolCallMatcher gates the beforeShellExecution hook to shed
+// workspace-new commands. Cursor matches it (regex-style) against the command
+// string.
+const cursorOnToolCallMatcher = "shed (workspace|ws) new"
 
 func (c *Cursor) Uninstall(prev Installed) error {
 	for _, hookCmd := range prev.AddedHooks {
@@ -77,12 +84,12 @@ func (c *Cursor) Uninstall(prev Installed) error {
 	return nil
 }
 
-// ensureCursorHook adds a flat {"command": command} entry to hooks.<event> in
-// Cursor's hooks.json, creating the file, the nested structure, and the
-// required top-level "version": 1 if missing. Idempotent: if an entry with the
-// same command already exists under that event, it is a no-op. Returns true if
-// an entry was added this call.
-func ensureCursorHook(filePath, event, command string) (bool, error) {
+// ensureCursorHook adds `entry` (a flat object with at least a "command", and
+// optionally a "matcher") to hooks.<event> in Cursor's hooks.json, creating the
+// file, the nested structure, and the required top-level "version": 1 if
+// missing. Idempotent: if an entry with the same command already exists under
+// that event, it is a no-op. Returns true if an entry was added this call.
+func ensureCursorHook(filePath, event string, entry map[string]any, command string) (bool, error) {
 	root, err := loadJSONC(filePath)
 	if err != nil {
 		return false, err
@@ -104,7 +111,7 @@ func ensureCursorHook(filePath, event, command string) (bool, error) {
 			return false, nil
 		}
 	}
-	entries = append(entries, map[string]any{"command": command})
+	entries = append(entries, entry)
 	hooks[event] = entries
 	return true, saveJSON(filePath, root)
 }

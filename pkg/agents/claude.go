@@ -25,19 +25,6 @@ func onToolCallCommand(agentKey string) string {
 	return OnToolCallCommand + " --agent " + agentKey
 }
 
-// onToolCallHookCommand is what actually gets installed into the before-tool
-// hook of a stdin-JSON agent (Claude, Cursor). It is a small POSIX-shell
-// snippet that reads the hook's JSON from stdin and only pipes it to shed when
-// the command looks like a `shed workspace new` / `ws new`. This keeps the shed
-// binary OUT of the hot path: the overwhelming majority of tool calls are
-// filtered out by the shell `case` and never spawn shed at all. A false
-// positive (the phrase appears in some unrelated command) is harmless — shed
-// just finds no workspace-new to link and exits.
-func onToolCallHookCommand(agentKey string) string {
-	return `in=$(cat); case "$in" in *'workspace new'*|*'ws new'*) printf '%s' "$in" | ` +
-		onToolCallCommand(agentKey) + `;; esac`
-}
-
 // Claude implements Agent for Claude Code.
 type Claude struct {
 	dir string // ~/.claude

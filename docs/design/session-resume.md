@@ -105,15 +105,24 @@ there). But that alone doesn't solve correlation: when a later
 ### 1. Pre-execution hook (new), installed by `shed init`
 
 Alongside the existing session-context + bg-sync hooks, shed installs a
-pre-exec hook per agent:
+pre-exec hook per agent. Critically, each is **natively gated to workspace-new
+commands**, so the shed binary is never spawned on ordinary tool calls — only
+on an actual `shed workspace new` / `shed ws new`:
 
-- Claude: a `PreToolUse` entry with matcher `Bash` running `shed __on-tool-call`
-  (reads the hook JSON on stdin).
-- Cursor: a `beforeShellExecution` entry running the same subcommand.
-- opencode: extend shed's existing plugin with a `tool.execute.before` handler.
+- Claude: a `PreToolUse` entry (matcher `Bash`) whose inner hooks carry an
+  `if` permission-rule — `Bash(shed workspace new *)` and `Bash(shed ws new *)`.
+  Claude evaluates the `if` natively and runs nothing on a non-match.
+- Cursor: a `beforeShellExecution` entry with a `matcher` (run against the
+  shell command string): `shed (workspace|ws) new`.
+- opencode: shed's in-process JS plugin gains a `tool.execute.before` handler.
+  Being in-process, there is no per-call subprocess at all; a trivial
+  `input.tool === "bash"` + command-substring check costs nothing and only
+  shells out to `shed __on-tool-call` on a match.
 
-The hook is cheap and a no-op for every command that isn't a
-`shed workspace new` / `shed ws new`.
+The matched command is piped to `shed __on-tool-call --agent <key>` (Claude/
+Cursor read the hook JSON on stdin; the opencode plugin constructs the same
+JSON shape). shed re-parses the command defensively, so a loose native match
+(e.g. the phrase inside an unrelated command) simply no-ops.
 
 ### 2. Linking, owned by the hook
 
