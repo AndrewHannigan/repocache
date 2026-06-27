@@ -144,8 +144,11 @@ pattern on stored repos:
 }
 ```
 
-Last writer wins (a workspace re-touched by a newer session points at the
-newer one). `shed prune` drops the link when it prunes the workspace.
+All three fields are always recorded — `cwd` included for every agent (the hook
+supplies it authoritatively; the env override defaults it), since resume always
+`cd`s to it regardless of agent. Last writer wins (a workspace re-touched by a
+newer session points at the newer one). `shed prune` drops the link when it
+prunes the workspace.
 
 ### 4. Workspace name is the identity (not the git branch)
 
@@ -225,12 +228,50 @@ work and stay robust as those agents add flags. cobra stops flag parsing at
 This makes automation (cron, CI, a parent agent fanning out resumes) use the
 exact same path as interactive use.
 
-### 6. Flags as override only
+**resume always `cd`s to the session's wd, for every agent — including Cursor.**
+Cursor's resume isn't cwd-scoped (it would work from anywhere), but dropping the
+resumed session into its original worktree is strictly better (the agent picks
+up where its files are) and has no downside: the `cd` happens inside shed's own
+subprocess, so it never changes your parent shell's directory (see "resume is a
+launcher, not a cd", below). So the per-agent cwd-scoping distinction only
+governs whether the `cd` is *strictly necessary* for the transcript lookup
+(Claude/opencode) — not whether we do it. We always do.
 
-`shed workspace new` keeps optional `--claude-code-session-id` /
-`--opencode-session-id` / `--cursor-chat-id` flags purely as an **explicit
-override** for headless / no-hook contexts (e.g. `claude -p` runs, CI), where
-the pre-exec hook may not fire. They are not the primary path.
+### resume is a launcher, not a `cd`
+
+`shed resume` does **not** change your shell's working directory. A child
+process can't alter its parent's cwd; shed `chdir`s only within its own process
+to launch the agent in the right place, and when the agent session ends you are
+returned to wherever you ran `shed resume`. (`--print` is the exception by
+design: it emits `cd <cwd> && …` for you to inspect or eval yourself.)
+
+### 6. Override via environment, not a visible flag
+
+The session→workspace link is normally established invisibly by the pre-exec
+hook (§1–§2), so **the agent's canonical command stays exactly `shed workspace
+new <repo> <name>`** — no session argument, nothing for the model to fill in.
+This matters: a visible `--…-session-id` flag in `--help` would pressure the
+agent to supply an id it cannot reliably know, so we deliberately do **not**
+expose one.
+
+For headless / no-hook contexts (e.g. `claude -p` runs, CI) where the pre-exec
+hook may not fire, the override is an **environment variable**, set once by the
+orchestrator that drives the agent (and which already knows the id — it minted
+it via `claude --session-id $ID`). The agent still runs the plain command;
+shed reads the environment:
+
+| Env var | Required? | Meaning |
+|---|---|---|
+| `SHED_SESSION_ID` | **yes** | the session/chat id to link (shed can't derive it) |
+| `SHED_SESSION_AGENT` | **yes** | which agent (`claude`/`opencode`/`cursor`) — selects the resume command (shed can't derive it) |
+| `SHED_SESSION_CWD` | optional | the session's launch dir; defaults to the directory `shed workspace new` runs in (`os.Getwd()`). Set it only when the agent may have `cd`'d away first. |
+
+Why env vars over a flag: an in-session model won't invent an env var it was
+never told about, whereas it *will* try to fill a flag it sees in `--help`.
+Inheritance also means the orchestrator sets it once and every `shed workspace
+new` in that process is covered, with no per-call cooperation from the agent.
+(If a flag is ever wanted for symmetry, it must be `MarkHidden` so it stays out
+of `--help`.)
 
 ## Open questions / must-verify
 
@@ -256,7 +297,8 @@ the pre-exec hook may not fire. They are not the primary path.
    lookup used by both the guard and resume.
 2. Pre-exec hook subcommand (`shed __on-tool-call`) + linking logic + workspace
    meta sidecar.
-3. `shed workspace new` reconciliation/handshake + override flags.
+3. `shed workspace new` reconciliation/handshake + `SHED_SESSION_*` env-var
+   override (no visible session flag).
 4. `shed resume <name>` command (`ExactArgs(1)` name resolve + exec/`--print` +
    `--` passthrough). Optionally annotate `shed ls` workspaces with their
    linked session/agent.
