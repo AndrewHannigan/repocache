@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -44,6 +45,23 @@ func humanSize(b int64) string {
 	default:
 		return fmt.Sprintf("%.2f GB", float64(b)/(k*k*k))
 	}
+}
+
+// dirtyLabel renders a workspace's dirty flag as "yes"/"no" for table output.
+func dirtyLabel(dirty bool) string {
+	if dirty {
+		return "yes"
+	}
+	return "no"
+}
+
+// unpushedLabel renders a workspace's unpushed-commit count, or "—" when the
+// branch has no upstream configured (count is -1).
+func unpushedLabel(n int) string {
+	if n < 0 {
+		return "—"
+	}
+	return strconv.Itoa(n)
 }
 
 // formatMs renders a millisecond duration as "850ms" / "1.2s".

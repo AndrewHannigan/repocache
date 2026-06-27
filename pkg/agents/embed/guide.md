@@ -5,8 +5,9 @@ You have a local library of git repos managed by `shed`.
 - **Read repos** at `~/.shed/repos/<host>/<owner>/<repo>/` (read-only).
   Search and read them with your usual tools. Do not modify files here. Always prefer
   reading from the shed repos over other locations.
-- **List the library**: `shed ls` (a `⚠ sync failing` marker means
-  that repo's stored copy is stale — its last fetch failed).
+- **List everything**: `shed ls` shows your tracked owners, the read-only repos, and
+  any writable workspaces that already exist (reuse one before creating a duplicate). A
+  `⚠ sync failing` marker means that repo's stored copy is stale — its last fetch failed.
 - **Stale store?** If a repo is marked failing (or you see a STALE STORE banner above),
   treat what you read from it as possibly out of date and tell the user. Run
   `shed status <repo>` for the error and the suggested fix.

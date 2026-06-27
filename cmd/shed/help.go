@@ -67,7 +67,7 @@ Commands:
   help <topic>  long-form docs
   history       show recent shed commands
   init          bootstrap + integrate with detected agents
-  ls            list tracked repos and owners
+  ls            list owners, repos, and workspaces (everything shed manages)
   prune         delete workspaces whose work has already landed
   rm            remove a tracked repo or owner
   status        report sync health; show a repo's error and the likely fix
@@ -175,8 +175,14 @@ confirmation before deleting (and refuses when stdin is not a TTY).
     auto-added (with the same safety checks).
 
   shed ls [--json]
-    Show tracked owners, then repos with last sync and the owner that
-    auto-added each (if any).
+    Show everything shed manages, in three captioned sections so it's
+    clear what each is:
+      Owners      whole users/orgs you track; sync auto-adds their repos
+      Repos       read-only reference copies, with last sync and (when an
+                  owner auto-added it) which owner did
+      Workspaces  isolated writable clones, with dirty/unpushed state and age
+    The Owners and Workspaces sections are omitted when empty (a hint to
+    create your first workspace is shown when you have repos but none yet).
 `,
 
 	"owner": `owner — track a whole user or org

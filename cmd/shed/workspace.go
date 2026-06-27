@@ -162,15 +162,9 @@ func runWorkspaceList(jsonOut bool) error {
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
-	names := make([]string, 0, len(c.Repos))
-	for _, r := range c.Repos {
-		if n, err := r.ResolvedName(); err == nil {
-			names = append(names, n)
-		}
-	}
-	infos, err := workspace.List(names)
+	infos, err := collectWorkspaces(c)
 	if err != nil {
-		return errs.Wrap(errs.Config, err)
+		return err
 	}
 
 	if jsonOut {
@@ -185,16 +179,8 @@ func runWorkspaceList(jsonOut bool) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "REPO\tBRANCH\tDIRTY\tUNPUSHED\tAGE\tPATH")
 	for _, i := range infos {
-		dirty := "no"
-		if i.Dirty {
-			dirty = "yes"
-		}
-		unpushed := "—"
-		if i.Unpushed >= 0 {
-			unpushed = fmt.Sprintf("%d", i.Unpushed)
-		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			i.Name, i.Branch, dirty, unpushed, relTime(i.Age), paths.Display(i.Path))
+			i.Name, i.Branch, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))
 	}
 	return w.Flush()
 }

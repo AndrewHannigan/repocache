@@ -94,9 +94,7 @@ func TestRepoListMarksFailure(t *testing.T) {
 		{Name: "github.com/acme/bad", LastSyncAt: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339), LastError: "fetch failed"},
 	}
 	var buf bytes.Buffer
-	if err := writeRepoTable(&buf, rows, nil); err != nil {
-		t.Fatal(err)
-	}
+	writeReposSection(&buf, rows)
 	out := buf.String()
 	if !strings.Contains(out, "sync failing") {
 		t.Fatalf("expected failure marker in table:\n%s", out)
