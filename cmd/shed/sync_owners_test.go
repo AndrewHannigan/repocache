@@ -170,11 +170,11 @@ func TestReconcileOwnerGhErrorLeavesConfigUntouched(t *testing.T) {
 	}
 
 	failing := func(url string, f forge.Filter) ([]forge.Repo, error) {
-		return nil, forge.ErrGhMissing
+		return nil, forge.ErrCLIMissing
 	}
 	_, err := reconcileOwner(owner, failing)
-	if !errors.Is(err, forge.ErrGhMissing) {
-		t.Fatalf("want ErrGhMissing, got %v", err)
+	if !errors.Is(err, forge.ErrCLIMissing) {
+		t.Fatalf("want ErrCLIMissing, got %v", err)
 	}
 	c, err := config.Load()
 	if err != nil {

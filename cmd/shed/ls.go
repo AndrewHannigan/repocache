@@ -25,7 +25,7 @@ func newLsCmd() *cobra.Command {
 		Short: "List your shed: tracked owners, read-only repos, and writable workspaces",
 		Long: `ls shows everything shed is managing for you, in three sections:
 
-  Owners      whole GitHub users/orgs you track; sync auto-adds their repos
+  Owners      whole users/orgs/groups you track; sync auto-adds their repos
   Repos       read-only reference copies your agents read from
   Workspaces  isolated writable clones where agents make and push changes
 

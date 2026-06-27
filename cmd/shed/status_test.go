@@ -30,6 +30,7 @@ func TestLikelyCause(t *testing.T) {
 	const ssh = "git@github.com:acme/widget.git"
 	cases := []struct{ name, err, url, want string }{
 		{"auth-https", "git fetch: exit status 128 (output: fatal: could not read Username for 'https://github.com')", https, "gh auth login"},
+		{"auth-https-gitlab", "git fetch: exit status 128 (output: fatal: could not read Username for 'https://gitlab.com')", "https://gitlab.com/acme/widget", "glab auth login"},
 		{"auth-ssh", "git fetch: exit status 128 (output: git@github.com: Permission denied (publickey).)", ssh, "ssh-add"},
 		{"auth-ssh-hostkey", "git fetch: exit status 128 (output: Host key verification failed.)", ssh, "SSH auth"},
 		{"notfound", "git fetch: exit status 128 (output: ERROR: Repository not found.)", https, "shed rm"},

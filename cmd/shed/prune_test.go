@@ -38,6 +38,7 @@ func TestDecidePrune(t *testing.T) {
 func TestPruneReason(t *testing.T) {
 	tests := []struct {
 		name          string
+		noun          string
 		prNumber      int
 		landed        bool
 		defaultBranch string
@@ -45,25 +46,26 @@ func TestPruneReason(t *testing.T) {
 		inactive      time.Duration
 		want          string
 	}{
-		{"merged PR wins", 12, true, "main", true, 100 * 24 * time.Hour, "PR #12 merged"},
-		{"landed into named default", 0, true, "main", false, 0, "merged into main"},
-		{"landed, default unknown", 0, true, "", false, 0, "merged into default branch"},
-		{"expired only", 0, false, "main", true, 100 * 24 * time.Hour, "inactive for 100 days"},
-		{"nothing", 0, false, "main", false, 0, ""},
+		{"merged PR wins", "PR", 12, true, "main", true, 100 * 24 * time.Hour, "PR #12 merged"},
+		{"merged MR wins", "MR", 7, true, "main", true, 100 * 24 * time.Hour, "MR #7 merged"},
+		{"landed into named default", "PR", 0, true, "main", false, 0, "merged into main"},
+		{"landed, default unknown", "PR", 0, true, "", false, 0, "merged into default branch"},
+		{"expired only", "PR", 0, false, "main", true, 100 * 24 * time.Hour, "inactive for 100 days"},
+		{"nothing", "PR", 0, false, "main", false, 0, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := pruneReason(tt.prNumber, tt.landed, tt.defaultBranch, tt.expired, tt.inactive); got != tt.want {
-				t.Errorf("pruneReason(%d, %v, %q, %v, %v) = %q, want %q",
-					tt.prNumber, tt.landed, tt.defaultBranch, tt.expired, tt.inactive, got, tt.want)
+			if got := pruneReason(tt.noun, tt.prNumber, tt.landed, tt.defaultBranch, tt.expired, tt.inactive); got != tt.want {
+				t.Errorf("pruneReason(%q, %d, %v, %q, %v, %v) = %q, want %q",
+					tt.noun, tt.prNumber, tt.landed, tt.defaultBranch, tt.expired, tt.inactive, got, tt.want)
 			}
 		})
 	}
 }
 
-// ghRepoFromName turns a workspace's "host/owner/repo" name into the host and
-// "owner/repo" slug gh needs.
-func TestGhRepoFromName(t *testing.T) {
+// forgeRepoFromName turns a workspace's "host/owner/repo" name into the host and
+// "owner/repo" slug the forge CLI needs.
+func TestForgeRepoFromName(t *testing.T) {
 	tests := []struct {
 		name     string
 		in       string
@@ -80,9 +82,9 @@ func TestGhRepoFromName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			host, repo, ok := ghRepoFromName(tt.in)
+			host, repo, ok := forgeRepoFromName(tt.in)
 			if host != tt.wantHost || repo != tt.wantRepo || ok != tt.wantOK {
-				t.Errorf("ghRepoFromName(%q) = (%q, %q, %v), want (%q, %q, %v)",
+				t.Errorf("forgeRepoFromName(%q) = (%q, %q, %v), want (%q, %q, %v)",
 					tt.in, host, repo, ok, tt.wantHost, tt.wantRepo, tt.wantOK)
 			}
 		})

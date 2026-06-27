@@ -313,7 +313,7 @@ func (c *Config) ResolveOwner(name string) (*Owner, error) {
 func EmptyTemplate() []byte {
 	return []byte(`# shed config.
 # Add a repo with:        shed add <repo-url>
-# Add a whole user/org:   shed add <owner-url>   # needs gh
+# Add a whole user/org:   shed add <owner-url>   # needs gh (GitHub) or glab (GitLab)
 # List with:              shed ls
 # Sync with:              shed sync
 #

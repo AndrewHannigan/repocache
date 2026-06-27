@@ -25,9 +25,11 @@ func newPruneCmd() *cobra.Command {
 		Short: "Delete workspaces whose work has already landed",
 		Long: `prune removes every workspace whose work has already landed, reclaiming
 the ones that are safe to delete. A workspace is reclaimed when its branch
-has a merged pull request, or its commits are already contained in the
-remote default branch (a merge- or rebase-merge with no PR). The merged-PR
-check asks GitHub via the gh CLI, so gh must be installed and authenticated.
+has a merged change — a GitHub pull request or a GitLab merge request — or
+its commits are already contained in the remote default branch (a merge- or
+rebase-merge with no PR/MR). The merged-change check asks the host's CLI
+(gh for GitHub, glab for GitLab), so the relevant CLI must be installed and
+authenticated for the hosts your workspaces live on.
 
 With --if-older-than, also reclaim workspaces whose last activity (newest
 reflog entry) is older than the given duration, regardless of merge status.
@@ -58,14 +60,6 @@ func runPrune(dryRun, force, yes bool, ifOlderThan time.Duration) error {
 	if err := repostore.RequireGit(); err != nil {
 		return errs.Wrap(errs.MissingDep, err)
 	}
-	// prune leans on gh for the merged-PR check, so fail fast (rather than
-	// degrade) when gh can't tell us which branches are merged.
-	if err := forge.Available(); err != nil {
-		if errors.Is(err, forge.ErrGhMissing) {
-			return errs.Wrap(errs.MissingDep, err)
-		}
-		return errs.Wrap(errs.Network, err)
-	}
 	c, err := config.Load()
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
@@ -84,24 +78,35 @@ func runPrune(dryRun, force, yes bool, ifOlderThan time.Duration) error {
 		fmt.Println("(no workspaces)")
 		return nil
 	}
+	// prune leans on a forge CLI (gh for GitHub, glab for GitLab) for the
+	// merged-change check, so fail fast (rather than degrade) when it can't
+	// tell us which branches are merged. Check every forge the workspaces
+	// actually touch — a GitHub-only library shouldn't require glab.
+	if err := requireForges(infos); err != nil {
+		if errors.Is(err, forge.ErrCLIMissing) {
+			return errs.Wrap(errs.MissingDep, err)
+		}
+		return errs.Wrap(errs.Network, err)
+	}
 
 	now := time.Now()
 	var plans []prunePlan
 	var skipped, kept, failed int
 	for _, i := range infos {
-		host, repo, ok := ghRepoFromName(i.Name)
+		host, repo, ok := forgeRepoFromName(i.Name)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "warning: skipping %s: cannot derive a GitHub repo from %q\n", i.Branch, i.Name)
+			fmt.Fprintf(os.Stderr, "warning: skipping %s: cannot derive a repo from %q\n", i.Branch, i.Name)
 			failed++
 			continue
 		}
-		pr, err := forge.MergedPR(host, repo, i.Branch)
+		noun := forge.ChangeNoun(host)
+		pr, err := forge.MergedChange(host, repo, i.Branch)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: %s %s: could not check PR status: %v\n", repo, i.Branch, err)
+			fmt.Fprintf(os.Stderr, "warning: %s %s: could not check %s status: %v\n", repo, i.Branch, noun, err)
 			failed++
 			continue
 		}
-		// Only consult git when there's no merged PR: a found PR is the
+		// Only consult git when there's no merged change: a found PR/MR is the
 		// stronger signal and gives the clearer message, and the ancestor
 		// check is redundant once we know it merged.
 		var landed bool
@@ -114,7 +119,7 @@ func runPrune(dryRun, force, yes bool, ifOlderThan time.Duration) error {
 		}
 		expired := ifOlderThan > 0 && !i.Age.IsZero() && now.Sub(i.Age) > ifOlderThan
 		prunable := pr != 0 || landed || expired
-		reason := pruneReason(pr, landed, defaultBranch, expired, now.Sub(i.Age))
+		reason := pruneReason(noun, pr, landed, defaultBranch, expired, now.Sub(i.Age))
 		switch decidePrune(prunable, i.Dirty, i.Unpushed, force) {
 		case pruneKeep:
 			kept++
@@ -197,12 +202,13 @@ func decidePrune(prunable, dirty bool, unpushed int, force bool) pruneAction {
 }
 
 // pruneReason describes why a workspace is being pruned, for status messages.
-// Reasons are reported in priority order: a merged PR is the clearest signal,
-// then containment in the default branch, then age.
-func pruneReason(prNumber int, landed bool, defaultBranch string, expired bool, inactive time.Duration) string {
+// Reasons are reported in priority order: a merged change (PR/MR, named by
+// noun) is the clearest signal, then containment in the default branch, then
+// age.
+func pruneReason(noun string, prNumber int, landed bool, defaultBranch string, expired bool, inactive time.Duration) string {
 	switch {
 	case prNumber != 0:
-		return fmt.Sprintf("PR #%d merged", prNumber)
+		return fmt.Sprintf("%s #%d merged", noun, prNumber)
 	case landed:
 		if defaultBranch != "" {
 			return fmt.Sprintf("merged into %s", defaultBranch)
@@ -238,15 +244,35 @@ func countNoun(n int, noun string) string {
 	return fmt.Sprintf("%d %ss", n, noun)
 }
 
-// ghRepoFromName splits a workspace repo name ("host/owner/repo") into the
-// GitHub host and the "owner/repo" slug gh expects. ok is false unless the
-// name has a host plus an owner/repo path. Pure, so it is unit-testable.
-func ghRepoFromName(name string) (host, repo string, ok bool) {
+// forgeRepoFromName splits a workspace repo name ("host/owner/repo", or
+// "host/group/subgroup/repo" on GitLab) into the host and the slug the forge
+// CLI expects (everything after the host). ok is false unless the name has a
+// host plus at least an owner/repo path. Pure, so it is unit-testable.
+func forgeRepoFromName(name string) (host, repo string, ok bool) {
 	h, rest, found := strings.Cut(name, "/")
 	if !found || h == "" || !strings.Contains(rest, "/") {
 		return "", "", false
 	}
 	return h, rest, true
+}
+
+// requireForges checks that the forge CLI for every host the given workspaces
+// touch is installed and authenticated, returning the first problem (wrapped
+// ErrCLIMissing / ErrCLIUnauthed). A library that only spans GitHub never
+// triggers a glab requirement, and vice versa.
+func requireForges(infos []workspace.Info) error {
+	checked := make(map[string]bool)
+	for _, i := range infos {
+		host, _, ok := forgeRepoFromName(i.Name)
+		if !ok || checked[host] {
+			continue
+		}
+		checked[host] = true
+		if err := forge.Available(host); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // localChangesDesc describes a workspace's uncommitted/unpushed state for the

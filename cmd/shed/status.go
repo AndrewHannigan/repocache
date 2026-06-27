@@ -174,7 +174,7 @@ func likelyCause(errText, name, url string) string {
 	switch {
 	case isAuthError(low):
 		return authFixHint(url) + ", then " + sync
-	case containsAny(low, "repository not found", "not found", "404", "does not exist"):
+	case isNotFoundError(low):
 		return fmt.Sprintf("repo may be renamed or deleted upstream — verify it exists, or remove it with `shed rm %s`", name)
 	case containsAny(low, "could not resolve host", "connection refused", "connection timed out", "timed out", "network is unreachable", "temporary failure in name resolution"):
 		return "network — likely transient; check your connection and re-run " + sync
@@ -199,6 +199,15 @@ func isAuthError(low string) bool {
 	)
 }
 
+// isNotFoundError reports whether git's (already-lowercased) output indicates
+// the remote repository does not exist — renamed, deleted, never created, or,
+// over HTTPS where GitHub conceals private repos behind the same message,
+// simply inaccessible. Shared by status reporting and the `add` shorthand
+// fallback (which switches GitHub→GitLab when a repo isn't found on GitHub).
+func isNotFoundError(low string) bool {
+	return containsAny(low, "repository not found", "not found", "404", "does not exist")
+}
+
 // authFixHint gives a protocol-aware remedy for an auth failure: SSH-key
 // guidance for git@/ssh:// remotes, credential/token guidance for HTTPS. The
 // gh suggestion only makes sense for HTTPS (it configures git's credential
@@ -208,7 +217,13 @@ func authFixHint(url string) string {
 	if paths.IsSSHURL(url) {
 		return "SSH auth — ensure your key is loaded (`ssh-add -l`) and authorized for the host"
 	}
-	return "HTTPS auth — run `gh auth login` or configure a git credential helper/token"
+	// Steer HTTPS users to the right forge CLI for credential setup: glab for
+	// GitLab hosts, gh otherwise.
+	cli := "gh"
+	if host, _, err := paths.ParseURL(url); err == nil && strings.Contains(strings.ToLower(host), "gitlab") {
+		cli = "glab"
+	}
+	return fmt.Sprintf("HTTPS auth — run `%s auth login` or configure a git credential helper/token", cli)
 }
 
 func containsAny(s string, subs ...string) bool {

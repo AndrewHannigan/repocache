@@ -177,9 +177,12 @@ confirmation before deleting (and refuses when stdin is not a TTY).
 	"library": `library — manage tracked repos and owners
 
   shed add <repo> [--name <n>] [--owner|--repo]
-    Add a repo to the library. <repo> may be a full git URL or GitHub
-    shorthand: a bare 'owner/repo' or 'owner' is expanded against
-    github.com, so 'shed add octocat/Hello-World' works.
+    Add a repo to the library. <repo> may be a full git URL or shorthand:
+    a bare 'owner/repo' or 'owner' is expanded against github.com, so
+    'shed add octocat/Hello-World' works. Shorthand defaults to GitHub but
+    falls back to GitLab — if 'owner/repo' isn't on github.com it resolves
+    against gitlab.com. Prefix a host ('gitlab.com/owner/repo') or pass a
+    full URL to pin it.
     Name defaults to <host>/<owner>/<repo> derived from the URL. --name
     overrides. Fetches the new repo right away (runs a scoped 'sync').
     Exit 3 if the name already exists.
@@ -219,17 +222,19 @@ confirmation before deleting (and refuses when stdin is not a TTY).
 	"owner": `owner — track a whole user or org
 
 Add an owner with 'shed add <owner-url>' (a URL with a single
-path segment, e.g. https://github.com/octocat). On every sync,
-shed lists that owner's repos and adds any new ones to the library
-automatically, so repos created upstream after you start tracking are
+path segment, e.g. https://github.com/octocat or https://gitlab.com/mygroup).
+On every sync, shed lists that owner's repos and adds any new ones to the
+library automatically, so repos created upstream after you start tracking are
 picked up and fetched without another 'add'. This also happens in
 the background at each agent session start (see 'shed help sync').
 
-Discovery uses the 'gh' CLI — shed's only dependency beyond 'git',
-and only for discovery. Once a repo has been discovered it is an ordinary
-library entry that syncs with plain 'git'. So if 'gh' is missing or not
-authenticated, shed degrades gracefully: it warns and skips
-discovery, but already-known repos still sync.
+Discovery uses a forge CLI — 'gh' for GitHub, 'glab' for a GitLab group —
+shed's only dependency beyond 'git', and only for discovery. Once a repo has
+been discovered it is an ordinary library entry that syncs with plain 'git'.
+So if the CLI is missing or not authenticated, shed degrades gracefully: it
+warns and skips discovery, but already-known repos still sync. On GitLab,
+owner discovery targets a group; a personal user namespace isn't supported by
+glab, so add a user's repos individually.
 
 By default an owner pulls its non-fork, non-archived repos (including
 private ones you can access). Tune per owner in config.toml:
@@ -239,6 +244,9 @@ private ones you can access). Tune per owner in config.toml:
   include_forks = false       # default
   include_archived = false    # default
   visibility = "all"          # all|public|private
+
+(On GitLab the include_forks and visibility filters are applied client-side;
+forks may slip through when GitLab omits fork metadata from its listing.)
 
 Reconciliation is additive: repos that disappear upstream are left in
 place (so a workspace with unpushed work is never deleted out from under
@@ -251,11 +259,11 @@ whole owner with 'shed rm <owner>'.
   shed sync [<name>...] [--if-older-than <dur>] [--jobs N] [--json]
 
 Before fetching, sync expands any tracked owners in scope: it lists each
-owner's repos via 'gh' and adds new ones to the library, then fetches them
-in the same pass (a brand-new repo has no store, so it is cloned). Naming
-an owner syncs all of its repos. If 'gh' is unavailable, discovery is
-skipped with a warning and already-known repos still sync. See
-'shed help owner'.
+owner's repos via the host's CLI ('gh' for GitHub, 'glab' for a GitLab group)
+and adds new ones to the library, then fetches them in the same pass (a
+brand-new repo has no store, so it is cloned). Naming an owner syncs all of
+its repos. If the CLI is unavailable, discovery is skipped with a warning and
+already-known repos still sync. See 'shed help owner'.
 
 Behavior per repo:
   1. Clone if missing (with gc.auto=0).
@@ -316,18 +324,21 @@ To bulk-clean workspaces whose work has already landed, see 'shed help prune'.
   shed prune [--dry-run] [--force] [--yes] [--if-older-than <dur>]
     Delete every workspace whose work has already landed, reclaiming the
     ones safe to delete. A workspace is reclaimed when its branch has a
-    merged pull request (asked of GitHub via the gh CLI), or its commits
-    are already contained in the remote default branch (a merge- or
-    rebase-merge with no PR). With --if-older-than, also reclaim workspaces
-    whose last activity (newest reflog entry) is older than the given
-    duration, e.g. --if-older-than 720h. Skips workspaces with uncommitted
-    or unpushed changes so local work is never lost; pass --force to remove
-    them anyway.
+    merged change — a GitHub pull request (asked via gh) or a GitLab merge
+    request (asked via glab) — or its commits are already contained in the
+    remote default branch (a merge- or rebase-merge with no PR/MR). With
+    --if-older-than, also reclaim workspaces whose last activity (newest
+    reflog entry) is older than the given duration, e.g. --if-older-than
+    720h. Skips workspaces with uncommitted or unpushed changes so local
+    work is never lost; pass --force to remove them anyway.
     Before deleting, prune lists the workspaces and asks for confirmation;
     pass --yes to skip the prompt or --dry-run to preview without deleting.
 
-The merged-PR check is gh-driven, so gh must be installed and authenticated;
-prune fails fast rather than degrade when gh can't report merge status.
+The merged-change check is CLI-driven, so the host's CLI must be installed and
+authenticated (gh for GitHub workspaces, glab for GitLab ones); prune fails
+fast rather than degrade when it can't report merge status. Only the forges
+your workspaces actually use are required — a GitHub-only library never needs
+glab.
 `,
 
 	"history": `history — show recent shed commands
@@ -399,8 +410,9 @@ Shed does not manage credentials. Every git operation defers to
 whatever 'git clone <url>' already works with in your shell:
 
   HTTPS  — credential helper ('gh auth setup-git',
-           'git-credential-manager', OS keychain helpers)
-  SSH    — your ssh-agent for git@github.com:... URLs
+           'glab auth git-credential', 'git-credential-manager',
+           OS keychain helpers)
+  SSH    — your ssh-agent for git@github.com:... / git@gitlab.com:... URLs
 
 If 'git clone <url>' works in your shell, shed works. If it
 doesn't, sync exits 6 with the underlying git error.

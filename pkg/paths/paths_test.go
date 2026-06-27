@@ -36,6 +36,47 @@ func TestNormalizeURL(t *testing.T) {
 	}
 }
 
+func TestIsBareShorthand(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"octocat", true},
+		{"octocat/Hello-World", true},
+		{"  octocat/Hello-World  ", true},
+		{"/octocat/", true},
+		{"github.com/octocat", false},     // leading host segment
+		{"gitlab.com/foo/bar", false},     // leading host segment
+		{"localhost:8080/foo", false},     // host:port
+		{"https://github.com/foo", false}, // has scheme
+		{"git@github.com:foo/bar", false}, // scp-style
+		{"", false},
+	}
+	for _, tt := range tests {
+		if got := IsBareShorthand(tt.input); got != tt.want {
+			t.Errorf("IsBareShorthand(%q) = %v, want %v", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestShorthandOnHost(t *testing.T) {
+	tests := []struct {
+		input string
+		host  string
+		want  string
+	}{
+		{"octocat/Hello-World", "gitlab.com", "https://gitlab.com/octocat/Hello-World"},
+		{"octocat", "gitlab.com", "https://gitlab.com/octocat"},
+		{"  /octocat/repo/  ", "gitlab.com", "https://gitlab.com/octocat/repo"},
+		{"foo/bar", "github.com", "https://github.com/foo/bar"},
+	}
+	for _, tt := range tests {
+		if got := ShorthandOnHost(tt.input, tt.host); got != tt.want {
+			t.Errorf("ShorthandOnHost(%q, %q) = %q, want %q", tt.input, tt.host, got, tt.want)
+		}
+	}
+}
+
 // Shorthand must round-trip through the same parsing the add path uses: an
 // expanded bare owner classifies as an owner, an expanded owner/repo as a repo.
 func TestNormalizeURLClassification(t *testing.T) {

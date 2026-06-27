@@ -1,33 +1,40 @@
-// Package forge talks to GitHub by shelling out to the `gh` CLI: it discovers
-// the repos belonging to an owner (a user or org) and reports whether a
-// branch has a merged pull request. This is shed's only runtime
-// dependency beyond `git` — everything else syncs with plain `git`, so callers
-// degrade gracefully when `gh` is missing or unauthenticated (see the sentinel
+// Package forge talks to a git hosting service ("forge") by shelling out to
+// its CLI — `gh` for GitHub, `glab` for GitLab. It does two things shed can't
+// do with plain git: discover the repos belonging to an owner (a user, org, or
+// group) and report whether a branch has a merged change request (a GitHub pull
+// request or a GitLab merge request). This is shed's only runtime dependency
+// beyond `git` — everything else syncs with plain `git`, so callers degrade
+// gracefully when the CLI is missing or unauthenticated (see the sentinel
 // errors below).
+//
+// Which CLI runs is chosen by host: github.com (and unknown hosts) use `gh`;
+// gitlab.com and any host whose name contains "gitlab" use `glab`. That keeps
+// every other part of shed — the store, sync, workspaces, the
+// <host>/<owner>/<repo> layout — host-agnostic; the forge is the one seam where
+// GitHub and GitLab differ.
 package forge
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
-// Sentinel errors callers use to decide how to degrade. ErrGhMissing means the
-// gh binary is not installed; ErrGhUnauthed means it is installed but not
-// logged in (so discovery, especially of private repos, cannot proceed).
+// Sentinel errors callers use to decide how to degrade. ErrCLIMissing means the
+// forge CLI is not installed; ErrCLIUnauthed means it is installed but not
+// logged in (so discovery, especially of private repos, cannot proceed). The
+// wrapped message names the specific CLI (`gh` vs `glab`).
 var (
-	ErrGhMissing  = errors.New("gh CLI not found on PATH (needed to expand owners)")
-	ErrGhUnauthed = errors.New("gh CLI is not authenticated (run `gh auth login`)")
+	ErrCLIMissing  = errors.New("forge CLI not found")
+	ErrCLIUnauthed = errors.New("forge CLI is not authenticated")
 )
 
-// defaultLimit caps how many repos we list per owner. gh defaults to 30, which
-// silently truncates large orgs, so we ask for a generous ceiling instead.
+// defaultLimit caps how many repos we list per owner. Both CLIs default to 30,
+// which silently truncates large orgs/groups, so we ask for a generous ceiling.
 const defaultLimit = 1000
 
 // Filter controls which of an owner's repos discovery returns. The zero value
@@ -48,178 +55,143 @@ type Repo struct {
 	Visibility string
 }
 
-// ghRepo mirrors the JSON object `gh repo list --json ...` emits.
-type ghRepo struct {
-	Name       string `json:"name"`
-	URL        string `json:"url"`
-	SSHURL     string `json:"sshUrl"`
-	IsFork     bool   `json:"isFork"`
-	IsArchived bool   `json:"isArchived"`
-	Visibility string `json:"visibility"`
+// provider is one forge's CLI integration. The arg builders and decoders are
+// kept pure (no exec) so they unit-test without the CLI installed; exec lives
+// only in the dispatchers below.
+type provider interface {
+	cli() string              // binary name on PATH, e.g. "gh" / "glab"
+	label() string            // human name, e.g. "GitHub" / "GitLab"
+	changeNoun() string       // "PR" / "MR" — for human-facing messages
+	authStatusArgs() []string // args that check auth, e.g. {"auth","status"}
+	// hostEnv returns environment overrides to target host, or nil for the
+	// CLI's default host. Empty host means "default".
+	hostEnv(host string) []string
+	// listArgs builds the repo-list argv for login under f.
+	listArgs(login string, f Filter) []string
+	// decodeRepos parses the CLI's repo-list JSON. f is passed so a CLI that
+	// can't filter server-side (glab) can filter client-side here; gh ignores
+	// it. wantSSH selects the ssh vs https clone URL.
+	decodeRepos(data []byte, f Filter, wantSSH bool) ([]Repo, error)
+	// mergedArgs builds the argv that asks for the single newest merged change
+	// (PR/MR) whose source branch is branch in repo (an "owner/name" slug).
+	mergedArgs(repo, branch string) []string
+	// decodeMerged parses that output and returns the change number, or 0.
+	decodeMerged(data []byte) (int, error)
 }
 
-// Available reports whether gh is usable: installed and authenticated. It
-// returns ErrGhMissing or ErrGhUnauthed so callers can warn precisely, or nil
-// when gh is ready. Used by `add` to warn early; ListOwnerRepos does its
-// own check so it never lists twice.
-func Available() error {
-	if _, err := exec.LookPath("gh"); err != nil {
-		return ErrGhMissing
+// providerFor selects the forge integration for a host. github.com and any
+// host we don't recognize use gh (GitHub Enterprise is reached with gh too, via
+// GH_HOST); gitlab.com and "gitlab"-containing hosts use glab.
+func providerFor(host string) provider {
+	if isGitLabHost(host) {
+		return gitlabProvider{}
 	}
-	if out, err := exec.Command("gh", "auth", "status").CombinedOutput(); err != nil {
-		return fmt.Errorf("%w: %s", ErrGhUnauthed, strings.TrimSpace(string(out)))
+	return githubProvider{}
+}
+
+// isGitLabHost reports whether host should be served by glab. We match
+// gitlab.com exactly and, for self-managed installs, any host whose name
+// contains "gitlab" (e.g. gitlab.example.com). Everything else falls to gh.
+func isGitLabHost(host string) bool {
+	h := strings.ToLower(host)
+	return h == "gitlab.com" || strings.Contains(h, "gitlab")
+}
+
+// ChangeNoun returns the host's word for a merged change — "PR" for GitHub,
+// "MR" for GitLab — so callers can phrase messages correctly.
+func ChangeNoun(host string) string { return providerFor(host).changeNoun() }
+
+// Available reports whether the forge CLI for host is usable: installed and
+// authenticated. It returns ErrCLIMissing or ErrCLIUnauthed (wrapped, with a
+// CLI-specific message) so callers can warn precisely, or nil when ready.
+func Available(host string) error {
+	p := providerFor(host)
+	if _, err := exec.LookPath(p.cli()); err != nil {
+		return missingErr(p)
+	}
+	if out, err := exec.Command(p.cli(), p.authStatusArgs()...).CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", unauthedErr(p), strings.TrimSpace(string(out)))
 	}
 	return nil
 }
 
 // ListOwnerRepos lists the repos under ownerURL (e.g.
-// "https://github.com/octocat") subject to f. On success it returns one
-// entry per repo with a clone URL matching ownerURL's protocol. It returns
-// ErrGhMissing / ErrGhUnauthed (wrapped) when gh can't be used, so the caller
-// can skip this owner and continue syncing already-known repos.
+// "https://github.com/octocat" or "https://gitlab.com/mygroup") subject to f.
+// On success it returns one entry per repo with a clone URL matching ownerURL's
+// protocol. It returns ErrCLIMissing / ErrCLIUnauthed (wrapped) when the CLI
+// can't be used, so the caller can skip this owner and continue syncing
+// already-known repos.
 func ListOwnerRepos(ownerURL string, f Filter) ([]Repo, error) {
 	host, login, err := paths.ParseURL(ownerURL)
 	if err != nil {
 		return nil, err
 	}
-	if strings.Contains(login, "/") {
-		return nil, fmt.Errorf("%q is a repo URL, not an owner URL", ownerURL)
-	}
-	if _, err := exec.LookPath("gh"); err != nil {
-		return nil, ErrGhMissing
+	p := providerFor(host)
+	if _, err := exec.LookPath(p.cli()); err != nil {
+		return nil, missingErr(p)
 	}
 
-	cmd := exec.Command("gh", buildListArgs(login, f)...)
-	// Target enterprise hosts by setting GH_HOST; github.com is gh's default.
-	if host != "" && host != "github.com" {
-		cmd.Env = append(os.Environ(), "GH_HOST="+host)
+	cmd := exec.Command(p.cli(), p.listArgs(login, f)...)
+	if env := p.hostEnv(host); env != nil {
+		cmd.Env = append(os.Environ(), env...)
 	}
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, classifyExecErr("gh repo list", err, stderr.String())
+		return nil, classifyExecErr(p, p.cli()+" repo list", err, stderr.String())
 	}
-	return decodeRepos(out, isSSHURL(ownerURL))
+	return p.decodeRepos(out, f, isSSHURL(ownerURL))
 }
 
-// MergedPR returns the number of a merged pull request whose head branch is
-// branch in repo (an "owner/name" slug), or 0 if there is none. host selects
-// the GitHub host: "" or "github.com" use gh's default; any other value
-// targets an enterprise host via GH_HOST. Like ListOwnerRepos it returns
-// ErrGhMissing / ErrGhUnauthed (wrapped) when gh can't be used.
-func MergedPR(host, repo, branch string) (int, error) {
-	if _, err := exec.LookPath("gh"); err != nil {
-		return 0, ErrGhMissing
+// MergedChange returns the number of a merged change request (a GitHub PR or a
+// GitLab MR) whose source branch is branch in repo (an "owner/name" slug), or 0
+// if there is none. host selects the forge. Like ListOwnerRepos it returns
+// ErrCLIMissing / ErrCLIUnauthed (wrapped) when the CLI can't be used.
+func MergedChange(host, repo, branch string) (int, error) {
+	p := providerFor(host)
+	if _, err := exec.LookPath(p.cli()); err != nil {
+		return 0, missingErr(p)
 	}
-	cmd := exec.Command("gh", buildPRListArgs(repo, branch)...)
-	if host != "" && host != "github.com" {
-		cmd.Env = append(os.Environ(), "GH_HOST="+host)
+	cmd := exec.Command(p.cli(), p.mergedArgs(repo, branch)...)
+	if env := p.hostEnv(host); env != nil {
+		cmd.Env = append(os.Environ(), env...)
 	}
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return 0, classifyExecErr("gh pr list", err, stderr.String())
+		return 0, classifyExecErr(p, p.cli()+" "+p.changeNoun()+" list", err, stderr.String())
 	}
-	return decodeMergedPR(out)
+	return p.decodeMerged(out)
 }
 
-// buildPRListArgs builds the `gh pr list` argument vector that asks for the
-// single newest merged PR whose head branch is branch. Kept pure (no exec) so
-// it can be unit-tested.
-func buildPRListArgs(repo, branch string) []string {
-	// The "--flag=value" form binds each value to its flag, so a repo or branch
-	// beginning with "-" can't be mistaken for a separate flag.
-	return []string{
-		"pr", "list",
-		"--repo=" + repo,
-		"--head=" + branch,
-		"--state", "merged",
-		"--json", "number",
-		"--limit", "1",
-	}
+// missingErr / unauthedErr wrap the sentinels with a CLI-specific message.
+func missingErr(p provider) error {
+	return fmt.Errorf("%w: %s CLI not found on PATH (needed to expand owners on %s)",
+		ErrCLIMissing, p.cli(), p.label())
 }
 
-// decodeMergedPR parses the JSON array gh emits for `pr list` and returns the
-// first PR's number, or 0 when the array is empty. Pure for testability.
-func decodeMergedPR(data []byte) (int, error) {
-	var prs []struct {
-		Number int `json:"number"`
-	}
-	if err := json.Unmarshal(data, &prs); err != nil {
-		return 0, fmt.Errorf("parse gh pr list output: %w", err)
-	}
-	if len(prs) == 0 {
-		return 0, nil
-	}
-	return prs[0].Number, nil
+func unauthedErr(p provider) error {
+	return fmt.Errorf("%w: %s CLI is not authenticated (run `%s auth login`)",
+		ErrCLIUnauthed, p.cli(), p.cli())
 }
 
-// buildListArgs builds the `gh repo list` argument vector for login under f.
-// Kept pure (no exec) so it can be unit-tested.
-func buildListArgs(login string, f Filter) []string {
-	limit := f.Limit
-	if limit <= 0 {
-		limit = defaultLimit
-	}
-	args := []string{
-		"repo", "list",
-		"--limit", strconv.Itoa(limit),
-		"--json", "name,url,sshUrl,isFork,isArchived,visibility",
-	}
-	if !f.IncludeForks {
-		args = append(args, "--source") // sources only (non-forks)
-	}
-	if !f.IncludeArchived {
-		args = append(args, "--no-archived")
-	}
-	if v := strings.ToLower(f.Visibility); v != "" && v != "all" {
-		args = append(args, "--visibility", v)
-	}
-	// "--" terminates flags, then login positionally, so an owner that begins
-	// with "-" can't be parsed as a gh flag (argument injection).
-	return append(args, "--", login)
-}
-
-// decodeRepos parses the JSON array gh emits and maps each entry to a Repo,
-// selecting the ssh or https clone URL per wantSSH. Pure for testability.
-func decodeRepos(data []byte, wantSSH bool) ([]Repo, error) {
-	var ghRepos []ghRepo
-	if err := json.Unmarshal(data, &ghRepos); err != nil {
-		return nil, fmt.Errorf("parse gh repo list output: %w", err)
-	}
-	repos := make([]Repo, 0, len(ghRepos))
-	for _, g := range ghRepos {
-		cloneURL := g.URL
-		if wantSSH && g.SSHURL != "" {
-			cloneURL = g.SSHURL
-		}
-		repos = append(repos, Repo{
-			Name:       g.Name,
-			CloneURL:   cloneURL,
-			IsFork:     g.IsFork,
-			IsArchived: g.IsArchived,
-			Visibility: g.Visibility,
-		})
-	}
-	return repos, nil
-}
-
-// classifyExecErr turns a failed gh invocation (what names it, e.g.
+// classifyExecErr turns a failed CLI invocation (what names it, e.g.
 // "gh repo list") into a sentinel where possible so callers can degrade.
 // Pure for testability.
-func classifyExecErr(what string, err error, stderr string) error {
+func classifyExecErr(p provider, what string, err error, stderr string) error {
 	if errors.Is(err, exec.ErrNotFound) {
-		return ErrGhMissing
+		return missingErr(p)
 	}
 	s := strings.ToLower(stderr)
 	switch {
 	case strings.Contains(s, "not logged in"),
-		strings.Contains(s, "gh auth login"),
+		strings.Contains(s, "auth login"),
 		strings.Contains(s, "authentication"),
-		strings.Contains(s, "requires authentication"):
-		return fmt.Errorf("%w: %s", ErrGhUnauthed, strings.TrimSpace(stderr))
+		strings.Contains(s, "requires authentication"),
+		strings.Contains(s, "401 unauthorized"):
+		return fmt.Errorf("%w: %s", unauthedErr(p), strings.TrimSpace(stderr))
 	default:
 		return fmt.Errorf("%s failed: %v: %s", what, err, strings.TrimSpace(stderr))
 	}

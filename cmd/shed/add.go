@@ -28,15 +28,20 @@ func newAddCmd() *cobra.Command {
 		Use:   "add <repo>",
 		Short: "Add a repository, or a whole user/org, to the library",
 		Long: `add appends a repo to the library. <repo> may be a full git URL
-(https://, ssh://, or scp-style git@host:owner/repo) or GitHub shorthand:
+(https://, ssh://, or scp-style git@host:owner/repo) or shorthand:
 a bare "owner/repo" or "owner" is expanded against github.com, so
 "shed add octocat/Hello-World" and "shed add octocat"
 both just work.
 
+Shorthand defaults to GitHub but falls back to GitLab: if "owner/repo"
+isn't found on github.com, add resolves it against gitlab.com instead. To
+pin a host explicitly, prefix it ("gitlab.com/owner/repo") or pass a full
+URL.
+
 If <repo> points at a bare user or org (a single path segment, e.g.
 octocat or https://github.com/octocat), it is tracked as an owner instead:
-each sync discovers that owner's repos via gh and adds any new ones
-automatically.
+each sync discovers that owner's repos and adds any new ones automatically
+(via gh for GitHub, glab for a GitLab group).
 
 Detection is automatic from the shape; force it with --owner / --repo.`,
 		Args: cobra.ExactArgs(1),
@@ -45,7 +50,7 @@ Detection is automatic from the shape; force it with --owner / --repo.`,
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "override the default name (derived from URL)")
-	cmd.Flags().BoolVar(&asOwner, "owner", false, "track <repo> as a user/org (discover its repos via gh)")
+	cmd.Flags().BoolVar(&asOwner, "owner", false, "track <repo> as a user/org/group (discover its repos via gh/glab)")
 	cmd.Flags().BoolVar(&asRepo, "repo", false, "track <repo> as a single repo (default for owner/repo references)")
 	return cmd
 }
@@ -69,10 +74,19 @@ func runRepoAdd(input, overrideName string, asOwner, asRepo bool) error {
 	if isOwner {
 		return runOwnerAdd(url, overrideName)
 	}
-	return runRepoAddOne(url, overrideName)
+	return runRepoAddOne(input, url, overrideName)
 }
 
-func runRepoAddOne(url, overrideName string) error {
+// runRepoAddOne adds a single repo. input is the user's original argument (used
+// to decide whether the GitHub→GitLab shorthand fallback applies); url is its
+// normalized form.
+func runRepoAddOne(input, url, overrideName string) error {
+	// Bare shorthand defaults to GitHub. If the repo isn't there, fall back to
+	// GitLab before we commit to a URL — so "shed add owner/repo" keeps the
+	// shorthand and just resolves to wherever the repo actually lives.
+	if paths.IsBareShorthand(input) {
+		url = githubOrGitLabURL(input, url)
+	}
 	// Validate URL and derive default name up front so we fail before locking.
 	defaultName, err := paths.DefaultName(url)
 	if err != nil {
@@ -139,14 +153,46 @@ func runOwnerAdd(url, overrideName string) error {
 	}
 
 	fmt.Printf("added owner %s\n", effectiveName)
-	// Surface gh problems now rather than only at sync time. Advisory only —
-	// the entry is already saved and will expand once gh becomes available.
-	if gherr := forge.Available(); gherr != nil {
-		fmt.Fprintf(os.Stderr, "warning: %v\n  owner expansion will be skipped until gh is available and authenticated.\n", gherr)
+	// Surface forge-CLI problems now rather than only at sync time. Advisory
+	// only — the entry is already saved and will expand once the CLI becomes
+	// available. Which CLI (gh vs glab) depends on the owner's host.
+	host, _, _ := paths.ParseURL(url)
+	if ferr := forge.Available(host); ferr != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n  owner expansion will be skipped until the forge CLI is available and authenticated.\n", ferr)
 	}
 	// Discover and fetch the owner's repos right away. Scoped to this owner,
 	// runSync reconciles it (adding newly discovered repos) and syncs them.
 	return runSync([]string{effectiveName}, syncDefaultJobs, 0, false)
+}
+
+// githubOrGitLabURL implements GitHub-first, GitLab-fallback resolution for
+// bare shorthand. ghURL is input expanded against github.com. If git can reach
+// it (public, or private with the user's credentials), GitHub wins — the
+// documented default. If GitHub reports the repo simply isn't there, we probe
+// the same owner/repo on gitlab.com and switch to it when it exists. Every
+// other outcome — no git to probe with, a network blip, or an auth failure
+// (the repo may well exist privately on GitHub) — keeps GitHub; a later
+// `shed sync` surfaces any real problem with a transport-aware fix.
+func githubOrGitLabURL(input, ghURL string) string {
+	if repostore.RequireGit() != nil {
+		return ghURL // no git to probe with; sync will report it.
+	}
+	err := repostore.Reachable(ghURL)
+	if err == nil {
+		return ghURL // found on GitHub
+	}
+	// Only a genuine "not found" is worth crossing to another host for. Auth or
+	// network failures would not be fixed by switching forges, and a private
+	// GitHub repo may exist even when the unauthenticated probe can't see it.
+	if !isNotFoundError(strings.ToLower(err.Error())) {
+		return ghURL
+	}
+	glURL := paths.ShorthandOnHost(input, "gitlab.com")
+	if repostore.Reachable(glURL) == nil {
+		fmt.Printf("note: %s was not found on GitHub; resolving to %s instead.\n", ghURL, glURL)
+		return glURL
+	}
+	return ghURL
 }
 
 // reachableURL returns a clone URL that authenticates with the user's current

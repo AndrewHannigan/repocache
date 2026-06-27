@@ -190,6 +190,33 @@ func NormalizeURL(input string) string {
 	return "https://github.com/" + s
 }
 
+// IsBareShorthand reports whether input is bare forge shorthand — an "owner" or
+// "owner/repo" with no scheme, no scp-style "user@host:", and no leading
+// host-like segment (one containing "." or ":"). These are exactly the inputs
+// NormalizeURL resolves against github.com, and thus the ones eligible for the
+// GitHub→GitLab fallback: "octocat/Hello-World" is shorthand, but
+// "gitlab.com/foo/bar" and "https://…" already name their host.
+func IsBareShorthand(input string) bool {
+	s := strings.TrimSpace(input)
+	if s == "" {
+		return false
+	}
+	if strings.Contains(s, "://") || isSCPLike(s) {
+		return false
+	}
+	s = strings.Trim(s, "/")
+	first, _, _ := strings.Cut(s, "/")
+	return !strings.ContainsAny(first, ".:")
+}
+
+// ShorthandOnHost expands bare shorthand (see IsBareShorthand) against host
+// over HTTPS — "octocat/Hello-World" + "gitlab.com" → "https://gitlab.com/octocat/Hello-World".
+// It only makes sense for inputs IsBareShorthand accepts; callers gate on that.
+func ShorthandOnHost(input, host string) string {
+	s := strings.Trim(strings.TrimSpace(input), "/")
+	return "https://" + host + "/" + s
+}
+
 // isSCPLike reports whether s is a scp-style remote (user@host:path with no
 // scheme), the one no-scheme form NormalizeURL must leave untouched. Mirrors
 // the detection in ParseURL.

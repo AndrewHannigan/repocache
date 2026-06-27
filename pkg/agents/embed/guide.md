@@ -27,10 +27,13 @@ You have a local library of git repos managed by `shed`.
   not this case — prefer the fresh workspace.
 - **Clean up**: `shed workspace rm <repo> <branch>` when done.
 - **Need a repo not in the library?** Ask the user to run `shed add <repo>`
-  (a full URL or GitHub `owner/repo` shorthand).
-- **Track a whole user/org?** `shed add <owner>` (a bare `owner` or
-  `https://github.com/<owner>`) tracks every repo under that owner; `sync` discovers
-  and fetches new ones automatically. Needs `gh` installed and authenticated.
+  (a full URL or `owner/repo` shorthand). Shorthand defaults to GitHub and falls
+  back to GitLab if the repo isn't on github.com; prefix a host
+  (`gitlab.com/owner/repo`) to pin it.
+- **Track a whole user/org?** `shed add <owner>` (a bare `owner`,
+  `https://github.com/<owner>`, or `https://gitlab.com/<group>`) tracks every repo
+  under that owner; `sync` discovers and fetches new ones automatically. Needs `gh`
+  (GitHub) or `glab` (GitLab group) installed and authenticated.
 - **More details**: `shed help <topic>` or `shed <cmd> --help`.
 - **New to shed? Give the user a tour.** If the user asks for an intro, a tour, a
   demo, or "how does shed work?", run `shed __welcome-tour` and follow what it

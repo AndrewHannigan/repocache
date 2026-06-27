@@ -73,8 +73,9 @@ func newRootCmd() *cobra.Command {
 	return cmd
 }
 
-const rootLong = `shed maintains a read-only local store of GitHub repos and
-creates writable workspaces from it via 'git clone --reference'.
+const rootLong = `shed maintains a read-only local store of git repos (GitHub,
+GitLab, or any git host) and creates writable workspaces from it via
+'git clone --reference'.
 
 Designed for terminal coding agents (Claude Code, Cursor, opencode)
 to search across many repos and edit a few.`

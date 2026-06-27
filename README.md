@@ -15,9 +15,9 @@ Run Claude Code, Cursor, and opencode against the same repos and they clobber ea
 - 🤝 **One system, every agent** — All agents manage repos and workspaces the same way, so parallel sessions never step on each other in the same repo.
 - ✍️ **Isolated writable workspaces** — `shed workspace new` gives each session its own clone off the pristine repo; agents edit there, never in your reference copy or each other's.
 - 🌱 **Never a stale branch** — every workspace is created from the freshly-synced repo, so an agent never unintentionally works on out-of-date code.
-- 🧹 **One-command cleanup** — workspaces pile up fast; `shed prune` reclaims the ones whose work has already landed (merged PR or merged into the default branch) and leaves anything unpushed untouched.
+- 🧹 **One-command cleanup** — workspaces pile up fast; `shed prune` reclaims the ones whose work has already landed (merged PR/MR or merged into the default branch) and leaves anything unpushed untouched.
 - 🔒 **Reference repos, stored once and never clobbered** — every repo lives read-only in `~/.shed` (`chmod a-w`), refreshed in the background and reused across sessions instead of re-cloned into `/tmp`.
-- 🧰 **Searchable out of the box** — agents run `rg`, `grep`, `git`, and `gh` across the entire catalog directly.
+- 🧰 **Searchable out of the box** — agents run `rg`, `grep`, `git`, `gh`, and `glab` across the entire catalog directly.
 - ⚙️ **Zero agent setup** — one `shed init` wires up each agent to use shed automatically — no path hallucinations.
 
 ---
@@ -40,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/shed/main/install.sh
 # integrate with your agents
 shed init
 
-# add a repo (github shorthand works)
+# add a repo (shorthand works — GitHub first, then GitLab)
 shed add octocat/Hello-World
 
 # now run claude, cursor-agent, or opencode — your agent knows how to use it
@@ -117,8 +117,9 @@ name = "myorg/bar"   # optional override; default derived from URL
 url = "https://github.com/myorg/widgets"
 git = { "user.email" = "me@work.com", "core.hooksPath" = ".githooks" }
 
-# Track a whole user/org. sync discovers its repos via gh and adds new ones
-# automatically (as [[repo]] entries tagged with source = this owner).
+# Track a whole user/org/group. sync discovers its repos (via gh for GitHub,
+# glab for a GitLab group) and adds new ones automatically (as [[repo]]
+# entries tagged with source = this owner).
 [[owner]]
 url = "https://github.com/octocat"
 # include_forks = false      # default
@@ -148,7 +149,9 @@ A worktree modifies state in the originating repo's `./git/`, breaking the read-
 
 Shed does not manage credentials. Every git operation defers to whatever `git clone <url>` already works with in your shell — HTTPS credential helpers or `ssh-agent`. If `git clone <url>` works, shed works.
 
-**Picking a transport.** GitHub shorthand (`shed add owner/repo`) expands to HTTPS. If that can't authenticate but the SSH form can — the common "I only have an `ssh-agent` set up" case — `shed add` detects this during a preflight check and stores the working SSH URL instead, telling you it did. To force a transport, pass a full URL (`git@github.com:owner/repo.git` or `https://github.com/owner/repo`).
+**Picking a host.** Shorthand (`shed add owner/repo`) resolves against GitHub first; if the repo isn't found on github.com, `shed add` falls back to gitlab.com during its preflight check and stores the GitLab URL instead, telling you it did. To pin a host, prefix it (`gitlab.com/owner/repo`) or pass a full URL.
+
+**Picking a transport.** Shorthand expands to HTTPS. If that can't authenticate but the SSH form can — the common "I only have an `ssh-agent` set up" case — `shed add` detects this during a preflight check and stores the working SSH URL instead, telling you it did. To force a transport, pass a full URL (`git@github.com:owner/repo.git` or `https://github.com/owner/repo`).
 
 **When auth fails.** Sync failures — including a repo's very first clone — are recorded and surfaced, never silently dropped: `shed status` reports them and the session-start hook warns your agent that the store is stale. The suggested fix is transport-aware (load your SSH key vs. `gh auth login` / a credential helper).
 
