@@ -297,8 +297,9 @@ sharing object storage but with independent refs. Edits happen here.
     Every workspace with repo, branch, dirty state, unpushed-commit count,
     age of the newest file.
 
-  shed workspace path <repo> <branch>
-    Print absolute workspace path. Exit 2 if missing.
+  shed workspace path <name>
+    Print absolute workspace path. Names are globally unique, so the
+    name alone identifies the workspace. Exit 2 if missing.
 
   shed workspace rm <name> [--force]
     Delete the named workspace dir (names are globally unique). Refuses

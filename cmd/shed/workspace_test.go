@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/AndrewHannigan/shed/pkg/config"
@@ -11,38 +12,6 @@ import (
 	"github.com/AndrewHannigan/shed/pkg/paths"
 	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
-
-// resolveRepoName powers the shorthand acceptance in `workspace path`/`rm`,
-// matching what `workspace new` already does via config.Resolve.
-func TestResolveRepoName(t *testing.T) {
-	c := &config.Config{
-		Repos: []config.Repo{
-			{URL: "https://github.com/AndrewHannigan/shed"},
-			{URL: "https://github.com/acme/widgets"},
-			{URL: "https://github.com/other/widgets"}, // shares leaf "widgets"
-		},
-	}
-
-	tests := []struct {
-		name   string
-		in     string
-		want   string
-		wantOK bool
-	}{
-		{"shorthand leaf", "shed", "github.com/AndrewHannigan/shed", true},
-		{"full name", "github.com/AndrewHannigan/shed", "github.com/AndrewHannigan/shed", true},
-		{"unknown", "nope", "", false},
-		{"ambiguous leaf", "widgets", "", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok := resolveRepoName(c, tt.in)
-			if ok != tt.wantOK || got != tt.want {
-				t.Errorf("resolveRepoName(%q) = (%q, %v), want (%q, %v)", tt.in, got, ok, tt.want, tt.wantOK)
-			}
-		})
-	}
-}
 
 // makeWorkspaceDir creates a minimal workspace dir (with a .git subdir) so
 // workspace.Exists / LocateByName treat it as a real workspace.
@@ -90,5 +59,42 @@ func TestRunWorkspaceRmNotFound(t *testing.T) {
 	var c *errs.Coded
 	if !errors.As(err, &c) || c.Code != errs.NotFound {
 		t.Fatalf("runWorkspaceRm(nope) = %v, want errs.NotFound", err)
+	}
+}
+
+// `workspace path` now takes just the globally-unique workspace name and
+// resolves it to the one repo it lives under, the same lookup `rm`/`resume` use.
+func TestRunWorkspacePathByName(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	saveConfig(t, &config.Config{
+		Repos: []config.Repo{{URL: "https://github.com/AndrewHannigan/shed"}},
+	})
+	const repo = "github.com/AndrewHannigan/shed"
+	want := makeWorkspaceDir(t, repo, "fix-thing")
+
+	out := captureStdout(t, func() {
+		if err := runWorkspacePath("fix-thing"); err != nil {
+			t.Fatalf("runWorkspacePath(fix-thing) = %v, want nil", err)
+		}
+	})
+	if got := strings.TrimSpace(out); got != want {
+		t.Errorf("runWorkspacePath(fix-thing) printed %q, want %q", got, want)
+	}
+}
+
+func TestRunWorkspacePathNotFound(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	saveConfig(t, &config.Config{
+		Repos: []config.Repo{{URL: "https://github.com/AndrewHannigan/shed"}},
+	})
+
+	err := runWorkspacePath("nope")
+	var c *errs.Coded
+	if !errors.As(err, &c) || c.Code != errs.NotFound {
+		t.Fatalf("runWorkspacePath(nope) = %v, want errs.NotFound", err)
 	}
 }
