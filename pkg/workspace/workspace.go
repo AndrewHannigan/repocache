@@ -221,7 +221,7 @@ func infoFor(name, branch, path string) Info {
 	if n, ok := unpushedCount(path); ok {
 		i.Unpushed = n
 	}
-	i.Age = newestMtime(path)
+	i.Age = lastActivity(path)
 	return i
 }
 
@@ -249,13 +249,40 @@ func unpushedCount(path string) (int, bool) {
 	return n, true
 }
 
-func newestMtime(path string) time.Time {
-	cmd := exec.Command("git", "-C", path, "log", "-g", "-1", "--format=%ct")
+// lastActivity reports when the workspace was last touched, used for its AGE
+// column and for prune's age threshold. It reads the timestamp of the newest
+// reflog entry — i.e. when the most recent action happened *in this workspace*
+// (the clone, a commit, a checkout) — not the date of the commit that entry
+// points at.
+//
+// The distinction matters: a workspace cloned from a repo whose newest commit
+// is years old should report its own creation age, not the commit's. The
+// reflog's oldest entry is always the clone, so the newest entry's time is
+// never older than creation — it reads as the creation time for an untouched
+// workspace and advances to the commit time once work lands, which is what the
+// AGE column should show.
+func lastActivity(path string) time.Time {
+	// %gd with --date=unix renders the reflog selector as "HEAD@{<unix>}",
+	// the entry's own time. (Plain %ct/%cd would give the pointed-at commit's
+	// date instead, the very thing we're avoiding.)
+	cmd := exec.Command("git", "-C", path, "log", "-g", "-1", "--format=%gd", "--date=unix")
 	out, err := cmd.Output()
 	if err != nil {
 		return time.Time{}
 	}
-	ts, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+	return parseReflogUnix(string(out))
+}
+
+// parseReflogUnix extracts the unix seconds from a "<ref>@{<unix>}" reflog
+// selector (as emitted by `git log -g --format=%gd --date=unix`) and returns
+// the corresponding time, or the zero time if it can't be parsed.
+func parseReflogUnix(selector string) time.Time {
+	open := strings.IndexByte(selector, '{')
+	end := strings.IndexByte(selector, '}')
+	if open < 0 || end <= open+1 {
+		return time.Time{}
+	}
+	ts, err := strconv.ParseInt(strings.TrimSpace(selector[open+1:end]), 10, 64)
 	if err != nil {
 		return time.Time{}
 	}

@@ -1,9 +1,111 @@
 package workspace
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+// git runs a git command in dir with a pinned identity, failing on error.
+// extraEnv adds per-command variables (e.g. GIT_COMMITTER_DATE) — the reflog
+// entry's own timestamp, which lastActivity reads, follows GIT_COMMITTER_DATE,
+// so a date is only forced on the commands meant to be backdated, never on the
+// clone whose reflog time must reflect real "creation now".
+func git(t *testing.T, dir string, extraEnv []string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(cmd.Environ(),
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+	cmd.Env = append(cmd.Env, extraEnv...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+}
+
+// TestLastActivity is the regression for the AGE column: a workspace cloned
+// from a repo whose newest commit is ancient must report its own (recent)
+// creation time, not the commit's date — and must advance once work is
+// committed.
+func TestLastActivity(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	root := t.TempDir()
+	ancient := []string{
+		"GIT_AUTHOR_DATE=2010-01-01T00:00:00Z",
+		"GIT_COMMITTER_DATE=2010-01-01T00:00:00Z",
+	}
+
+	// Upstream repo whose only commit is backdated to 2010.
+	upstream := filepath.Join(root, "upstream")
+	git(t, root, nil, "init", "-q", upstream)
+	if err := os.WriteFile(filepath.Join(upstream, "a.txt"), []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, upstream, nil, "add", "a.txt")
+	git(t, upstream, ancient, "commit", "-q", "-m", "ancient")
+
+	// Clone it "now" (no date override) — this is the workspace creation.
+	ws := filepath.Join(root, "ws")
+	git(t, root, nil, "clone", "-q", upstream, ws)
+
+	age := lastActivity(ws)
+	if age.IsZero() {
+		t.Fatal("lastActivity returned zero time for a fresh clone")
+	}
+	if time.Since(age) > time.Hour {
+		t.Fatalf("fresh clone age = %v (%v ago); want recent creation time, not the 2010 commit date",
+			age, time.Since(age))
+	}
+
+	// Committing new work advances the age to the commit's action time.
+	if err := os.WriteFile(filepath.Join(ws, "a.txt"), []byte("hello world"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, ws, nil, "add", "a.txt")
+	git(t, ws, nil, "commit", "-q", "-m", "new work")
+
+	after := lastActivity(ws)
+	if time.Since(after) > time.Hour {
+		t.Fatalf("post-commit age = %v (%v ago); want recent commit time", after, time.Since(after))
+	}
+	if after.Before(age) {
+		t.Fatalf("age went backwards after a commit: before=%v after=%v", age, after)
+	}
+}
+
+func TestParseReflogUnix(t *testing.T) {
+	cases := []struct {
+		name     string
+		selector string
+		want     int64 // unix seconds; -1 means expect the zero time
+	}{
+		{"clone entry", "HEAD@{1782599155}\n", 1782599155},
+		{"trailing newline trimmed inside braces", "HEAD@{ 1782599155 }", 1782599155},
+		{"non-unix selector falls back to zero", "HEAD@{0}x", 0},
+		{"missing braces", "HEAD", -1},
+		{"empty", "", -1},
+		{"non-numeric", "HEAD@{abc}", -1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := parseReflogUnix(c.selector)
+			if c.want < 0 {
+				if !got.IsZero() {
+					t.Fatalf("parseReflogUnix(%q) = %v, want zero time", c.selector, got)
+				}
+				return
+			}
+			if got.Unix() != c.want {
+				t.Fatalf("parseReflogUnix(%q).Unix() = %d, want %d", c.selector, got.Unix(), c.want)
+			}
+		})
+	}
+}
 
 func TestCloneArgs(t *testing.T) {
 	t.Run("no git config", func(t *testing.T) {
