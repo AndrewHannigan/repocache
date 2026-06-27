@@ -108,9 +108,15 @@ func runRepoOnlyList(jsonOut bool) error {
 			Repos []repoRow `json:"repos"`
 		}{rows})
 	}
-	// owners=nil and workspaces=nil (with workspaceHint=false) leave only the
-	// Repos section; the Owners and Workspaces sections are omitted entirely.
-	return writeLibrary(os.Stdout, nil, rows, nil, false)
+	if len(rows) == 0 {
+		fmt.Fprintln(os.Stdout, nothingTrackedHint)
+		return nil
+	}
+	// This is a single, standalone table — not the multi-section `shed ls`
+	// overview — so its rows sit flush-left under the caption (indent "")
+	// rather than nested two spaces in.
+	writeReposSection(os.Stdout, rows, "")
+	return nil
 }
 
 // collectRepoList gathers the repo and owner rows behind `ls`, probing the
@@ -165,6 +171,10 @@ func collectWorkspaces(c *config.Config) ([]workspace.Info, error) {
 	return infos, nil
 }
 
+// nothingTrackedHint is shown by the human-readable `ls` views when the library
+// is empty, pointing a newcomer at the command that fills it.
+const nothingTrackedHint = "(nothing tracked yet — add a repo with `shed add <url>`)"
+
 // writeLibrary renders the human-readable `ls` overview to out: a captioned
 // section per kind of thing shed manages, so a newcomer can tell at a glance
 // what each table is. Sections with no rows are omitted, except that
@@ -172,7 +182,7 @@ func collectWorkspaces(c *config.Config) ([]workspace.Info, error) {
 // when there are repos but no workspaces yet — the common first-run state.
 func writeLibrary(out io.Writer, owners []ownerRow, repos []repoRow, workspaces []workspace.Info, workspaceHint bool) error {
 	if len(owners) == 0 && len(repos) == 0 && len(workspaces) == 0 {
-		fmt.Fprintln(out, "(nothing tracked yet — add a repo with `shed add <url>`)")
+		fmt.Fprintln(out, nothingTrackedHint)
 		return nil
 	}
 	first := true
@@ -188,7 +198,9 @@ func writeLibrary(out io.Writer, owners []ownerRow, repos []repoRow, workspaces 
 	}
 	if len(repos) > 0 {
 		gap()
-		writeReposSection(out, repos)
+		// The overview indents each section's rows under its caption so the
+		// sections read as a nested hierarchy.
+		writeReposSection(out, repos, "  ")
 	}
 	if len(workspaces) > 0 || (workspaceHint && len(repos) > 0) {
 		gap()
@@ -207,7 +219,11 @@ func writeOwnersSection(out io.Writer, owners []ownerRow) {
 	w.Flush()
 }
 
-func writeReposSection(out io.Writer, repos []repoRow) {
+// writeReposSection renders the captioned Repos table. indent is prepended to
+// each table row (not the caption): the multi-section `shed ls` overview passes
+// two spaces so the rows nest visually under their heading, while the standalone
+// `shed repo ls` passes "" so its single table sits flush-left.
+func writeReposSection(out io.Writer, repos []repoRow, indent string) {
 	fmt.Fprintln(out, "Repos")
 	// The "FROM" column only matters when an owner auto-added some repo;
 	// hide it otherwise so the common (no-owners) case isn't cluttered with
@@ -221,9 +237,9 @@ func writeReposSection(out io.Writer, repos []repoRow) {
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	if showSource {
-		fmt.Fprintln(w, "  NAME\tLAST SYNC\tFROM\tPATH")
+		fmt.Fprintln(w, indent+"NAME\tLAST SYNC\tFROM\tPATH")
 	} else {
-		fmt.Fprintln(w, "  NAME\tLAST SYNC\tPATH")
+		fmt.Fprintln(w, indent+"NAME\tLAST SYNC\tPATH")
 	}
 	for _, r := range repos {
 		if showSource {
@@ -231,9 +247,9 @@ func writeReposSection(out io.Writer, repos []repoRow) {
 			if r.Source != "" {
 				source = r.Source
 			}
-			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", r.Name, lastSyncLabel(r), source, repoPathLabel(r))
+			fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\n", indent, r.Name, lastSyncLabel(r), source, repoPathLabel(r))
 		} else {
-			fmt.Fprintf(w, "  %s\t%s\t%s\n", r.Name, lastSyncLabel(r), repoPathLabel(r))
+			fmt.Fprintf(w, "%s%s\t%s\t%s\n", indent, r.Name, lastSyncLabel(r), repoPathLabel(r))
 		}
 	}
 	w.Flush()

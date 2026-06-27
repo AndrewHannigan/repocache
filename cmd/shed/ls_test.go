@@ -97,6 +97,43 @@ func TestWriteLibraryWorkspaceHint(t *testing.T) {
 	}
 }
 
+// writeReposSection prepends its indent argument to the table rows but never to
+// the "Repos" caption: `shed repo ls` passes "" so its single table sits
+// flush-left, while the `shed ls` overview passes two spaces to nest the rows
+// under their caption.
+func TestWriteReposSectionIndent(t *testing.T) {
+	repos := []repoRow{{
+		Name:       "github.com/acme/widget",
+		LastSyncAt: time.Now().UTC().Format(time.RFC3339),
+	}}
+
+	rowsOf := func(indent string) (caption string, rows []string) {
+		var buf bytes.Buffer
+		writeReposSection(&buf, repos, indent)
+		lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+		return lines[0], lines[1:]
+	}
+
+	// Flush-left: caption present, no leading whitespace on any table row.
+	caption, flushRows := rowsOf("")
+	if caption != "Repos" {
+		t.Errorf("expected \"Repos\" caption on the first line, got %q", caption)
+	}
+	for _, line := range flushRows {
+		if strings.HasPrefix(line, " ") {
+			t.Errorf("flush-left table row should have no leading indent, got %q", line)
+		}
+	}
+
+	// Nested: every table row begins with the two-space indent.
+	_, nestedRows := rowsOf("  ")
+	for _, line := range nestedRows {
+		if !strings.HasPrefix(line, "  ") {
+			t.Errorf("nested table row should be indented two spaces, got %q", line)
+		}
+	}
+}
+
 // The Workspaces section lists workspaces most-recently-active first, so the
 // one a user just touched sits at the top.
 func TestWriteWorkspacesSectionSortsByAge(t *testing.T) {
