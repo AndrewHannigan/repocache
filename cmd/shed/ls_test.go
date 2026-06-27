@@ -32,7 +32,7 @@ func TestWriteLibraryCaptionedSections(t *testing.T) {
 	out := buf.String()
 
 	for _, want := range []string{
-		"Owners", "OWNER", "octocat",
+		"Tracked Owners", "OWNER", "octocat",
 		"Repos", "NAME", "LAST SYNC", "github.com/octocat/Hello-World",
 		// The Repos section shows each stored copy's path, just like Workspaces.
 		"PATH", "/home/u/.shed/repos/github.com/octocat/Hello-World",

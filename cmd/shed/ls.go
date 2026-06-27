@@ -26,9 +26,9 @@ func newLsCmd() *cobra.Command {
 		Short: "List your shed: tracked owners, read-only repos, and writable workspaces",
 		Long: `ls shows everything shed is managing for you, in three sections:
 
-  Owners      whole GitHub users/orgs you track; sync auto-adds their repos
-  Repos       read-only reference copies your agents read from
-  Workspaces  isolated writable clones where agents make and push changes
+  Tracked Owners  whole GitHub users/orgs you track; sync auto-adds their repos
+  Repos           read-only reference copies your agents read from
+  Workspaces      isolated writable clones where agents make and push changes
 
 A repo's "⚠ sync failing" marker means its last fetch failed, so its stored
 copy is stale — run 'shed status <repo>' for the error and the fix.`,
@@ -198,7 +198,7 @@ func writeLibrary(out io.Writer, owners []ownerRow, repos []repoRow, workspaces 
 }
 
 func writeOwnersSection(out io.Writer, owners []ownerRow) {
-	fmt.Fprintln(out, "Owners")
+	fmt.Fprintln(out, "Tracked Owners")
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "  OWNER\tREPOS")
 	for _, o := range owners {
