@@ -29,7 +29,7 @@ func main() {
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "shed",
-		Short:         "Read-only store of git repos for terminal coding agents",
+		Short:         "git repo management for terminal coding agents",
 		Long:          rootLong,
 		Version:       version,
 		SilenceErrors: true,
@@ -41,6 +41,19 @@ func newRootCmd() *cobra.Command {
 		PersistentPostRun: func(c *cobra.Command, _ []string) { recordCommand(c) },
 	}
 	cmd.SetHelpCommand(newHelpCmd())
+	// Make a bare `shed`, `shed -h`, and `shed --help` all print the same
+	// curated overview that `shed help` prints. Without this, the flag form
+	// falls back to Cobra's auto-generated usage — a different topline and
+	// layout from `shed help`, which is confusing. Subcommand help
+	// (`shed add --help`) still uses Cobra's default rendering.
+	defaultHelp := cmd.HelpFunc()
+	cmd.SetHelpFunc(func(c *cobra.Command, args []string) {
+		if c == cmd {
+			fmt.Fprint(c.OutOrStdout(), helpTopics["overview"])
+			return
+		}
+		defaultHelp(c, args)
+	})
 	cmd.CompletionOptions.DisableDefaultCmd = true
 	cmd.AddCommand(
 		newInitCmd(),
