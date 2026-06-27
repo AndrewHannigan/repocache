@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 	"github.com/AndrewHannigan/shed/pkg/forge"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
 
@@ -55,7 +55,7 @@ type prunePlan struct {
 }
 
 func runPrune(dryRun, force, yes bool, ifOlderThan time.Duration) error {
-	if err := cache.RequireGit(); err != nil {
+	if err := repostore.RequireGit(); err != nil {
 		return errs.Wrap(errs.MissingDep, err)
 	}
 	// prune leans on gh for the merged-PR check, so fail fast (rather than

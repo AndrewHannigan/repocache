@@ -7,8 +7,8 @@ import (
 )
 
 // TestRemoveAllForce verifies removeAllForce deletes a tree containing
-// read-only directories (mode a-w) — the state sync leaves cache repos in
-// (see cache.LockTree), and what made a plain os.RemoveAll-based --purge
+// read-only directories (mode a-w) — the state sync leaves stored repos in
+// (see repostore.LockTree), and what made a plain os.RemoveAll-based --purge
 // fail partway through with EACCES.
 func TestRemoveAllForce(t *testing.T) {
 	root := t.TempDir()
@@ -19,7 +19,7 @@ func TestRemoveAllForce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(sub, "sync.go"), []byte("package main\n"), 0o444); err != nil {
 		t.Fatal(err)
 	}
-	// Lock the tree read-only from the leaves up, as cache.LockTree does.
+	// Lock the tree read-only from the leaves up, as repostore.LockTree does.
 	// A read-only parent directory is what blocks unlinking its children.
 	for _, d := range []string{sub, filepath.Join(root, "repo")} {
 		if err := os.Chmod(d, 0o555); err != nil {

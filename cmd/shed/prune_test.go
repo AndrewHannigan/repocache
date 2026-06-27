@@ -71,7 +71,7 @@ func TestGhRepoFromName(t *testing.T) {
 		wantRepo string
 		wantOK   bool
 	}{
-		{"github", "github.com/AndrewHannigan/repocache", "github.com", "AndrewHannigan/repocache", true},
+		{"github", "github.com/AndrewHannigan/widgets", "github.com", "AndrewHannigan/widgets", true},
 		{"enterprise host", "ghe.acme.com/team/widgets", "ghe.acme.com", "team/widgets", true},
 		{"nested repo path", "github.com/acme/group/widgets", "github.com", "acme/group/widgets", true},
 		{"no repo segment", "github.com/owneronly", "", "", false},

@@ -10,16 +10,16 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 )
 
 const bgSyncWorkerEnv = "SHED_BG_SYNC_WORKER"
 
-// cacheEmptyHint nudges the user to populate an empty cache. It is printed to
+// storeEmptyHint nudges the user to populate an empty store. It is printed to
 // stdout for the plain-stdout agents.
-const cacheEmptyHint = "shed: cache is empty. Run `shed sync` to fetch your tracked repos."
+const storeEmptyHint = "shed: store is empty. Run `shed sync` to fetch your tracked repos."
 
 func newBgSyncCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -31,7 +31,7 @@ func newBgSyncCmd() *cobra.Command {
 				return bgSyncWorker()
 			}
 			if bgSyncStart() {
-				fmt.Println(cacheEmptyHint)
+				fmt.Println(storeEmptyHint)
 			}
 			return nil
 		},
@@ -41,7 +41,7 @@ func newBgSyncCmd() *cobra.Command {
 
 // bgSyncStart runs the session-start bg-sync action in the hook's process: it
 // does nothing if no repos are tracked, returns true on first run (nothing ever
-// synced) so the caller can surface cacheEmptyHint, and otherwise spawns the
+// synced) so the caller can surface storeEmptyHint, and otherwise spawns the
 // detached worker. It never fails — the hook must not break the agent.
 func bgSyncStart() (showEmptyHint bool) {
 	c, err := config.Load()
@@ -89,7 +89,7 @@ func everSynced(c *config.Config) bool {
 		if err != nil {
 			continue
 		}
-		if meta, _ := cache.LoadMeta(name); meta != nil {
+		if meta, _ := repostore.LoadMeta(name); meta != nil {
 			return true
 		}
 	}
@@ -97,7 +97,7 @@ func everSynced(c *config.Config) bool {
 }
 
 // configBgInterval returns the staleness gate passed to `sync
-// --if-older-than`. Default is 0 (no gate): the cache refreshes on every
+// --if-older-than`. Default is 0 (no gate): the store refreshes on every
 // session start. Set bg_sync_interval (e.g. "1h") to skip repos synced
 // within that window instead.
 func configBgInterval() time.Duration {

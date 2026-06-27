@@ -9,10 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
 
@@ -20,7 +20,7 @@ func newWorkspaceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "workspace",
 		Aliases: []string{"ws"},
-		Short:   "Manage writable workspaces derived from cache repos",
+		Short:   "Manage writable workspaces derived from stored repos",
 	}
 	cmd.AddCommand(
 		newWorkspaceNewCmd(),
@@ -36,9 +36,9 @@ func newWorkspaceNewCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "new <repo> <branch>",
 		Short: "Create a workspace via `git clone --reference`",
-		Long: `new creates a writable clone of the cache repo at
+		Long: `new creates a writable clone of the stored repo at
 ~/.shed/workspaces/<repo>/<branch>/ using
-'git clone --reference' so it shares object storage with the cache.
+'git clone --reference' so it shares object storage with the store.
 
 If <branch> exists on origin, checks it out. Otherwise creates it off
 origin/HEAD (or --base). Prints the workspace path on stdout.`,
@@ -52,7 +52,7 @@ origin/HEAD (or --base). Prints the workspace path on stdout.`,
 }
 
 func runWorkspaceNew(name, branch, base string) error {
-	if err := cache.RequireGit(); err != nil {
+	if err := repostore.RequireGit(); err != nil {
 		return errs.Wrap(errs.MissingDep, err)
 	}
 	// Reject an unsafe branch/base up front, before the (network) sync below,
@@ -81,23 +81,23 @@ func runWorkspaceNew(name, branch, base string) error {
 	if workspace.Exists(name, branch) {
 		return errs.New(errs.Exists, "workspace already exists at %s", workspace.PathFor(name, branch))
 	}
-	// Refresh the cache first so the workspace forks from up-to-date code.
-	// syncOne clones the repo if it isn't cached yet. If the sync fails but a
-	// cache already exists, fall back to it (so `new` still works offline);
-	// only hard-fail when there is nothing cached to fork from.
+	// Refresh the store first so the workspace forks from up-to-date code.
+	// syncOne clones the repo if it isn't stored yet. If the sync fails but a
+	// store already exists, fall back to it (so `new` still works offline);
+	// only hard-fail when there is nothing stored to fork from.
 	fmt.Fprintf(os.Stderr, "syncing %s...\n", name)
 	if res := syncOne(name, repo.URL, 0); res.Status == "error" {
-		if !cache.Exists(name) {
+		if !repostore.Exists(name) {
 			if res.locked {
 				return errs.New(errs.Locked, "could not sync %s: %s", name, res.Error)
 			}
 			return errs.New(errs.Network, "could not sync %s: %s", name, res.Error)
 		}
-		fmt.Fprintf(os.Stderr, "warning: could not refresh %s (%s); using existing cache\n", name, res.Error)
+		fmt.Fprintf(os.Stderr, "warning: could not refresh %s (%s); using existing store\n", name, res.Error)
 	}
 	path, err := workspace.New(name, branch, base, repo.URL)
 	if err != nil {
-		if errors.Is(err, cache.ErrLocked) {
+		if errors.Is(err, repostore.ErrLocked) {
 			return errs.Wrap(errs.Locked, err)
 		}
 		return errs.Wrap(errs.Network, err)

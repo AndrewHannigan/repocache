@@ -29,7 +29,7 @@ func main() {
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "shed",
-		Short:         "Read-only mirror of git repos for terminal coding agents",
+		Short:         "Read-only store of git repos for terminal coding agents",
 		Long:          rootLong,
 		Version:       version,
 		SilenceErrors: true,
@@ -60,7 +60,7 @@ func newRootCmd() *cobra.Command {
 	return cmd
 }
 
-const rootLong = `shed maintains a read-only local mirror of GitHub repos and
+const rootLong = `shed maintains a read-only local store of GitHub repos and
 creates writable workspaces from it via 'git clone --reference'.
 
 Designed for terminal coding agents (Claude Code, Cursor, opencode)

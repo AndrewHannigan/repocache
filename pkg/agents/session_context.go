@@ -88,28 +88,6 @@ func sessionContextCommand(agentKey string) string {
 	return SessionContextCommand + " --agent " + agentKey
 }
 
-// legacySessionContextCommands are session-context hook commands that earlier
-// versions installed under the old `repocache` binary name. Install strips
-// them so a superseded form does not run (or error) on every session start:
-//   - "repocache session-context"   — the original public subcommand,
-//     which no longer exists (now the internal __session-context).
-//   - "repocache __session-context" — the pre-per-agent bare form, before
-//     --agent <key> selected the per-agent output shape.
-var legacySessionContextCommands = []string{
-	legacySessionContextCommand,
-	"repocache __session-context",
-}
-
-// removeLegacySessionContextHooks strips every superseded session-context hook
-// command from a settings file. Best-effort, like the rest of the install
-// migration steps: errors are ignored so a malformed legacy entry can't block
-// a fresh install.
-func removeLegacySessionContextHooks(load loadFn, save saveFn, filePath string) {
-	for _, cmd := range legacySessionContextCommands {
-		_ = removeSessionStartHook(load, save, filePath, cmd)
-	}
-}
-
 // SessionContextOutputFor renders the guide body in the shape the named agent
 // expects. It is the entry point the __session-context command uses to map an
 // --agent <key> flag to the right per-agent output.

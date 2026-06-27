@@ -37,9 +37,9 @@ func BgSyncLockFile() string { return filepath.Join(DataDir(), ".bg-sync.lock") 
 func BgSyncLogFile() string  { return filepath.Join(LogsDir(), "bg-sync.log") }
 
 // SyncErrorDir holds standalone failure records for repos that failed their
-// very first sync — before a cache dir (and thus its .git/shed.meta sidecar)
+// very first sync — before a store dir (and thus its .git/shed.meta sidecar)
 // ever existed. Kept outside ReposDir so a record can never be mistaken for a
-// populated cache by Exists() or Clone().
+// populated store by Exists() or Clone().
 func SyncErrorDir() string { return filepath.Join(DataDir(), ".sync-errors") }
 
 // SyncErrorFile is the JSON failure record for a repo whose first sync failed,
@@ -54,18 +54,18 @@ func SyncErrorFile(name string) string {
 func HistoryFile() string           { return filepath.Join(DataDir(), "history.jsonl") }
 func HistoryTrimMarkerFile() string { return filepath.Join(DataDir(), ".history-trim") }
 
-// CacheRepoPath returns the on-disk path for a named cache repo
+// RepoStorePath returns the on-disk path for a named stored repo
 // (e.g. "github.com/foo/bar" → "<DataDir>/repos/github.com/foo/bar").
-func CacheRepoPath(name string) string {
+func RepoStorePath(name string) string {
 	return filepath.Join(ReposDir(), filepath.FromSlash(name))
 }
 
-func CacheRepoLockFile(name string) string {
-	return filepath.Join(CacheRepoPath(name), ".git", "shed.lock")
+func RepoStoreLockFile(name string) string {
+	return filepath.Join(RepoStorePath(name), ".git", "shed.lock")
 }
 
-func CacheRepoMetaFile(name string) string {
-	return filepath.Join(CacheRepoPath(name), ".git", "shed.meta")
+func RepoStoreMetaFile(name string) string {
+	return filepath.Join(RepoStorePath(name), ".git", "shed.meta")
 }
 
 // WorkspacePath returns the on-disk path for a (repo, branch) workspace.
