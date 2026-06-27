@@ -10,16 +10,15 @@ workspace mid-session, shed should record *which session* did it, so that
 later you can run:
 
 ```
-shed resume <repo> <branch>
+shed resume <name>
 ```
 
 and be dropped back into that exact agent session, in the right directory,
 ready to continue — across Claude Code, opencode, and Cursor, from one place.
 
-The powerful end state: `shed resume` with no args lists every piece of
-in-progress work across every agent (the workspace, its repo/branch, the
-agent, how stale it is, dirty/unpushed state), and a single command resumes
-any of them.
+The powerful end state: `shed ls` shows every workspace across every agent
+(dirty/unpushed state, age) annotated with the session that owns it, and
+`shed resume <name>` drops you back into any of them — one hub, many agents.
 
 ## Background: how each agent resumes
 
@@ -119,21 +118,39 @@ The hook is cheap and a no-op for every command that isn't a
 ### 2. Linking, owned by the hook
 
 When the hook sees a `shed workspace new` command, it has `(session_id, cwd,
-command)`. To turn the command into a concrete workspace identity:
+command)`. The workspace doesn't exist yet at hook time (the hook fires
+*before* the command runs), so linking is a two-step **pending-intent →
+finalize** handshake:
 
-- **Primary — parse it.** shed owns its own CLI grammar, so it re-resolves
-  `<repo> <name>` with the same shorthand resolution `workspace new` uses and
-  computes the deterministic workspace path. The workspace doesn't exist yet at
-  hook time, but the path is deterministic, so the link is keyed to the
-  future path and is already in place when `workspace new` creates the dir.
-- **Fallback — handshake.** If a command is shell-wrapped in a way that defeats
-  tolerant parsing (`cd x && FOO=1 shed ws new …`), `workspace new` itself, on
-  success, claims the most recent session the hook recorded for this cwd.
+1. **Hook records a pending intent.** shed owns its own CLI grammar, so it
+   re-resolves the `<name>` argument with the same resolution `workspace new`
+   uses and writes a small pending record keyed by that name —
+   `pending/<name> = {session_id, agent, cwd}`. The globally-unique workspace
+   name is the join key, so there's no cwd/ancestry guessing.
+2. **`workspace new` finalizes.** On successful creation, `workspace new`
+   resolves the session from the first available source — the `SHED_SESSION_*`
+   env override (§6) if set, else `pending/<name>` — writes the authoritative
+   link sidecar *into the new workspace* (§3), and clears the pending record.
+   (The env override thus needs no hook at all: `workspace new` reads it
+   directly.)
+
+This ordering also gives the safety model for free: because the link lives
+inside the workspace dir, removing the workspace removes the link automatically
+(§3, §4-lifecycle) — there is no central link store to keep in sync.
+
+- **Fallback.** If a command is shell-wrapped so the name can't be parsed
+  (`cd x && FOO=1 shed ws new …`), no `pending/<name>` is written;
+  `workspace new` falls back to the most recent pending intent for this cwd, and
+  if there is none, simply creates an unlinked workspace (resume unavailable for
+  it — a graceful degradation, never an error).
+- **Pending records are ephemeral**: short-TTL, cleared on finalize, and safe
+  to garbage-collect on age since a stale one only costs a missed link.
 
 ### 3. The link record
 
-Stored as a workspace meta sidecar, mirroring the existing `.git/shed.meta`
-pattern on stored repos:
+Written by `workspace new` *inside the workspace*, as a sidecar in its `.git/`
+(e.g. `.git/shed.session`), mirroring the existing `.git/shed.meta` pattern on
+stored repos:
 
 ```json
 {
@@ -144,10 +161,15 @@ pattern on stored repos:
 }
 ```
 
+Storing it inside the workspace (rather than a central index) means it is
+removed automatically when the workspace is — no separate cleanup, and the
+"link never outlives or endangers its workspace" property is structural. Resume
+reads it directly after `FindByName` locates the workspace dir; no central index
+to scan or keep consistent.
+
 All three fields are always recorded — `cwd` included for every agent (the hook
 supplies it authoritatively; the env override defaults it), since resume always
-`cd`s to it regardless of agent. `shed prune` drops the link when it prunes the
-workspace.
+`cd`s to it regardless of agent.
 
 **Cardinality (settled):**
 
@@ -314,10 +336,11 @@ of `--help`.)
    workspace names in `shed workspace new` (reject a `<name>` already present
    under any repo, naming the conflict). Add a `workspace.FindByName(name)`
    lookup used by both the guard and resume.
-2. Pre-exec hook subcommand (`shed __on-tool-call`) + linking logic + workspace
-   meta sidecar.
-3. `shed workspace new` reconciliation/handshake + `SHED_SESSION_*` env-var
-   override (no visible session flag).
+2. Pre-exec hook subcommand (`shed __on-tool-call`) that parses the `<name>`
+   and writes the `pending/<name>` intent record.
+3. `shed workspace new` finalize step: write the `.git/shed.session` sidecar
+   from the `SHED_SESSION_*` env override (no visible flag) or the pending
+   intent, then clear the pending record.
 4. `shed resume <name>` command (`ExactArgs(1)` name resolve + exec/`--print` +
    `--` passthrough). Optionally annotate `shed ls` workspaces with their
    linked session/agent.
