@@ -12,8 +12,8 @@ Run Claude Code, Cursor, and opencode against the same repos and they clobber ea
      hook; keep it above the fold. -->
 <!-- ![shed in action](docs/demo.gif) -->
 
-- 🤝 **One system, every agent** — Claude Code, Cursor, and opencode all manage repos and workspaces the same way, so parallel agents never step on each other in the same repo.
-- ✍️ **Isolated writable workspaces** — `shed workspace new` gives each task its own clone off the pristine repo; agents edit there, never in your reference copy or each other's.
+- 🤝 **One system, every agent** — All agents manage repos and workspaces the same way, so parallel sessions never step on each other in the same repo.
+- ✍️ **Isolated writable workspaces** — `shed workspace new` gives each session its own clone off the pristine repo; agents edit there, never in your reference copy or each other's.
 - 🌱 **Never a stale branch** — every workspace is created from the freshly-synced repo, so an agent never unintentionally works on out-of-date code.
 - 🧹 **One-command cleanup** — workspaces pile up fast; `shed prune` reclaims the ones whose work has already landed (merged PR or merged into the default branch) and leaves anything unpushed untouched.
 - 🔒 **Reference repos, cached once and never clobbered** — every repo lives read-only in `~/.shed` (`chmod a-w`), refreshed in the background and reused across sessions instead of re-cloned into `/tmp`.
@@ -46,7 +46,7 @@ shed add octocat/Hello-World
 # now run claude, cursor-agent, or opencode — your agent knows how to use it
 ```
 
-That's it. Now any of your agents work the same tracked repos through one shared catalog — reading the read-only copy, and carving off an isolated, up-to-date workspace the moment they need to make changes:
+That's it. Now any of your agents have a consistent system for working with your repo catalog — reading the read-only copy, and carving off an isolated, up-to-date workspace the moment they need to make changes:
 
 ```text
 You:   "Fix the broken link in octocat/Hello-World's README"
@@ -134,7 +134,7 @@ So read-only isn't the goal in itself — it's what makes the *writable* workspa
 
 ## Why `git clone --reference`, not `git worktree`
 
-Both share an underlying object store, but they are not interchangeable. A worktree modifies state in the originating repo's `./git/`, breaking the read-only invariant. `--reference` clones keep independent refs and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Shed sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race.
+A worktree modifies state in the originating repo's `./git/`, breaking the read-only invariant that keeps agents from modifying the repo store directly. `--reference` clones keep independent refs and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Shed sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race.
 
 ---
 
