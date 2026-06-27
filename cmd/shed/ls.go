@@ -242,7 +242,7 @@ func writeWorkspacesSection(out io.Writer, infos []workspace.Info) {
 		return
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  REPO\tBRANCH\tDIRTY\tUNPUSHED\tAGE\tPATH")
+	fmt.Fprintln(w, "  REPO\tNAME\tDIRTY\tUNPUSHED\tAGE\tPATH")
 	for _, i := range infos {
 		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
 			i.Name, i.Branch, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))

@@ -122,7 +122,7 @@ When the hook sees a `shed workspace new` command, it has `(session_id, cwd,
 command)`. To turn the command into a concrete workspace identity:
 
 - **Primary — parse it.** shed owns its own CLI grammar, so it re-resolves
-  `<repo> <branch>` with the same shorthand resolution `workspace new` uses and
+  `<repo> <name>` with the same shorthand resolution `workspace new` uses and
   computes the deterministic workspace path. The workspace doesn't exist yet at
   hook time, but the path is deterministic, so the link is keyed to the
   future path and is already in place when `workspace new` creates the dir.
@@ -147,34 +147,57 @@ pattern on stored repos:
 Last writer wins (a workspace re-touched by a newer session points at the
 newer one). `shed prune` drops the link when it prunes the workspace.
 
-### 4. Unique branch names → resume by branch alone
+### 4. Workspace name is the identity (not the git branch)
 
-Workspaces are currently keyed by `<repo>/<branch>` on disk, so two repos can
-each have, say, a `main` workspace. To make resume unambiguous from a single
-argument, we add an invariant:
+A workspace's identity is its **name** — the directory shed creates and owns.
+The **git branch** checked out inside it is the agent's to rename, switch, or
+add to; shed must never key on it. These are different things and the design
+must not conflate them:
 
-> **A workspace branch name is unique across the entire shed.** `shed workspace
-> new <repo> <branch>` fails if a workspace with that `<branch>` already exists
-> under *any* repo, pointing at the existing one.
+- **Workspace name** — shed-controlled, immutable for the life of the
+  workspace, the directory name, the thing resume and uniqueness key on.
+- **Git branch(es) inside** — agent-controlled, mutable, irrelevant to
+  identity. An agent may `git checkout -b` something else mid-task; the
+  workspace is still the same workspace.
 
-The on-disk layout stays `<repo>/<branch>` (so the path still encodes the
-repo), but the branch alone is now a key. This means `shed resume <branch>`
-resolves to exactly one workspace — no `<repo>` needed.
+shed already half-works this way: the "branch" the workspace layer tracks is
+derived from the *directory name* set at creation, not from `git branch
+--show-current`, so it's stable even if the agent renames the live branch.
+This change makes the distinction explicit and renames the concept to
+*workspace name* so nothing downstream assumes name == live branch.
 
-Tradeoff: you can't have two live workspaces sharing a branch name — most
-visibly `main`/`master` across repos. This fits shed's grain (agents branch
-per task, e.g. `fix-readme-link`, not `main`), and the failure is loud and
-actionable ("workspace `main` already exists for `other/repo`; pick a distinct
-branch"). The same invariant lets `workspace path` / `rm` accept branch-only
-too, though that's out of scope here.
+`shed workspace new <repo> <name>` creates a workspace named `<name>` and, as a
+convenience, seeds an initial git branch of the same name — but that's just the
+starting point, not a binding. (A later `--branch` option could decouple the
+seed branch from the name; not needed now.)
+
+#### Uniqueness invariant → resume by name alone
+
+> **A workspace name is unique across the entire shed.** `shed workspace new
+> <repo> <name>` fails if a workspace named `<name>` already exists under *any*
+> repo, naming the conflict.
+
+The on-disk layout stays `<repo>/<name>` (so the path still encodes the repo),
+but the name alone is now a key, so `shed resume <name>` resolves to exactly
+one workspace — no `<repo>` needed. A `workspace.FindByName(name)` lookup
+backs both the creation guard and resume.
+
+Tradeoff: no two live workspaces can share a name — most visibly if you tried
+two `main` workspaces across repos. This fits shed's grain (workspaces are
+named per task, e.g. `fix-readme-link`), and the failure is loud and actionable
+("workspace `main` already exists for `other/repo`; pick a distinct name").
+The same invariant lets `workspace path` / `rm` accept name-only too, though
+that's out of scope here.
 
 ### 5. `shed resume`
 
 - **`shed resume`** (no args) → the hub: a table joining workspaces to their
-  linked sessions — repo, branch, agent, session age, dirty/unpushed — across
-  all agents. Workspaces with no link are shown but marked not-resumable.
-- **`shed resume <branch>`** → resolve the unique workspace for `<branch>`,
-  read its link, then exec:
+  linked sessions — workspace name, repo, agent, session age, dirty/unpushed —
+  across all agents. (The live git branch can be shown as incidental info, but
+  the name is the identity.) Workspaces with no link are shown but marked
+  not-resumable.
+- **`shed resume <name>`** → resolve the unique workspace for `<name>`, read
+  its link, then exec:
 
   ```
   cd <cwd> && <agent-bin> <resume-flag> <session_id> <args-after-->
@@ -185,7 +208,7 @@ too, though that's out of scope here.
 #### Argument contract
 
 ```
-shed resume <branch> [shed flags] [-- <args passed straight to the agent>]
+shed resume <name> [shed flags] [-- <args passed straight to the agent>]
 ```
 
 Everything after `--` is appended to the agent invocation **verbatim** — shed
@@ -225,15 +248,18 @@ the pre-exec hook may not fire. They are not the primary path.
 
 ## Implementation sequence
 
-1. Enforce unique workspace branch names in `shed workspace new` (reject a
-   `<branch>` already present under any repo, naming the conflict). Add a
-   `workspace.FindByBranch(branch)` lookup used by both the guard and resume.
+1. Rename the workspace-layer "branch" concept to *workspace name* (it's
+   already the directory name, not the live git branch) — including the
+   `shed ls` / `workspace ls` column header (BRANCH → NAME). Enforce unique
+   workspace names in `shed workspace new` (reject a `<name>` already present
+   under any repo, naming the conflict). Add a `workspace.FindByName(name)`
+   lookup used by both the guard and resume.
 2. Pre-exec hook subcommand (`shed __on-tool-call`) + linking logic + workspace
    meta sidecar.
 3. `shed workspace new` reconciliation/handshake + override flags.
-4. `shed resume` command (branch-only resolve + hub table + exec/`--print` +
+4. `shed resume` command (name-only resolve + hub table + exec/`--print` +
    `--` passthrough).
 5. `shed init` wiring: install the pre-exec hook for each agent; extend the
    opencode plugin.
-6. Update the embedded guide so agents know to pick distinct branch names and
+6. Update the embedded guide so agents know to pick distinct workspace names and
    that `shed resume` exists.

@@ -35,7 +35,7 @@ func TestWriteLibraryCaptionedSections(t *testing.T) {
 		"Repos", "NAME", "LAST SYNC", "github.com/octocat/Hello-World",
 		// The Repos section shows each stored copy's path, just like Workspaces.
 		"PATH", "/home/u/.shed/repos/github.com/octocat/Hello-World",
-		"Workspaces", "BRANCH", "fix-typo", "DIRTY", "UNPUSHED",
+		"Workspaces", "fix-typo", "DIRTY", "UNPUSHED",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
