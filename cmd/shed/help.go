@@ -93,7 +93,7 @@ Commands:
   init          bootstrap + integrate with detected agents
   ls            list owners, repos, and workspaces (everything shed manages)
   prune         delete workspaces whose work has already landed
-  rm            remove a tracked repo or owner
+  rm            remove tracked repos or owners
   status        report sync health; show a repo's error and the likely fix
   sync          fetch tracked repos and re-apply read-only chmod (usually automatic)
   uninstall     reverse agent integration (--purge also deletes data + config)
@@ -189,7 +189,7 @@ confirmation before deleting (and refuses when stdin is not a TTY).
     sync then discovers and adds that owner's repos. Detection is automatic;
     --owner / --repo force it. See 'shed help owner'.
 
-  shed rm <name> [--force]
+  shed rm <name>... [--force]
     Remove a repo completely: the config entry, the store on disk, and
     every workspace derived from it. When the removal would also delete a
     workspace, rm asks for confirmation first. Restores write permissions
@@ -199,6 +199,9 @@ confirmation before deleting (and refuses when stdin is not a TTY).
     auto-added, along with their workspaces and stores — again asking for
     confirmation first. Answering no keeps the repos: they stay on disk,
     just untied from the owner (so a later sync no longer manages them).
+
+    Several names may be given at once ('shed rm a b c'); each is removed
+    independently, so a failure on one is reported but doesn't stop the rest.
 
     --force skips the confirmation prompt and discards uncommitted or
     unpushed work without asking. When stdin is not a TTY, rm will not

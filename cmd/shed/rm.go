@@ -18,9 +18,9 @@ import (
 func newRmCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "rm <name>",
-		Short: "Remove a tracked repo or owner (config, store on disk, and workspaces)",
-		Long: `rm removes a tracked repo or owner.
+		Use:   "rm <name>...",
+		Short: "Remove tracked repos or owners (config, store on disk, and workspaces)",
+		Long: `rm removes one or more tracked repos or owners.
 
 For a repo, this deletes its config entry, its store on disk, and every
 workspace derived from it. When removing it would also delete one or more
@@ -31,17 +31,87 @@ along with their workspaces and stores. rm asks for confirmation first;
 answering no keeps the repos — they stay on disk, just untied from the
 owner (Source cleared) so a later sync no longer manages them.
 
+Several names may be given at once (e.g. "shed rm a b c"); each is removed
+independently, so a failure on one (a typo, or a workspace with unsaved
+work) is reported but does not stop the rest from being removed.
+
 --force skips the confirmation prompt and discards uncommitted or unpushed
 work without asking. When stdin is not a TTY, rm will not delete workspaces
 without --force: a repo removal refuses, and an owner is untied instead.`,
-		Args: cobra.ExactArgs(1),
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRepoRm(args[0], force)
+			return runRepoRmMany(args, force)
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false,
 		"skip the confirmation prompt and delete even if a workspace has uncommitted or unpushed changes")
 	return cmd
+}
+
+// runRepoRmMany removes each named repo or owner in turn. Each name is
+// handled independently: a failure on one (a typo, or a workspace with
+// unsaved work) is reported to stderr but does not stop the rest from being
+// removed, so `shed rm a b c` removes whatever it can.
+//
+// A single name behaves exactly as a plain removal: its error propagates
+// untouched to main for the "error:" line and the matching exit code.
+// Duplicate names are collapsed so the same target isn't removed (and then
+// reported as already-gone) twice.
+func runRepoRmMany(names []string, force bool) error {
+	names = dedupeStrings(names)
+	if len(names) == 1 {
+		return runRepoRm(names[0], force)
+	}
+	var failed []error
+	for _, name := range names {
+		if err := runRepoRm(name, force); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			failed = append(failed, err)
+		}
+	}
+	if len(failed) == 0 {
+		return nil
+	}
+	// The per-name errors were already printed above; return a concise summary
+	// so main adds one closing line and exits non-zero. The exit code is the
+	// shared code when every failure used the same one, else the generic config
+	// code (the batch failed for mixed reasons).
+	return errs.New(rmBatchExitCode(failed), "%s could not be removed", pluralize(len(failed), "name"))
+}
+
+// rmBatchExitCode returns the exit code for a batch removal: the common code
+// when every failure carries the same one, otherwise errs.Config.
+func rmBatchExitCode(failed []error) int {
+	code := codeOf(failed[0])
+	for _, err := range failed[1:] {
+		if codeOf(err) != code {
+			return errs.Config
+		}
+	}
+	return code
+}
+
+// codeOf extracts the exit code carried by err, defaulting to errs.Config for
+// any error that isn't a *errs.Coded.
+func codeOf(err error) int {
+	var c *errs.Coded
+	if errors.As(err, &c) {
+		return c.Code
+	}
+	return errs.Config
+}
+
+// dedupeStrings returns s with duplicates removed, preserving first-seen order.
+func dedupeStrings(s []string) []string {
+	seen := make(map[string]bool, len(s))
+	out := s[:0]
+	for _, v := range s {
+		if !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func runRepoRm(name string, force bool) error {
