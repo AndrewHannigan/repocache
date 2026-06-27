@@ -132,8 +132,8 @@ Then mention — in a line or two each, no need to run them — where to go next
 Now clean up what the tour created, and tell the user what you're removing:
 
 ```
-shed workspace rm octocat/Hello-World tour-feature-a --force
-shed workspace rm octocat/Hello-World tour-feature-b --force
+shed workspace rm tour-feature-a --force
+shed workspace rm tour-feature-b --force
 ```
 
 Ask whether they want to keep `octocat/Hello-World` in their library or remove it
