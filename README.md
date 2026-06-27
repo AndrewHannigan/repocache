@@ -2,15 +2,22 @@
 
 ![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
 
-A managed repo catalog for terminal coding agents.
+**Stop letting your coding agent clone into `/tmp`.**
 
-- 🔒 **Read-only repos** — every repo is a pristine reference that is automatically updated and impossible to clobber.
-- ⚡ **Write-ready workspaces** — your agent runs `shed workspace new` and makes its edits in the created workspace.
-- 🔄 **Repos never stale** — refreshed in the background at session start.
-- 🤝 **Auto-integrates with your agents** — one `shed init` wires up your agent with hooks providing dynamic context from shed.
-- 📦 **Persistent shared library** — cached once and reused across sessions, never re-cloned to `/tmp`.
-- 🧰 **Natively searchable** — agents can use `rg`, `grep`, `git`, and `gh` across the entire catalog directly.
-- 🌐 **Simpler multi-repo PRs** — spin up writable workspaces on demand within a single session.
+Your terminal coding agent keeps re-cloning repos into `/tmp`, editing your reference copies by accident, and losing them between sessions. **shed** gives it a persistent, always-fresh, read-only repo catalog it already knows how to use.
+
+<!-- TODO(visual hook): drop a demo GIF/asciinema here — `shed init` → run `claude` →
+     agent reads from the catalog instead of cloning to /tmp, then `shed workspace new`
+     to make an edit. This is the "10-second, read-no-text" hook; keep it above the fold. -->
+<!-- ![shed in action](docs/demo.gif) -->
+
+- 📦 **No more `/tmp` re-clones** — the catalog is cached once in `~/.shed` and reused across every session, never re-cloned.
+- 🔒 **No more clobbered reference repos** — every repo is read-only (`chmod a-w`) and impossible for an agent to edit by accident.
+- 🔄 **No more stale checkouts** — repos refresh in the background at session start, so the agent always reads current code.
+- ✍️ **Edits without the risk** — when the agent needs to write, `shed workspace new` spins up a throwaway writable workspace off the pristine copy.
+- 🤝 **Zero agent setup** — one `shed init` wires up Claude Code, Cursor, or opencode to use shed automatically — no path hallucinations.
+- 🧰 **Searchable out of the box** — agents run `rg`, `grep`, `git`, and `gh` across the entire catalog directly.
+- 🌐 **Multi-repo PRs in one session** — spin up writable workspaces on demand across repos.
 
 ---
 
@@ -36,6 +43,15 @@ shed init
 shed add octocat/Hello-World
 
 # now run claude, cursor-agent, or opencode — your agent knows how to use it
+```
+
+That's it. Now when you ask your agent to work with a tracked repo, it reads from the shared catalog instead of cloning into `/tmp` — and creates an isolated workspace the moment it needs to make changes:
+
+```text
+You:   "Fix the broken link in octocat/Hello-World's README"
+Agent: reads ~/.shed/repos/github.com/octocat/Hello-World   (read-only, always fresh)
+       → shed workspace new                                 (isolated, writable)
+       → edits there, opens a PR                            (your reference copy untouched)
 ```
 
 ---
