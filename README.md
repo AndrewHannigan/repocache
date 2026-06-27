@@ -16,6 +16,7 @@ Run Claude Code, Cursor, and opencode against the same repos and they clobber ea
 - ✍️ **Isolated writable workspaces** — `shed workspace new` gives each session its own clone off the pristine repo; agents edit there, never in your reference copy or each other's.
 - 🌱 **Never a stale branch** — every workspace is created from the freshly-synced repo, so an agent never unintentionally works on out-of-date code.
 - 🧹 **One-command cleanup** — workspaces pile up fast; `shed prune` reclaims the ones whose work has already landed (merged PR or merged into the default branch) and leaves anything unpushed untouched.
+- 🔁 **Pick up where you left off** — `shed resume <workspace>` reopens the exact agent session that created a workspace — same agent, same session id, same directory — so a half-finished task is one command away.
 - 🔒 **Reference repos, stored once and never clobbered** — every repo lives read-only in `~/.shed` (`chmod a-w`), refreshed in the background and reused across sessions instead of re-cloned into `/tmp`.
 - 🧰 **Searchable out of the box** — agents run `rg`, `grep`, `git`, and `gh` across the entire catalog directly.
 - ⚙️ **Zero agent setup** — one `shed init` wires up each agent to use shed automatically — no path hallucinations.
@@ -61,12 +62,39 @@ Once branches land, reclaim the workspaces they left behind:
 shed prune          # remove workspaces whose work is already merged
 ```
 
+Need to get back into one? `shed resume <workspace>` relaunches the agent session that
+created it — in its original working directory — so you can continue the task instead of
+re-explaining it.
+
 > **Who runs what.** `shed add` / `shed rm` curate the library — run them yourself,
 > or let your agent run them when it needs a repo. The `shed workspace` commands are
 > best left to the agent: it creates a workspace the moment it needs to make a change
 > and tears it down when done. You generally don't pre-create workspaces — a stale,
 > hand-made one just risks the agent branching off the wrong base, which is exactly
 > what shed exists to avoid. Set up the library; let the agent manage its own scratch space.
+
+---
+
+## Commands
+
+| Command | What it does |
+|---------|--------------|
+| `shed init` | Bootstrap dirs + integrate with detected agents (`--uninstall` reverses it) |
+| `shed add <repo\|owner>` | Add a repo — or a whole user/org — to the library |
+| `shed rm <name>…` | Remove tracked repos or owners (and their stores/workspaces) |
+| `shed ls` | List owners, repos, and workspaces — everything shed manages |
+| `shed sync [<name>…]` | Fetch tracked repos and re-apply the read-only chmod (usually automatic) |
+| `shed status` | Report sync health; show a repo's error and the likely fix |
+| `shed workspace new <repo> <branch>` | Create a writable clone off the freshly-synced store; prints its path |
+| `shed workspace ls` | List workspaces with dirty/unpushed state and age |
+| `shed workspace path <name>` | Print a workspace's absolute path (names are globally unique) |
+| `shed workspace rm <name>` | Delete a workspace (refuses dirty/unpushed work without `--force`) |
+| `shed prune` | Delete workspaces whose work has already landed |
+| `shed resume <name>` | Reopen the agent session that created a workspace |
+| `shed history` | Show recent shed commands |
+| `shed help [topic]` | Long-form docs on a command or concept |
+
+Curate the library yourself (`add`/`rm`/`ls`); leave the `workspace` commands to the agent.
 
 ---
 
@@ -156,6 +184,8 @@ Shed does not manage credentials. Every git operation defers to whatever `git cl
 
 ## Documentation
 
+- `shed help` — curated overview of every command
+- `shed help <topic>` — long-form prose docs on a command or concept (topics: `agents`, `auth`, `concepts`, `history`, `init`, `library`, `locking`, `owner`, `prune`, `sync`, `workspace`)
 - `shed --help` and `shed <cmd> --help` — flag reference
 
 ## License
