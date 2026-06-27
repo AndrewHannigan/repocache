@@ -180,7 +180,7 @@ func writeOwnersSection(out io.Writer, owners []ownerRow) {
 
 func writeReposSection(out io.Writer, repos []repoRow) {
 	fmt.Fprintln(out, "Repos")
-	// The "ADDED BY" column only matters when an owner auto-added some repo;
+	// The "FROM" column only matters when an owner auto-added some repo;
 	// hide it otherwise so the common (no-owners) case isn't cluttered with
 	// a column of em-dashes.
 	showSource := false
@@ -192,7 +192,7 @@ func writeReposSection(out io.Writer, repos []repoRow) {
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	if showSource {
-		fmt.Fprintln(w, "  NAME\tLAST SYNC\tADDED BY")
+		fmt.Fprintln(w, "  NAME\tLAST SYNC\tFROM")
 	} else {
 		fmt.Fprintln(w, "  NAME\tLAST SYNC")
 	}

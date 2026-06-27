@@ -38,13 +38,13 @@ func TestWriteLibraryCaptionedSections(t *testing.T) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}
 	}
-	// A repo auto-added by an owner shows the ADDED BY column.
-	if !strings.Contains(out, "ADDED BY") {
-		t.Errorf("expected ADDED BY column when a repo has a source:\n%s", out)
+	// A repo auto-added by an owner shows the FROM column.
+	if !strings.Contains(out, "FROM") {
+		t.Errorf("expected FROM column when a repo has a source:\n%s", out)
 	}
 }
 
-// The ADDED BY column is hidden when no repo was auto-added by an owner, so the
+// The FROM column is hidden when no repo was auto-added by an owner, so the
 // common no-owners case isn't cluttered with a column of em-dashes.
 func TestWriteLibraryHidesSourceColumnWhenUnused(t *testing.T) {
 	repos := []repoRow{{
@@ -56,8 +56,8 @@ func TestWriteLibraryHidesSourceColumnWhenUnused(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if strings.Contains(out, "ADDED BY") {
-		t.Errorf("ADDED BY column should be hidden when no repo has a source:\n%s", out)
+	if strings.Contains(out, "FROM") {
+		t.Errorf("FROM column should be hidden when no repo has a source:\n%s", out)
 	}
 	// With no owners and no workspaces, only the Repos section appears.
 	if strings.Contains(out, "Owners\n") || strings.Contains(out, "Workspaces\n") {
