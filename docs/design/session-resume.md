@@ -147,12 +147,34 @@ pattern on stored repos:
 Last writer wins (a workspace re-touched by a newer session points at the
 newer one). `shed prune` drops the link when it prunes the workspace.
 
-### 4. `shed resume`
+### 4. Unique branch names → resume by branch alone
+
+Workspaces are currently keyed by `<repo>/<branch>` on disk, so two repos can
+each have, say, a `main` workspace. To make resume unambiguous from a single
+argument, we add an invariant:
+
+> **A workspace branch name is unique across the entire shed.** `shed workspace
+> new <repo> <branch>` fails if a workspace with that `<branch>` already exists
+> under *any* repo, pointing at the existing one.
+
+The on-disk layout stays `<repo>/<branch>` (so the path still encodes the
+repo), but the branch alone is now a key. This means `shed resume <branch>`
+resolves to exactly one workspace — no `<repo>` needed.
+
+Tradeoff: you can't have two live workspaces sharing a branch name — most
+visibly `main`/`master` across repos. This fits shed's grain (agents branch
+per task, e.g. `fix-readme-link`, not `main`), and the failure is loud and
+actionable ("workspace `main` already exists for `other/repo`; pick a distinct
+branch"). The same invariant lets `workspace path` / `rm` accept branch-only
+too, though that's out of scope here.
+
+### 5. `shed resume`
 
 - **`shed resume`** (no args) → the hub: a table joining workspaces to their
   linked sessions — repo, branch, agent, session age, dirty/unpushed — across
   all agents. Workspaces with no link are shown but marked not-resumable.
-- **`shed resume <repo> <branch>`** → read the link, then exec:
+- **`shed resume <branch>`** → resolve the unique workspace for `<branch>`,
+  read its link, then exec:
 
   ```
   cd <cwd> && <agent-bin> <resume-flag> <session_id> <args-after-->
@@ -163,7 +185,7 @@ newer one). `shed prune` drops the link when it prunes the workspace.
 #### Argument contract
 
 ```
-shed resume <repo> <branch> [shed flags] [-- <args passed straight to the agent>]
+shed resume <branch> [shed flags] [-- <args passed straight to the agent>]
 ```
 
 Everything after `--` is appended to the agent invocation **verbatim** — shed
@@ -171,16 +193,16 @@ never interprets it, so each agent's own prompt/print/flag conventions just
 work and stay robust as those agents add flags. cobra stops flag parsing at
 `--` automatically, so shed's own flags must precede it.
 
-- Interactive: `shed resume foo bar` → `cd <cwd> && claude --resume <id>`
-- Non-interactive: `shed resume foo bar -- -p "continue the refactor"` →
+- Interactive: `shed resume fix-bug` → `cd <cwd> && claude --resume <id>`
+- Non-interactive: `shed resume fix-bug -- -p "continue the refactor"` →
   `cd <cwd> && claude --resume <id> -p "continue the refactor"`
-- Dry run: `shed resume foo bar --print` emits the command instead of exec'ing
+- Dry run: `shed resume fix-bug --print` emits the command instead of exec'ing
   (note `--print` is before `--`).
 
 This makes automation (cron, CI, a parent agent fanning out resumes) use the
 exact same path as interactive use.
 
-### 5. Flags as override only
+### 6. Flags as override only
 
 `shed workspace new` keeps optional `--claude-code-session-id` /
 `--opencode-session-id` / `--cursor-chat-id` flags purely as an **explicit
@@ -200,13 +222,23 @@ the pre-exec hook may not fire. They are not the primary path.
    last-writer-wins. Decide if a small link history is worth it.
 5. **Lifecycle**: prune stale links (transcript gone, session too old) — fold
    into `shed prune`.
+6. **Unique-branch migration**: the invariant is enforced at *creation*, so
+   pre-existing duplicate-branch workspaces (if any) keep working; only a *new*
+   `workspace new` for a colliding branch is rejected. `shed resume <branch>`
+   must handle a legacy duplicate by erroring with the candidates rather than
+   guessing. Decide whether to detect/report existing duplicates on upgrade.
 
 ## Implementation sequence
 
-1. Pre-exec hook subcommand (`shed __on-tool-call`) + linking logic + workspace
+1. Enforce unique workspace branch names in `shed workspace new` (reject a
+   `<branch>` already present under any repo, naming the conflict). Add a
+   `workspace.FindByBranch(branch)` lookup used by both the guard and resume.
+2. Pre-exec hook subcommand (`shed __on-tool-call`) + linking logic + workspace
    meta sidecar.
-2. `shed workspace new` reconciliation/handshake + override flags.
-3. `shed resume` command (hub table + exec/`--print` + `--` passthrough).
-4. `shed init` wiring: install the pre-exec hook for each agent; extend the
+3. `shed workspace new` reconciliation/handshake + override flags.
+4. `shed resume` command (branch-only resolve + hub table + exec/`--print` +
+   `--` passthrough).
+5. `shed init` wiring: install the pre-exec hook for each agent; extend the
    opencode plugin.
-5. Update the embedded guide so agents know `shed resume` exists.
+6. Update the embedded guide so agents know to pick distinct branch names and
+   that `shed resume` exists.
