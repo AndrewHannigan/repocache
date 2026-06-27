@@ -13,10 +13,6 @@ import (
 	"github.com/AndrewHannigan/shed/pkg/history"
 )
 
-// historyInjectCount is how many recent commands the session-context hook shows
-// the agent (see recentHistoryText).
-const historyInjectCount = 20
-
 // recordedCommands are the command paths (relative to the root command) whose
 // successful runs are appended to the history log: the "working" commands that
 // change the library or workspaces. Everything else — read-only queries (ls,
@@ -54,10 +50,7 @@ func newHistoryCmd() *cobra.Command {
 		Short: "Show recent shed commands",
 		Long: `history prints the most recent shed commands that changed the
 library or workspaces (add, rm, prune, init, workspace new/rm), newest
-last. Read-only queries and background syncs are not recorded.
-
-The same recent history (last 20) is injected into each agent's session context,
-so the agent has ambient awareness of what you have been working on.`,
+last. Read-only queries and background syncs are not recorded.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runHistory(limit, jsonOut)
@@ -99,22 +92,4 @@ func eventTime(ev history.Event) string {
 
 func eventCommand(ev history.Event) string {
 	return "shed " + strings.Join(ev.Args, " ")
-}
-
-// recentHistoryText renders the recent-command history for embedding in session
-// context, mirroring the `ls` snapshot style. Best-effort: returns "" when the
-// log can't be read or is empty, so a hiccup never breaks session startup. The
-// framing is deliberately neutral — it presents the commands as ambient context
-// without telling the agent how to act on them.
-func recentHistoryText() string {
-	events, err := history.Recent(historyInjectCount)
-	if err != nil || len(events) == 0 {
-		return ""
-	}
-	var lines strings.Builder
-	for _, ev := range events {
-		fmt.Fprintf(&lines, "%s  %s\n", eventTime(ev), eventCommand(ev))
-	}
-	return "\nThe user's recent `shed` commands (most recent last), provided as ambient context:\n\n```\n" +
-		lines.String() + "```\n"
 }

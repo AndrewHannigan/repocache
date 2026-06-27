@@ -349,12 +349,6 @@ Storage and truncation
   is trimmed back to the most recent 200 entries, at most once every few
   minutes (a marker file debounces the trim), so it never grows without bound
   and the trim cost isn't paid on every command.
-
-Session context
-  The last 20 commands are also injected into each agent's session context by
-  the SessionStart hook, so the agent has ambient awareness of what you've
-  been working on (e.g. which repo you recently made a workspace in). It is
-  presented as neutral context, not as instructions.
 `,
 
 	"agents": `agents — terminal coding agent integration
