@@ -26,8 +26,8 @@ func sliceHas(s []string, v string) bool {
 	return false
 }
 
-// Install must integrate via SessionStart hooks, never the old on-disk
-// REPOCACHE.md / @import.
+// Install must integrate via SessionStart hooks, not via an on-disk doc or an
+// @import line in CLAUDE.md.
 func TestClaudeInstallUsesHooksNotImport(t *testing.T) {
 	home := withHome(t)
 
@@ -36,9 +36,6 @@ func TestClaudeInstallUsesHooksNotImport(t *testing.T) {
 		t.Fatalf("Install: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(home, ".claude", "REPOCACHE.md")); !os.IsNotExist(err) {
-		t.Errorf("REPOCACHE.md should not be installed")
-	}
 	if _, err := os.Stat(filepath.Join(home, ".claude", "CLAUDE.md")); !os.IsNotExist(err) {
 		t.Errorf("CLAUDE.md should not be created for an @import")
 	}
@@ -68,71 +65,6 @@ func TestClaudeInstallNoBgSync(t *testing.T) {
 	}
 	if !sliceHas(got.AddedHooks, sessionContextCommand("claude")) {
 		t.Errorf("session-context must install even with NoBgSync; got %v", got.AddedHooks)
-	}
-}
-
-// Install migrates away from a legacy install: the @import line and the
-// on-disk doc are removed, but unrelated user content is preserved.
-func TestClaudeInstallMigratesLegacy(t *testing.T) {
-	home := withHome(t)
-	dir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	memory := filepath.Join(dir, "CLAUDE.md")
-	doc := filepath.Join(dir, "REPOCACHE.md")
-	os.WriteFile(memory, []byte("# my notes\n@REPOCACHE.md  <!-- repocache:managed -->\n"), 0644)
-	os.WriteFile(doc, []byte("stale doc"), 0644)
-
-	if _, err := NewClaude().Install(InstallOptions{}); err != nil {
-		t.Fatalf("Install: %v", err)
-	}
-
-	if _, err := os.Stat(doc); !os.IsNotExist(err) {
-		t.Errorf("legacy REPOCACHE.md should be removed")
-	}
-	got, _ := os.ReadFile(memory)
-	if strings.Contains(string(got), "@REPOCACHE.md") {
-		t.Errorf("legacy @import should be removed; got %q", got)
-	}
-	if !strings.Contains(string(got), "# my notes") {
-		t.Errorf("user content should be preserved; got %q", got)
-	}
-}
-
-// Install migrates superseded session-context hooks to the per-agent form.
-// An older install (under the old `repocache` binary name) wrote either the
-// public `repocache session-context` subcommand (since renamed, now removed)
-// or the bare `repocache __session-context` (before --agent <key> selected the
-// per-agent shape). Both must be stripped and replaced with the current
-// `shed __session-context --agent claude`.
-func TestClaudeInstallMigratesLegacyHooks(t *testing.T) {
-	for _, legacy := range legacySessionContextCommands {
-		t.Run(legacy, func(t *testing.T) {
-			home := withHome(t)
-			dir := filepath.Join(home, ".claude")
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				t.Fatal(err)
-			}
-			settings := filepath.Join(dir, "settings.json")
-			os.WriteFile(settings, []byte(`{"hooks":{"SessionStart":[`+
-				`{"hooks":[{"type":"command","command":"`+legacy+`"}]}]}}`), 0644)
-
-			if _, err := NewClaude().Install(InstallOptions{}); err != nil {
-				t.Fatalf("Install: %v", err)
-			}
-
-			data, _ := os.ReadFile(settings)
-			if want := sessionContextCommand("claude"); !strings.Contains(string(data), want) {
-				t.Errorf("per-agent hook %q should be present:\n%s", want, data)
-			}
-			// The bare legacy command must not survive as its own entry. It is
-			// a substring of the per-agent command, so match the exact JSON
-			// command string rather than a loose substring.
-			if exact := `"command":"` + legacy + `"`; strings.Contains(string(data), exact) {
-				t.Errorf("legacy hook %q should be stripped:\n%s", legacy, data)
-			}
-		})
 	}
 }
 
@@ -297,26 +229,6 @@ func TestCursorInstallNoBgSync(t *testing.T) {
 	}
 	if cmds := cursorSessionStartCommands(t, home); sliceHas(cmds, BgSyncCommand) {
 		t.Errorf("hooks.json should not contain bg-sync; got %v", cmds)
-	}
-}
-
-// Install removes the hand-rolled plugin prototype so the guide isn't injected
-// twice once `--agent cursor` becomes valid.
-func TestCursorInstallRemovesLegacyPlugin(t *testing.T) {
-	home := withHome(t)
-	pluginDir := filepath.Join(home, ".cursor", "plugins", "local", "repocache")
-	if err := os.MkdirAll(filepath.Join(pluginDir, "scripts"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(pluginDir, "scripts", "session-start.sh"), []byte("#!/bin/bash\n"), 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := NewCursor().Install(InstallOptions{}); err != nil {
-		t.Fatalf("Install: %v", err)
-	}
-	if _, err := os.Stat(pluginDir); !os.IsNotExist(err) {
-		t.Errorf("legacy cursor plugin dir should be removed, stat err = %v", err)
 	}
 }
 

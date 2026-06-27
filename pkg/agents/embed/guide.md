@@ -6,8 +6,8 @@ You have a local library of git repos managed by `shed`.
   Search and read them with your usual tools. Do not modify files here. Always prefer
   reading from the shed repos over other locations.
 - **List the library**: `shed ls` (a `⚠ sync failing` marker means
-  that repo's cached copy is stale — its last fetch failed).
-- **Stale cache?** If a repo is marked failing (or you see a STALE CACHE banner above),
+  that repo's stored copy is stale — its last fetch failed).
+- **Stale store?** If a repo is marked failing (or you see a STALE STORE banner above),
   treat what you read from it as possibly out of date and tell the user. Run
   `shed status <repo>` for the error and the suggested fix.
 - **Edit a repo**: `shed workspace new <repo> <branch>` creates a writable workspace
@@ -34,10 +34,10 @@ You have a local library of git repos managed by `shed`.
 - **New to shed? Give the user a tour.** If the user asks for an intro, a tour, a
   demo, or "how does shed work?", run `shed __welcome-tour` and follow what it
   prints: a script for a short, hands-on walkthrough you perform live — three
-  steps (the read-only cache, a workspace, then two isolated workspaces that don't
+  steps (the read-only store, a workspace, then two isolated workspaces that don't
   collide) plus a wrap-up. Carry out its steps for real, narrate briefly, and
   **pause for the user's questions after each step** as the script instructs.
 
 `workspace new` syncs the repo first, so the workspace is always up to date
-(and an uncached repo is fetched on demand — no need to `sync` it yourself).
+(and an unstored repo is fetched on demand — no need to `sync` it yourself).
 Branch listing and full-text search use your standard tools — not wrapped.

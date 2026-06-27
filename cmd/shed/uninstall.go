@@ -24,19 +24,18 @@ func newUninstallCmd() *cobra.Command {
 		Long: `uninstall removes the entries shed previously added to each
 agent's config: the allowed-directory entries and SessionStart hooks.
 Uses a sidecar state file to know which entries are shed's; other
-entries are preserved. Also cleans up the legacy @REPOCACHE.md import
-and doc file that older shed versions installed.
+entries are preserved.
 
 By default this does NOT delete ~/.config/shed/ or
 ~/.shed/. Pass --purge to also remove those, deleting
-all cached repos, workspaces, and config. --purge warns and asks for
+all stored repos, workspaces, and config. --purge warns and asks for
 confirmation if any workspace has uncommitted or unpushed work.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUninstall(agentsFlag, purge)
 		},
 	}
 	cmd.Flags().StringVar(&agentsFlag, "agents", "auto", "which agents to uninstall: auto|all|<comma-separated list>")
-	cmd.Flags().BoolVar(&purge, "purge", false, "also delete ~/.config/shed and ~/.shed (all cached repos, workspaces, and config)")
+	cmd.Flags().BoolVar(&purge, "purge", false, "also delete ~/.config/shed and ~/.shed (all stored repos, workspaces, and config)")
 	return cmd
 }
 
@@ -111,8 +110,8 @@ func runPurge() error {
 }
 
 // removeAllForce deletes dir like os.RemoveAll, but first restores the
-// owner write bit on every directory in the tree. sync leaves cache repos
-// chmod a-w (see cache.LockTree), and os.RemoveAll cannot unlink entries
+// owner write bit on every directory in the tree. sync leaves stored repos
+// chmod a-w (see repostore.LockTree), and os.RemoveAll cannot unlink entries
 // inside a directory that lacks write permission, so a plain RemoveAll
 // fails partway through with EACCES. Only directories need fixing:
 // removing an entry depends on the parent dir's mode, not the entry's own.

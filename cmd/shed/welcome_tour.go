@@ -24,7 +24,7 @@ func newWelcomeTourCmd() *cobra.Command {
 		Long: `__welcome-tour prints the shed welcome-tour script: a set of
 instructions the agent reads and then carries out as a live, hands-on
 walkthrough of shed (adding a repo and an owner, demonstrating the read-only
-cache, opening two isolated workspaces, and pushing both as separate PRs).
+store, opening two isolated workspaces, and pushing both as separate PRs).
 
 The agent reaches for this when the user asks for an intro or tour of shed —
 the session-context guide tells it this command exists. Like the guide, the

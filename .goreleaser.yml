@@ -74,7 +74,7 @@ homebrew_casks:
       email: bot@goreleaser.com
     commit_msg_template: "shed: cask update for {{ .Tag }}"
     homepage: "https://github.com/AndrewHannigan/shed"
-    description: "Read-only mirror of git repos for terminal coding agents"
+    description: "Read-only store of git repos for terminal coding agents"
     caveats: |
       Run this once to set up shed and wire it into your coding agents:
 

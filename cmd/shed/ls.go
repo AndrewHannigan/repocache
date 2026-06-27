@@ -11,10 +11,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AndrewHannigan/shed/pkg/cache"
 	"github.com/AndrewHannigan/shed/pkg/config"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 )
 
 func newLsCmd() *cobra.Command {
@@ -65,7 +65,7 @@ func runRepoList(jsonOut bool) error {
 	return writeRepoTable(os.Stdout, rows, owners)
 }
 
-// collectRepoList gathers the rows behind `ls`, probing the cache for
+// collectRepoList gathers the rows behind `ls`, probing the store for
 // each tracked repo's last-sync time. The probes are deliberately cheap (a
 // stat and a small metadata read, no size walk or git subprocess) so this is
 // safe to run on the session-context hot path via repoListText.
@@ -77,9 +77,9 @@ func collectRepoList(c *config.Config) ([]repoRow, []ownerRow, error) {
 			return nil, nil, errs.Wrap(errs.Config, err)
 		}
 		row := repoRow{Name: name, URL: r.URL, Source: r.Source, LastSyncAt: nil}
-		if cache.Exists(name) {
-			row.Path = paths.CacheRepoPath(name)
-			if meta, err := cache.LoadMeta(name); err == nil && meta != nil {
+		if repostore.Exists(name) {
+			row.Path = paths.RepoStorePath(name)
+			if meta, err := repostore.LoadMeta(name); err == nil && meta != nil {
 				row.LastSyncAt = meta.LastSyncAt.UTC().Format(time.RFC3339)
 				row.LastError = meta.LastError
 			}
