@@ -115,6 +115,16 @@ url = "https://github.com/octocat"
 
 ---
 
+## Why a read-only cache + writable workspaces
+
+The natural first instinct is "just keep a normal clone of each repo and let agents work in it." That breaks down the moment you have more than one thing going on:
+
+- **One clone has one working tree and one `HEAD`.** Two agents — or one agent on two tasks — can't both use it. One has to stash, switch branches, and pray; the other clobbers it. Splitting a *read-only reference* from *N disposable workspaces* gives every task its own tree and refs, so they run in parallel without colliding.
+- **The reference stays trustworthy.** Because the cache is `chmod a-w`, it's never half-edited, never parked on some branch an agent forgot to leave, never carrying stray uncommitted changes. So searching and reading across the catalog always reflects real upstream code, and every new workspace forks from a known-good, current copy — never a stale branch by accident.
+- **Mistakes are cheap.** An agent literally can't corrupt the source of truth. Workspaces are throwaway: if one goes sideways, delete it (or `shed prune`) and the pristine copy is untouched.
+
+So read-only isn't the goal in itself — it's what makes the *writable* workspaces safe to hand out freely. You get a stable baseline to read from **and** isolated, always-fresh scratch space to write in, instead of having to trade one for the other.
+
 ## Why `git clone --reference`, not `git worktree`
 
 Both share an underlying object store, but they are not interchangeable. A worktree modifies state in the originating repo's `./git/`, breaking the read-only invariant. `--reference` clones keep independent refs and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Shed sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race.

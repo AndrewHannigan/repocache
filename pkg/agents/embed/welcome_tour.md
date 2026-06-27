@@ -51,9 +51,15 @@ Then say, briefly:
 
 Now prove it's read-only: find a file in that cache (e.g. the `README`) and
 **try to edit it in place** — append a line or `touch` it. It **fails with a
-permission error.** Show the user the actual error, and explain the point in one
-line: shed makes the mirror read-only so neither you nor any agent can clobber
-it. To make changes, you open a *workspace* — that's next.
+permission error.** Show the user the actual error.
+
+Then explain *why* this is the design, briefly: the cache is locked down so it
+stays a clean, always-current baseline — never half-edited or stuck on some
+branch an agent forgot to leave. That's what makes it safe to read across many
+repos, and it means every change starts from a known-good copy. To actually make
+changes, you don't touch the cache — you open an isolated *workspace*, which is
+next. (Read-only isn't the point on its own; it's what keeps the writable
+workspaces safe to spin up freely.)
 
 **→ Pause. Ask if they have questions, and wait before continuing.**
 
