@@ -98,7 +98,8 @@ All edits are idempotent and recorded in a sidecar state file, so `shed uninstal
 
 ~/.shed/
 ├── repos/<host>/<owner>/<repo>/             # store (chmod a-w)
-└── workspaces/<host>/<owner>/<repo>/<br>/   # editable (git clone --reference)
+├── workspaces/<host>/<owner>/<repo>/<br>/   # editable (git clone --reference)
+└── logs/                                    # bg-sync.log, debug.log (debug_mode)
 ```
 
 Config example:
@@ -124,6 +125,11 @@ url = "https://github.com/octocat"
 # include_forks = false      # default
 # include_archived = false   # default
 # visibility = "all"         # all|public|private
+
+# Optional global settings.
+[settings]
+# debug_mode = false         # write a detailed log to ~/.shed/logs/debug.log
+# bg_sync_interval = "1h"    # on session start, skip repos synced within this window
 ```
 
 ---

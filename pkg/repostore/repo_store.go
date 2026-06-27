@@ -16,8 +16,27 @@ import (
 
 	"github.com/gofrs/flock"
 
+	"github.com/AndrewHannigan/shed/pkg/debuglog"
 	"github.com/AndrewHannigan/shed/pkg/paths"
 )
+
+// runGit runs a prepared git command and returns its combined output, tracing
+// the invocation to the debug log along the way: the full argv, how long it
+// took, and — on failure — git's output. With debug_mode off the trace is a
+// no-op (see pkg/debuglog), so every store git call can route through here
+// unconditionally. op is a short label (e.g. "fetch") used only in the log.
+func runGit(op string, cmd *exec.Cmd) ([]byte, error) {
+	start := time.Now()
+	out, err := cmd.CombinedOutput()
+	ms := time.Since(start).Milliseconds()
+	if err != nil {
+		debuglog.Log("git "+op+" failed", "argv", cmd.Args, "ms", ms,
+			"err", err.Error(), "output", strings.TrimSpace(string(out)))
+	} else {
+		debuglog.Log("git "+op, "argv", cmd.Args, "ms", ms)
+	}
+	return out, err
+}
 
 // ErrLocked is returned when a stored repo's lock cannot be acquired in time.
 var ErrLocked = errors.New("stored repo locked by another process")
@@ -137,7 +156,7 @@ func Reachable(url string) error {
 		env = append(env, "GIT_SSH_COMMAND=ssh -oBatchMode=yes -oStrictHostKeyChecking=accept-new")
 	}
 	cmd.Env = env
-	out, err := cmd.CombinedOutput()
+	out, err := runGit("ls-remote", cmd)
 	if err != nil {
 		return fmt.Errorf("git ls-remote: %w (output: %s)", err, strings.TrimSpace(string(out)))
 	}
@@ -285,7 +304,7 @@ func Clone(url, name string) error {
 	// "--" terminates options so a url beginning with "-" can't be parsed as a
 	// git flag (argument injection); url and dest are strictly positional.
 	cmd := exec.Command("git", "clone", "--no-checkout", "--config", "gc.auto=0", "--", url, dest)
-	out, err := cmd.CombinedOutput()
+	out, err := runGit("clone", cmd)
 	if err != nil {
 		// Race: another process created the dir between our stat and clone.
 		if strings.Contains(string(out), "already exists") {
@@ -315,7 +334,7 @@ func SetConfig(name string, kv map[string]string) error {
 	path := paths.RepoStorePath(name)
 	for _, k := range keys {
 		cmd := exec.Command("git", "-C", path, "config", k, kv[k])
-		if out, err := cmd.CombinedOutput(); err != nil {
+		if out, err := runGit("config", cmd); err != nil {
 			return fmt.Errorf("git config %s: %w (output: %s)", k, err, strings.TrimSpace(string(out)))
 		}
 	}
@@ -325,7 +344,7 @@ func SetConfig(name string, kv map[string]string) error {
 // Fetch runs `git fetch --all --prune --tags` in the stored repo.
 func Fetch(name string) error {
 	cmd := exec.Command("git", "-C", paths.RepoStorePath(name), "fetch", "--all", "--prune", "--tags")
-	out, err := cmd.CombinedOutput()
+	out, err := runGit("fetch", cmd)
 	if err != nil {
 		return fmt.Errorf("git fetch: %w (output: %s)", err, strings.TrimSpace(string(out)))
 	}
@@ -350,7 +369,7 @@ func Fetch(name string) error {
 func CheckoutDetachedHEAD(name string) error {
 	cmd := exec.Command("git", "-C", paths.RepoStorePath(name), "checkout", "--detach", "--force", "origin/HEAD")
 	cmd.Env = append(os.Environ(), "GIT_LFS_SKIP_SMUDGE=1")
-	out, err := cmd.CombinedOutput()
+	out, err := runGit("checkout", cmd)
 	if err != nil {
 		return fmt.Errorf("git checkout: %w (output: %s)", err, strings.TrimSpace(string(out)))
 	}
@@ -365,6 +384,7 @@ func RemoteHEADResolves(name string) (bool, error) {
 	cmd := exec.Command("git", "-C", paths.RepoStorePath(name),
 		"rev-parse", "--verify", "--quiet", "origin/HEAD")
 	err := cmd.Run()
+	debuglog.Log("git rev-parse origin/HEAD", "name", name, "resolves", err == nil)
 	if err == nil {
 		return true, nil
 	}

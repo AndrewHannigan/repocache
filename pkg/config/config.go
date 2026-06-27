@@ -26,6 +26,9 @@ type Config struct {
 
 type Settings struct {
 	BgSyncInterval string `toml:"bg_sync_interval,omitempty"`
+	// DebugMode, when true, makes shed write a detailed diagnostic log to
+	// ~/.shed/logs/debug.log (see pkg/debuglog). Off by default.
+	DebugMode bool `toml:"debug_mode,omitempty"`
 }
 
 type Repo struct {
@@ -329,6 +332,11 @@ func EmptyTemplate() []byte {
 # # include_archived = false
 # # visibility = "all"   # all|public|private
 # # exclude = ["owner/repo"]
+#
+# Optional settings:
+# [settings]
+# debug_mode = false          # write a detailed log to ~/.shed/logs/debug.log
+# bg_sync_interval = "1h"     # on session start, skip repos synced within this window
 
 `)
 }

@@ -36,6 +36,10 @@ func LogsDir() string       { return filepath.Join(DataDir(), "logs") }
 func BgSyncLockFile() string { return filepath.Join(DataDir(), ".bg-sync.lock") }
 func BgSyncLogFile() string  { return filepath.Join(LogsDir(), "bg-sync.log") }
 
+// DebugLogFile is the detailed diagnostic log written when settings.debug_mode
+// is enabled (see pkg/debuglog).
+func DebugLogFile() string { return filepath.Join(LogsDir(), "debug.log") }
+
 // SyncErrorDir holds standalone failure records for repos that failed their
 // very first sync — before a store dir (and thus its .git/shed.meta sidecar)
 // ever existed. Kept outside ReposDir so a record can never be mistaken for a

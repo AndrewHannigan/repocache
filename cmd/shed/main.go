@@ -7,6 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/debuglog"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 )
 
@@ -17,6 +19,7 @@ var version = "dev"
 func main() {
 	root := newRootCmd()
 	if err := root.Execute(); err != nil {
+		debuglog.Log("command error", "err", err.Error())
 		fmt.Fprintln(os.Stderr, "error:", err)
 		var coded *errs.Coded
 		if errors.As(err, &coded) {
@@ -34,11 +37,20 @@ func newRootCmd() *cobra.Command {
 		Version:       version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		// Turn on debug logging (when settings.debug_mode is set) before any
+		// command runs, and trace the invocation. cobra runs the closest
+		// Persistent hook up the tree, and no subcommand defines one, so this
+		// fires for every leaf — including the hidden hooks and the bg-sync
+		// worker, which run in their own processes.
+		PersistentPreRun: func(c *cobra.Command, args []string) { initDebugLog(c, args) },
 		// Record successful "working" commands to the history log. PostRun (not
 		// the …E variant) so logging can never alter exit status; cobra runs the
 		// closest Persistent hook up the tree, and no subcommand defines one, so
 		// this fires for every leaf — on success only (a failed RunE skips it).
-		PersistentPostRun: func(c *cobra.Command, _ []string) { recordCommand(c) },
+		PersistentPostRun: func(c *cobra.Command, _ []string) {
+			recordCommand(c)
+			debuglog.Log("command done", "command", c.CommandPath())
+		},
 	}
 	cmd.SetHelpCommand(newHelpCmd())
 	// Make a bare `shed`, `shed -h`, and `shed --help` all print the same
@@ -73,6 +85,22 @@ func newRootCmd() *cobra.Command {
 		newResumeCmd(),
 	)
 	return cmd
+}
+
+// initDebugLog turns on file logging when settings.debug_mode is set in
+// config.toml, then traces the command about to run. Best-effort throughout: an
+// unreadable config simply leaves logging off, and a failure to open the log
+// file is reported once on stderr but never blocks the command.
+func initDebugLog(cmd *cobra.Command, args []string) {
+	cfg, err := config.Load()
+	if err != nil || !cfg.Settings.DebugMode {
+		return
+	}
+	if err := debuglog.Enable(); err != nil {
+		fmt.Fprintln(os.Stderr, "shed: could not open debug log:", err)
+		return
+	}
+	debuglog.Log("command start", "command", cmd.CommandPath(), "args", args, "version", version)
 }
 
 const rootLong = `shed maintains a read-only local store of GitHub repos and

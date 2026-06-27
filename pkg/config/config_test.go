@@ -99,6 +99,24 @@ func TestSourceAndOwnerRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSettingsRoundTrip(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	in := &Config{Settings: Settings{DebugMode: true, BgSyncInterval: "1h"}}
+	if err := Save(in); err != nil {
+		t.Fatal(err)
+	}
+	out, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.Settings.DebugMode {
+		t.Fatalf("debug_mode did not round-trip: %+v", out.Settings)
+	}
+	if out.Settings.BgSyncInterval != "1h" {
+		t.Fatalf("bg_sync_interval did not round-trip: %+v", out.Settings)
+	}
+}
+
 func TestValidateGitConfigKey(t *testing.T) {
 	good := []string{"user.email", "core.hooksPath", "a.b.c", `url.git@github.com:.insteadOf`}
 	for _, k := range good {
