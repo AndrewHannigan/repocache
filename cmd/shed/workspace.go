@@ -177,10 +177,10 @@ func runWorkspaceList(jsonOut bool) error {
 		return nil
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "REPO\tNAME\tDIRTY\tUNPUSHED\tAGE\tPATH")
+	fmt.Fprintln(w, "NAME\tREPO\tDIRTY\tUNPUSHED\tAGE\tPATH")
 	for _, i := range infos {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			i.Name, i.Branch, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))
+			i.Branch, i.Name, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))
 	}
 	return w.Flush()
 }
