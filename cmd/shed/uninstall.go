@@ -7,38 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/AndrewHannigan/shed/pkg/agents"
 	"github.com/AndrewHannigan/shed/pkg/errs"
 	"github.com/AndrewHannigan/shed/pkg/paths"
 	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
 
-func newUninstallCmd() *cobra.Command {
-	var agentsFlag string
-	var purge bool
-	cmd := &cobra.Command{
-		Use:   "uninstall",
-		Short: "Reverse agent integration (leaves shed data and config in place)",
-		Long: `uninstall removes the entries shed previously added to each
-agent's config: the allowed-directory entries and SessionStart hooks.
-Uses a sidecar state file to know which entries are shed's; other
-entries are preserved.
-
-By default this does NOT delete ~/.config/shed/ or
-~/.shed/. Pass --purge to also remove those, deleting
-all stored repos, workspaces, and config. --purge warns and asks for
-confirmation if any workspace has uncommitted or unpushed work.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runUninstall(agentsFlag, purge)
-		},
-	}
-	cmd.Flags().StringVar(&agentsFlag, "agents", "auto", "which agents to uninstall: auto|all|<comma-separated list>")
-	cmd.Flags().BoolVar(&purge, "purge", false, "also delete ~/.config/shed and ~/.shed (all stored repos, workspaces, and config)")
-	return cmd
-}
-
+// runUninstall reverses agent integration for the selected agents and,
+// when purge is set, deletes shed's config and data directories. It is
+// the implementation behind 'shed init --uninstall'.
 func runUninstall(flag string, purge bool) error {
 	list, err := agents.SelectByFlag(flag)
 	if err != nil {

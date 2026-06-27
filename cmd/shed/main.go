@@ -57,7 +57,6 @@ func newRootCmd() *cobra.Command {
 	cmd.CompletionOptions.DisableDefaultCmd = true
 	cmd.AddCommand(
 		newInitCmd(),
-		newUninstallCmd(),
 		newAddCmd(),
 		newRmCmd(),
 		newLsCmd(),

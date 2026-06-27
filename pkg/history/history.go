@@ -34,7 +34,7 @@ type Event struct {
 // Record appends one command invocation to the history log, then opportunistically
 // trims it. Best-effort: it is a no-op (returns nil) when shed's data dir
 // does not exist, and it never creates that dir — so it neither materializes the
-// data dir on its own nor resurrects it after `uninstall --purge`.
+// data dir on its own nor resurrects it after `init --uninstall --purge`.
 func Record(args []string) error {
 	dir := paths.DataDir()
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {

@@ -25,7 +25,7 @@ func findCmd(t *testing.T, path ...string) *cobra.Command {
 
 func TestShouldRecord(t *testing.T) {
 	record := [][]string{
-		{"add"}, {"rm"}, {"prune"}, {"init"}, {"uninstall"},
+		{"add"}, {"rm"}, {"prune"}, {"init"},
 		{"workspace", "new"}, {"workspace", "rm"},
 	}
 	skip := [][]string{
