@@ -291,8 +291,20 @@ of `--help`.)
 3. **Claude cwd semantics**: the `PreToolUse` `cwd` should be the session's
    project dir (= the resume dir). Confirm it doesn't drift if the model `cd`s
    mid-session.
-4. **Lifecycle**: prune stale links (transcript gone, session too old) — fold
-   into `shed prune`.
+4. **Link lifecycle (safety-critical).** A link is subordinate metadata; its
+   staleness must **never** delete a workspace. The only things that remove a
+   workspace stay exactly as today: the `shed prune` landed-work rule (merged
+   PR / merged into default) and explicit `shed workspace rm`. A dead or missing
+   session is **not** a deletion trigger — losing resumability is a minor,
+   recoverable degradation; losing a workspace (possibly holding unpushed work)
+   is not.
+   - A link rides along with its workspace: removed only when the workspace is
+     removed. No standalone link-reaping job.
+   - A dangling link (session transcript gone / too old to resume) is handled
+     **lazily at resume**: `shed resume <name>` detects the missing transcript
+     and reports "that session is no longer resumable — the workspace is intact
+     at `<path>`" instead of surfacing a cryptic agent error. Optionally it may
+     clear the now-dead link in passing, but it never touches the workspace.
 
 ## Implementation sequence
 
