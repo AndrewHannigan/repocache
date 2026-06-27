@@ -99,6 +99,51 @@ func TestSourceAndOwnerRoundTrip(t *testing.T) {
 	}
 }
 
+func TestValidateGitConfigKey(t *testing.T) {
+	good := []string{"user.email", "core.hooksPath", "a.b.c", `url.git@github.com:.insteadOf`}
+	for _, k := range good {
+		if err := ValidateGitConfigKey(k); err != nil {
+			t.Errorf("ValidateGitConfigKey(%q) = %v, want nil", k, err)
+		}
+	}
+	// Empty, no section (git requires section.key), a key that would be parsed
+	// as a flag (argument injection), and whitespace-bearing keys are rejected.
+	bad := []string{"", "nodots", "-upload-pack=evil", "has space.key", "key\n.x"}
+	for _, k := range bad {
+		if err := ValidateGitConfigKey(k); err == nil {
+			t.Errorf("ValidateGitConfigKey(%q) = nil, want error", k)
+		}
+	}
+}
+
+func TestValidateRejectsBadGitConfigKey(t *testing.T) {
+	c := &Config{Repos: []Repo{{
+		URL: "https://github.com/acme/widgets",
+		Git: map[string]string{"-upload-pack=evil": "x"},
+	}}}
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected validation error for a git config key that could be parsed as a flag")
+	}
+}
+
+func TestGitConfigRoundTrip(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	in := &Config{Repos: []Repo{{
+		URL: "https://github.com/acme/a",
+		Git: map[string]string{"user.email": "me@work.com"},
+	}}}
+	if err := Save(in); err != nil {
+		t.Fatal(err)
+	}
+	out, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Repos) != 1 || out.Repos[0].Git["user.email"] != "me@work.com" {
+		t.Fatalf("git config did not round-trip: %+v", out.Repos)
+	}
+}
+
 func TestResolve(t *testing.T) {
 	c := &Config{Repos: []Repo{
 		{URL: "https://github.com/octocat/hello-world"},

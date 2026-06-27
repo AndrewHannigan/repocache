@@ -36,6 +36,13 @@ type Repo struct {
 	// the user directly. Auto-managed repos are reconciled on each sync;
 	// user-added repos are never touched by owner reconciliation.
 	Source string `toml:"source,omitempty"`
+	// Git holds git config key/value pairs applied to this repo: reconciled
+	// into the cache's .git/config on every sync, and seeded into each new
+	// workspace at clone time. shed forwards them verbatim to git and never
+	// interprets the keys, so any git config option works without shed code.
+	// Set/update only — removing a key here does not unset it from a clone
+	// that already has it (re-add the repo to fully reset).
+	Git map[string]string `toml:"git,omitempty"`
 }
 
 // Owner is a tracked user or org. On each sync, shed lists the owner's
@@ -72,6 +79,26 @@ func (o Owner) ResolvedName() (string, error) {
 		return o.Name, nil
 	}
 	return paths.DefaultOwnerName(o.URL)
+}
+
+// ValidateGitConfigKey guards a per-repo git config key before shed forwards
+// it to git (via `git config <key> <value>` and `git clone --config
+// <key>=<value>`). It is deliberately permissive: it blocks argument
+// injection (a key parsed as a flag) and obvious malformations, then leaves
+// the rest of git's key grammar to git itself — so shed never has to track
+// which keys git accepts.
+func ValidateGitConfigKey(key string) error {
+	switch {
+	case key == "":
+		return errors.New("git config key is empty")
+	case strings.HasPrefix(key, "-"):
+		return fmt.Errorf("git config key %q must not start with '-'", key)
+	case strings.ContainsAny(key, " \t\r\n\x00"):
+		return fmt.Errorf("git config key %q must not contain whitespace", key)
+	case !strings.Contains(key, "."):
+		return fmt.Errorf("git config key %q must be of the form section.key", key)
+	}
+	return nil
 }
 
 // ErrLocked is returned when the config lock cannot be acquired in time.
@@ -151,6 +178,11 @@ func (c *Config) Validate() error {
 		}
 		if err := paths.ValidateName(name); err != nil {
 			return fmt.Errorf("repo[%d] (%q): %w", i, r.URL, err)
+		}
+		for key := range r.Git {
+			if err := ValidateGitConfigKey(key); err != nil {
+				return fmt.Errorf("repo[%d] (%q): %w", i, r.URL, err)
+			}
 		}
 		if prev, ok := seen[name]; ok {
 			return fmt.Errorf("name %q appears in both %s and repo %d", name, prev, i)
@@ -289,6 +321,7 @@ func EmptyTemplate() []byte {
 # [[repo]]
 # url = "https://github.com/owner/name"
 # # name = "owner/name"   # optional; default derived from URL
+# # git = { "user.email" = "me@work.com" }   # git config, applied to clones
 #
 # [[owner]]
 # url = "https://github.com/owner"   # sync discovers + adds this owner's repos

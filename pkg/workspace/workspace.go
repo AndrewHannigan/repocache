@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -47,7 +48,12 @@ func Exists(name, branch string) bool {
 // If branch exists on the store's origin refs, checks it out. Otherwise
 // clones starting from base (or origin/HEAD if base is empty) and
 // creates a new local branch named branch.
-func New(name, branch, base, url string) (string, error) {
+//
+// gitConfig is seeded into the new workspace's .git/config at clone time via
+// `git clone --config`, so the repo's configured git options apply to every
+// later git command in the workspace — including the user's own. Keys are
+// validated by config before reaching here.
+func New(name, branch, base, url string, gitConfig map[string]string) (string, error) {
 	// Guard the path-forming inputs so a name/branch can't escape WorkspacesDir
 	// (filepath.Join would resolve a ".." away). base only ever becomes a git
 	// ref, but validating it too keeps option-injection out of `git clone
@@ -88,7 +94,7 @@ func New(name, branch, base, url string) (string, error) {
 
 	storePath := paths.RepoStorePath(name)
 	if branchExists {
-		if err := runGitClone(storePath, url, branch, wsPath); err != nil {
+		if err := runGitClone(storePath, url, branch, wsPath, gitConfig); err != nil {
 			return "", err
 		}
 	} else {
@@ -99,7 +105,7 @@ func New(name, branch, base, url string) (string, error) {
 				return "", err
 			}
 		}
-		if err := runGitClone(storePath, url, baseBranch, wsPath); err != nil {
+		if err := runGitClone(storePath, url, baseBranch, wsPath, gitConfig); err != nil {
 			return "", err
 		}
 		if err := runGit(wsPath, "checkout", "-b", branch); err != nil {
@@ -109,18 +115,36 @@ func New(name, branch, base, url string) (string, error) {
 	return wsPath, nil
 }
 
-func runGitClone(referencePath, url, branch, dest string) error {
-	// "--" terminates options so a url beginning with "-" can't be parsed as a
-	// git flag (argument injection); url and dest are strictly positional.
-	cmd := exec.Command("git", "clone",
-		"--reference", referencePath,
-		"--branch", branch,
-		"--", url, dest)
+func runGitClone(referencePath, url, branch, dest string, gitConfig map[string]string) error {
+	cmd := exec.Command("git", cloneArgs(referencePath, url, branch, dest, gitConfig)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git clone: %w (output: %s)", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// cloneArgs builds the `git clone` argv. Each --config <key>=<value> persists
+// into the new clone's .git/config; they are emitted in sorted order for
+// deterministic behavior. Keys are validated by config (no leading "-") so
+// they can't be parsed as git options. The trailing "--" terminates options
+// so a url beginning with "-" can't be parsed as a git flag (argument
+// injection); url and dest are strictly positional.
+func cloneArgs(referencePath, url, branch, dest string, gitConfig map[string]string) []string {
+	args := []string{"clone", "--reference", referencePath, "--branch", branch}
+	for _, k := range sortedKeys(gitConfig) {
+		args = append(args, "--config", k+"="+gitConfig[k])
+	}
+	return append(args, "--", url, dest)
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func runGit(dir string, args ...string) error {
