@@ -167,12 +167,19 @@ confirmation before deleting (and refuses when stdin is not a TTY).
 
   shed rm <name> [--force]
     Remove a repo completely: the config entry, the store on disk, and
-    every workspace derived from it. Refuses if any workspace has
-    uncommitted or unpushed changes unless --force is given. Restores
-    write permissions on the read-only store tree automatically.
+    every workspace derived from it. When the removal would also delete a
+    workspace, rm asks for confirmation first. Restores write permissions
+    on the read-only store tree automatically.
 
     If <name> is an owner, removes the owner entry and every repo it
-    auto-added (with the same safety checks).
+    auto-added, along with their workspaces and stores — again asking for
+    confirmation first. Answering no keeps the repos: they stay on disk,
+    just untied from the owner (so a later sync no longer manages them).
+
+    --force skips the confirmation prompt and discards uncommitted or
+    unpushed work without asking. When stdin is not a TTY, rm will not
+    delete workspaces without --force: a repo removal refuses, and an
+    owner is untied instead.
 
   shed ls [--json]
     Show everything shed manages, in three captioned sections so it's

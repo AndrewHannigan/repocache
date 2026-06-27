@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -17,14 +19,28 @@ func newRmCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
 		Use:   "rm <name>",
-		Short: "Remove a repository: config entry, store on disk, and its workspaces",
-		Args:  cobra.ExactArgs(1),
+		Short: "Remove a tracked repo or owner (config, store on disk, and workspaces)",
+		Long: `rm removes a tracked repo or owner.
+
+For a repo, this deletes its config entry, its store on disk, and every
+workspace derived from it. When removing it would also delete one or more
+workspaces, rm asks for confirmation first.
+
+For an owner, this removes the owner entry and every repo it auto-added,
+along with their workspaces and stores. rm asks for confirmation first;
+answering no keeps the repos — they stay on disk, just untied from the
+owner (Source cleared) so a later sync no longer manages them.
+
+--force skips the confirmation prompt and discards uncommitted or unpushed
+work without asking. When stdin is not a TTY, rm will not delete workspaces
+without --force: a repo removal refuses, and an owner is untied instead.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRepoRm(args[0], force)
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false,
-		"delete even if a workspace has uncommitted or unpushed changes")
+		"skip the confirmation prompt and delete even if a workspace has uncommitted or unpushed changes")
 	return cmd
 }
 
@@ -63,6 +79,15 @@ func runRepoRmOne(r *config.Repo, force bool) error {
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
+	// Removing a repo also tears down its workspaces and store. If that would
+	// destroy any workspace, confirm first (unless --force).
+	if !force && len(workspaces) > 0 {
+		if !confirmRepoRemoval(resolved, workspaces) {
+			return nil
+		}
+	}
+	// Even once removal is confirmed, refuse to discard unsaved work without
+	// --force; the prompt already flagged that this would need it.
 	if !force {
 		if blocked := blockedWorkspaces(workspaces); len(blocked) > 0 {
 			return errs.New(errs.Dirty,
@@ -149,9 +174,10 @@ func rmOwnedRepo(r *config.Repo, resolved string, force bool, workspaces []works
 }
 
 // runOwnerRm removes an owner entry and every repo it auto-added (Source ==
-// owner), with the same workspace-safety guarantees as a single repo: it
-// refuses up front (listing all offenders) if any managed workspace has
-// unsaved work and --force wasn't given.
+// owner). Because that also deletes those repos' workspaces and stores, it
+// confirms first unless --force: answering no (or running non-interactively)
+// keeps the repos, untied from the owner, via untieOwner. Once removal is
+// confirmed it still refuses to discard unsaved work without --force.
 func runOwnerRm(o *config.Owner, force bool) error {
 	ownerName, err := o.ResolvedName()
 	if err != nil {
@@ -167,7 +193,24 @@ func runOwnerRm(o *config.Owner, force bool) error {
 	if err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
+
+	// An owner with no repos of its own: just drop the entry, nothing to lose.
+	if len(managed) == 0 {
+		if err := removeConfigEntries(nil, map[string]bool{ownerName: true}); err != nil {
+			return err
+		}
+		fmt.Printf("removed owner %s (config)\n", ownerName)
+		return nil
+	}
+
+	// Removing the owner would delete its repos and their workspaces/stores.
+	// Confirm first (unless --force); answering no keeps the repos, untied
+	// from the owner.
 	if !force {
+		if !confirmOwnerRemoval(ownerName, managed, workspaces) {
+			return untieOwner(ownerName, len(managed), len(workspaces))
+		}
+		// Confirmed: still refuse to discard unsaved work without --force.
 		if blocked := blockedWorkspaces(workspaces); len(blocked) > 0 {
 			return errs.New(errs.Dirty,
 				"refusing to remove owner %s; these workspaces have unsaved work:\n%s\ncommit and push, or pass --force to discard",
@@ -218,6 +261,94 @@ func blockedWorkspaces(workspaces []workspace.Info) []string {
 		}
 	}
 	return blocked
+}
+
+// untieOwner removes an owner entry but keeps the repos it added, clearing
+// their Source so they become ordinary user-added repos. Workspaces and stores
+// are left untouched. This is the "no" answer to the owner-removal prompt:
+// drop the owner, keep everything it managed.
+func untieOwner(ownerName string, repoCount, wsCount int) error {
+	err := config.WithLock(configLockTimeout, func(c *config.Config) error {
+		for i := range c.Repos {
+			if c.Repos[i].Source == ownerName {
+				c.Repos[i].Source = ""
+			}
+		}
+		kept := c.Owners[:0]
+		for _, o := range c.Owners {
+			n, _ := o.ResolvedName()
+			if n == ownerName {
+				continue
+			}
+			kept = append(kept, o)
+		}
+		c.Owners = kept
+		return config.Save(c)
+	})
+	if err != nil {
+		if errors.Is(err, config.ErrLocked) {
+			return errs.Wrap(errs.Locked, err)
+		}
+		return errs.EnsureCoded(err, errs.Config)
+	}
+	fmt.Printf("removed owner %s (config); kept %s", ownerName, pluralize(repoCount, "repo"))
+	if wsCount > 0 {
+		fmt.Printf(" and %s", pluralize(wsCount, "workspace"))
+	}
+	fmt.Println(" (now untied — remove with `shed rm <repo>`)")
+	return nil
+}
+
+// confirmRepoRemoval asks whether to delete a repo whose removal would also
+// destroy workspaces, returning true to proceed. When stdin isn't a TTY it
+// refuses rather than destroy workspaces unattended (use --force).
+func confirmRepoRemoval(resolved string, workspaces []workspace.Info) bool {
+	fmt.Fprintf(os.Stderr, "Removing %s will delete %s (and its store on disk).\n",
+		resolved, pluralize(len(workspaces), "workspace"))
+	if blocked := blockedWorkspaces(workspaces); len(blocked) > 0 {
+		fmt.Fprintf(os.Stderr, "  %d of them have unsaved work and need --force to delete.\n", len(blocked))
+	}
+	if !stdinIsTTY() {
+		fmt.Fprintln(os.Stderr, "refusing to delete workspaces without confirmation; re-run with --force")
+		return false
+	}
+	fmt.Fprint(os.Stderr, "Delete the repo and its workspaces? [y/N] ")
+	if readYes() {
+		return true
+	}
+	fmt.Fprintln(os.Stderr, "aborted; nothing removed")
+	return false
+}
+
+// confirmOwnerRemoval asks whether to delete an owner's repos and workspaces,
+// returning true to delete them and false to keep them (the caller untie's
+// instead). When stdin isn't a TTY it returns false: the owner is still
+// removed, but its repos are kept rather than destroyed unattended (--force
+// deletes them non-interactively).
+func confirmOwnerRemoval(ownerName string, managed []string, workspaces []workspace.Info) bool {
+	fmt.Fprintf(os.Stderr, "Removing owner %s will delete %s", ownerName, pluralize(len(managed), "repo"))
+	if len(workspaces) > 0 {
+		fmt.Fprintf(os.Stderr, " and %s", pluralize(len(workspaces), "workspace"))
+	}
+	fmt.Fprintln(os.Stderr, " (and their stores on disk).")
+	if blocked := blockedWorkspaces(workspaces); len(blocked) > 0 {
+		fmt.Fprintf(os.Stderr, "  %d of them have unsaved work and need --force to delete.\n", len(blocked))
+	}
+	if !stdinIsTTY() {
+		fmt.Fprintln(os.Stderr, "non-interactive: keeping the repos (untied from the owner); pass --force to delete them.")
+		return false
+	}
+	fmt.Fprint(os.Stderr, "Delete them? [y/N]  (n keeps the repos, untied from the owner) ")
+	return readYes()
+}
+
+// readYes reads a line from stdin and reports whether it is an affirmative
+// (y/yes). Shared by the rm confirmation prompts.
+func readYes() bool {
+	r := bufio.NewReader(os.Stdin)
+	line, _ := r.ReadString('\n')
+	line = strings.TrimSpace(strings.ToLower(line))
+	return line == "y" || line == "yes"
 }
 
 // removeRepoArtifacts deletes a repo's workspaces and store from disk (but not
