@@ -191,13 +191,13 @@ that's out of scope here.
 
 ### 5. `shed resume`
 
-- **`shed resume`** (no args) → the hub: a table joining workspaces to their
-  linked sessions — workspace name, repo, agent, session age, dirty/unpushed —
-  across all agents. (The live git branch can be shown as incidental info, but
-  the name is the identity.) Workspaces with no link are shown but marked
-  not-resumable.
-- **`shed resume <name>`** → resolve the unique workspace for `<name>`, read
-  its link, then exec:
+`shed resume` requires exactly one argument — the workspace name (cobra
+`ExactArgs(1)`). There is no bare/no-args form; listing in-progress work is
+`shed ls`'s job (which already shows workspaces, and can later be annotated
+with the linked session/agent). Bare `shed resume` errors with usage.
+
+**`shed resume <name>`** → resolve the unique workspace for `<name>`, read its
+link, then exec:
 
   ```
   cd <cwd> && <agent-bin> <resume-flag> <session_id> <args-after-->
@@ -257,8 +257,9 @@ the pre-exec hook may not fire. They are not the primary path.
 2. Pre-exec hook subcommand (`shed __on-tool-call`) + linking logic + workspace
    meta sidecar.
 3. `shed workspace new` reconciliation/handshake + override flags.
-4. `shed resume` command (name-only resolve + hub table + exec/`--print` +
-   `--` passthrough).
+4. `shed resume <name>` command (`ExactArgs(1)` name resolve + exec/`--print` +
+   `--` passthrough). Optionally annotate `shed ls` workspaces with their
+   linked session/agent.
 5. `shed init` wiring: install the pre-exec hook for each agent; extend the
    opencode plugin.
 6. Update the embedded guide so agents know to pick distinct workspace names and
