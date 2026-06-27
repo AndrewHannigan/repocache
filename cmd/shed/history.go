@@ -21,6 +21,8 @@ import (
 var recordedCommands = map[string]bool{
 	"add":           true,
 	"rm":            true,
+	"repo add":      true,
+	"repo rm":       true,
 	"prune":         true,
 	"init":          true,
 	"workspace new": true,

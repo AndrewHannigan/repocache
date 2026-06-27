@@ -54,6 +54,7 @@ var helpAliases = map[string]string{
 	"add":       "library",
 	"rm":        "library",
 	"ls":        "library",
+	"repo":      "library",
 	"new":       "workspace",
 	"path":      "workspace",
 	"uninstall": "init",
@@ -95,6 +96,7 @@ Commands:
   init          bootstrap + integrate with detected agents (--uninstall reverses it)
   ls            list owners, repos, and workspaces (everything shed manages)
   prune         delete workspaces whose work has already landed
+  repo          {ls,add,rm} of the read-only repo library
   resume        reopen the agent session that created a workspace
   rm            remove tracked repos or owners
   status        report sync health; show a repo's error and the likely fix
@@ -214,6 +216,11 @@ Reversing integration ('shed init --uninstall')
       Workspaces  isolated writable clones, with dirty/unpushed state and age
     The Owners and Workspaces sections are omitted when empty (a hint to
     create your first workspace is shown when you have repos but none yet).
+
+These are also grouped under a 'repo' noun (mirroring 'workspace'):
+'shed repo add' and 'shed repo rm' are the same as 'shed add'/'shed rm',
+and 'shed repo ls' lists just the library (Owners + Repos) — where plain
+'shed ls' also includes Workspaces.
 `,
 
 	"owner": `owner — track a whole user or org
