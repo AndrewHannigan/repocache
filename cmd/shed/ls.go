@@ -169,7 +169,7 @@ func writeLibrary(out io.Writer, owners []ownerRow, repos []repoRow, workspaces 
 }
 
 func writeOwnersSection(out io.Writer, owners []ownerRow) {
-	fmt.Fprintln(out, "Owners — whole GitHub users/orgs you track; sync auto-adds their new repos.")
+	fmt.Fprintln(out, "Owners")
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "  OWNER\tREPOS")
 	for _, o := range owners {
@@ -179,7 +179,7 @@ func writeOwnersSection(out io.Writer, owners []ownerRow) {
 }
 
 func writeReposSection(out io.Writer, repos []repoRow) {
-	fmt.Fprintln(out, "Repos — read-only reference copies kept fresh by sync; your agents read from these.")
+	fmt.Fprintln(out, "Repos")
 	// The "ADDED BY" column only matters when an owner auto-added some repo;
 	// hide it otherwise so the common (no-owners) case isn't cluttered with
 	// a column of em-dashes.
@@ -226,7 +226,7 @@ func lastSyncLabel(r repoRow) string {
 }
 
 func writeWorkspacesSection(out io.Writer, infos []workspace.Info) {
-	fmt.Fprintln(out, "Workspaces — isolated writable clones (shed workspace new) where agents edit and push.")
+	fmt.Fprintln(out, "Workspaces")
 	if len(infos) == 0 {
 		fmt.Fprintln(out, "  (none yet — create one with `shed workspace new <repo> <branch>`)")
 		return

@@ -30,9 +30,9 @@ func TestWriteLibraryCaptionedSections(t *testing.T) {
 	out := buf.String()
 
 	for _, want := range []string{
-		"Owners —", "OWNER", "octocat",
-		"Repos —", "NAME", "LAST SYNC", "github.com/octocat/Hello-World",
-		"Workspaces —", "BRANCH", "fix-typo", "DIRTY", "UNPUSHED",
+		"Owners", "OWNER", "octocat",
+		"Repos", "NAME", "LAST SYNC", "github.com/octocat/Hello-World",
+		"Workspaces", "BRANCH", "fix-typo", "DIRTY", "UNPUSHED",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
@@ -60,7 +60,7 @@ func TestWriteLibraryHidesSourceColumnWhenUnused(t *testing.T) {
 		t.Errorf("ADDED BY column should be hidden when no repo has a source:\n%s", out)
 	}
 	// With no owners and no workspaces, only the Repos section appears.
-	if strings.Contains(out, "Owners —") || strings.Contains(out, "Workspaces —") {
+	if strings.Contains(out, "Owners\n") || strings.Contains(out, "Workspaces\n") {
 		t.Errorf("empty owners/workspaces sections should be omitted:\n%s", out)
 	}
 }
@@ -75,7 +75,7 @@ func TestWriteLibraryWorkspaceHint(t *testing.T) {
 	if err := writeLibrary(&withHint, nil, repos, nil, true); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(withHint.String(), "Workspaces —") || !strings.Contains(withHint.String(), "workspace new") {
+	if !strings.Contains(withHint.String(), "Workspaces\n") || !strings.Contains(withHint.String(), "workspace new") {
 		t.Errorf("expected workspaces section + creation hint:\n%s", withHint.String())
 	}
 
@@ -83,7 +83,7 @@ func TestWriteLibraryWorkspaceHint(t *testing.T) {
 	if err := writeLibrary(&noHint, nil, repos, nil, false); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(noHint.String(), "Workspaces —") {
+	if strings.Contains(noHint.String(), "Workspaces") {
 		t.Errorf("workspaces section should be omitted with no workspaces and hint off:\n%s", noHint.String())
 	}
 }
@@ -98,7 +98,7 @@ func TestWriteLibraryEmpty(t *testing.T) {
 	if !strings.Contains(out, "nothing tracked yet") {
 		t.Errorf("expected empty-shed hint:\n%s", out)
 	}
-	if strings.Contains(out, "Owners —") || strings.Contains(out, "Repos —") || strings.Contains(out, "Workspaces —") {
+	if strings.Contains(out, "Owners") || strings.Contains(out, "Repos") || strings.Contains(out, "Workspaces") {
 		t.Errorf("empty shed should not render section headers:\n%s", out)
 	}
 }
