@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"text/tabwriter"
 	"time"
 
@@ -250,31 +251,76 @@ func writeWorkspacesSection(out io.Writer, infos []workspace.Info) {
 	w.Flush()
 }
 
-// repoListText renders the `ls` overview to a string for embedding in session
-// context, so the agent starts each session knowing which repos and workspaces
-// already exist without having to run `shed ls` itself. Best-effort: returns ""
-// if the library can't be read, so a config hiccup never breaks session
-// startup. The empty-workspaces hint is suppressed (workspaceHint=false) to
-// keep the snapshot terse for an agent.
-func repoListText() string {
+// recentWorkspaceReposLimit caps how many repos the session-context snapshot
+// lists, so a heavily-used shed surfaces only the handful the user is actively
+// working in rather than its whole history of workspaces.
+const recentWorkspaceReposLimit = 10
+
+// repoActivity pairs a repo with the age of its most recently active workspace
+// (the workspace AGE field — reflog-based lastActivity).
+type repoActivity struct {
+	Name string
+	Age  time.Time
+}
+
+// recentWorkspaceRepos collapses workspaces to one entry per repo, keeping each
+// repo's newest workspace activity, and returns them most-recent first, capped
+// at limit (limit <= 0 means no cap). Ranking reuses the same workspace AGE the
+// `ls` Workspaces section shows, so "recent" means the same thing in both places.
+func recentWorkspaceRepos(infos []workspace.Info, limit int) []repoActivity {
+	newest := make(map[string]time.Time, len(infos))
+	for _, i := range infos {
+		if cur, ok := newest[i.Name]; !ok || i.Age.After(cur) {
+			newest[i.Name] = i.Age
+		}
+	}
+	repos := make([]repoActivity, 0, len(newest))
+	for name, age := range newest {
+		repos = append(repos, repoActivity{Name: name, Age: age})
+	}
+	// Most recent first; the repo name breaks ties so the order is deterministic
+	// (the map iteration above is randomized) and callers can rely on it.
+	sort.Slice(repos, func(a, b int) bool {
+		if repos[a].Age.Equal(repos[b].Age) {
+			return repos[a].Name < repos[b].Name
+		}
+		return repos[a].Age.After(repos[b].Age)
+	})
+	if limit > 0 && len(repos) > limit {
+		repos = repos[:limit]
+	}
+	return repos
+}
+
+// writeRecentWorkspaceRepos renders the recent-workspace repos as a small table
+// (REPO, and how long ago that repo's newest workspace was last active).
+func writeRecentWorkspaceRepos(out io.Writer, repos []repoActivity) {
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "  REPO\tLAST WORKSPACE")
+	for _, r := range repos {
+		fmt.Fprintf(w, "  %s\t%s\n", r.Name, relTime(r.Age))
+	}
+	w.Flush()
+}
+
+// recentWorkspaceReposText renders, for embedding in session context, the repos
+// the user has most recently had a workspace in: one row per repo, ranked by its
+// newest workspace's age and capped at recentWorkspaceReposLimit. It replaces
+// dumping the whole `ls` library, which a tracked owner can balloon to dozens of
+// repos — the agent can still run `shed ls` for the full picture. Best-effort:
+// returns "" if the library can't be read or no workspace exists yet, so a
+// config hiccup never breaks session startup and a workspace-less shed simply
+// omits the section.
+func recentWorkspaceReposText() string {
 	c, err := config.Load()
 	if err != nil {
 		return ""
 	}
-	rows, owners, err := collectRepoList(c)
-	if err != nil {
-		return ""
-	}
 	workspaces, err := collectWorkspaces(c)
-	if err != nil {
-		workspaces = nil // best-effort; still show repos/owners
-	}
-	if len(rows) == 0 && len(owners) == 0 && len(workspaces) == 0 {
-		return "" // nothing tracked yet; the guide already covers adding repos
+	if err != nil || len(workspaces) == 0 {
+		return ""
 	}
 	var buf bytes.Buffer
-	if err := writeLibrary(&buf, owners, rows, workspaces, false); err != nil {
-		return ""
-	}
+	writeRecentWorkspaceRepos(&buf, recentWorkspaceRepos(workspaces, recentWorkspaceReposLimit))
 	return buf.String()
 }

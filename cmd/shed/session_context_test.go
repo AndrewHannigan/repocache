@@ -3,11 +3,15 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/AndrewHannigan/shed/pkg/agents"
 	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 // Claude gets the hookSpecificOutput JSON envelope, wrapped in
@@ -108,36 +112,76 @@ func TestPrintSessionContextUnknownAgent(t *testing.T) {
 	}
 }
 
-// With a configured library, the body appends a live `ls` snapshot.
-func TestSessionContextBodyIncludesLibrary(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+// With a workspace present, the body appends the recent-workspace-repos
+// snapshot — naming the repo and its newest workspace's age — instead of
+// dumping the whole library.
+func TestSessionContextBodyIncludesRecentWorkspaceRepos(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	t.Setenv("HOME", dir) // isolates the workspaces dir (DataDir = $HOME/.shed)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "config"))
 	if err := config.Save(&config.Config{
 		Repos: []config.Repo{{URL: "https://github.com/acme/widget"}},
 	}); err != nil {
 		t.Fatal(err)
 	}
+	makeGitWorkspace(t, paths.WorkspacePath("github.com/acme/widget", "fix-typo"))
 
 	body := sessionContextBody()
 	if !strings.HasPrefix(body, string(agents.DocContent)) {
 		t.Fatalf("body should start with the embedded guide")
 	}
-	for _, want := range []string{"shed ls", "NAME", "acme/widget"} {
+	for _, want := range []string{"most recently had a workspace", "REPO", "LAST WORKSPACE", "github.com/acme/widget"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body should contain %q\n%s", want, body)
 		}
 	}
 }
 
-// With no library configured, the body is just the guide (no snapshot noise).
-func TestSessionContextBodyEmptyLibrary(t *testing.T) {
+// With no workspaces, the body is just the guide (no snapshot noise) — the
+// snapshot now keys off workspace activity, not merely a tracked repo.
+func TestSessionContextBodyNoWorkspaces(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if err := config.Save(&config.Config{
+		Repos: []config.Repo{{URL: "https://github.com/acme/widget"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	body := sessionContextBody()
 	if !strings.HasPrefix(body, string(agents.DocContent)) {
 		t.Fatalf("body should start with the embedded guide")
 	}
-	if strings.Contains(body, "shed ls`):") {
-		t.Errorf("empty library should not append a snapshot section\n%s", body)
+	if strings.Contains(body, "most recently had a workspace") {
+		t.Errorf("a workspace-less shed should not append a snapshot section\n%s", body)
 	}
+}
+
+// makeGitWorkspace creates a minimal git repo at path so workspace.List treats
+// it as a workspace (a dir containing .git) with a reflog backing its AGE.
+func makeGitWorkspace(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", path}, args...)...)
+		cmd.Env = append(cmd.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init", "-q")
+	if err := os.WriteFile(filepath.Join(path, "f.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "f.txt")
+	run("commit", "-q", "-m", "init")
 }
 
 // collisionWarning fires when the working directory's origin matches a library

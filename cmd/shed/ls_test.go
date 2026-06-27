@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -93,6 +94,66 @@ func TestWriteLibraryWorkspaceHint(t *testing.T) {
 	}
 	if strings.Contains(noHint.String(), "Workspaces") {
 		t.Errorf("workspaces section should be omitted with no workspaces and hint off:\n%s", noHint.String())
+	}
+}
+
+// recentWorkspaceRepos collapses workspaces to one row per repo (keeping the
+// repo's newest workspace activity) and ranks them most-recent first.
+func TestRecentWorkspaceRepos(t *testing.T) {
+	now := time.Now()
+	infos := []workspace.Info{
+		{Name: "github.com/acme/widget", Branch: "a", Age: now.Add(-3 * time.Hour)},
+		{Name: "github.com/acme/widget", Branch: "b", Age: now.Add(-1 * time.Hour)}, // newer; wins for this repo
+		{Name: "github.com/octo/hello", Branch: "c", Age: now.Add(-2 * time.Hour)},
+	}
+
+	got := recentWorkspaceRepos(infos, 10)
+	if len(got) != 2 {
+		t.Fatalf("want one entry per repo (2), got %d: %+v", len(got), got)
+	}
+	// Ranked by each repo's newest workspace: widget's "b" (1 hr) beats hello (2 hr).
+	if got[0].Name != "github.com/acme/widget" || got[1].Name != "github.com/octo/hello" {
+		t.Errorf("wrong order: %+v", got)
+	}
+	// The repo carries its newest workspace's age, not the older sibling's.
+	if !got[0].Age.Equal(now.Add(-1 * time.Hour)) {
+		t.Errorf("widget should carry its newest workspace age, got %v", got[0].Age)
+	}
+}
+
+// The limit keeps only the most-recently-active repos, newest first.
+func TestRecentWorkspaceReposLimit(t *testing.T) {
+	now := time.Now()
+	var infos []workspace.Info
+	for i := 0; i < 5; i++ {
+		infos = append(infos, workspace.Info{
+			Name: fmt.Sprintf("github.com/o/r%d", i),
+			Age:  now.Add(-time.Duration(i) * time.Hour), // r0 newest … r4 oldest
+		})
+	}
+	got := recentWorkspaceRepos(infos, 3)
+	if len(got) != 3 {
+		t.Fatalf("limit should cap at 3, got %d", len(got))
+	}
+	for i, r := range got {
+		want := fmt.Sprintf("github.com/o/r%d", i)
+		if r.Name != want {
+			t.Errorf("position %d = %q, want %q", i, r.Name, want)
+		}
+	}
+}
+
+// writeRecentWorkspaceRepos renders a REPO / LAST WORKSPACE table with a
+// relative age per repo.
+func TestWriteRecentWorkspaceRepos(t *testing.T) {
+	repos := []repoActivity{{Name: "github.com/acme/widget", Age: time.Now().Add(-2 * time.Hour)}}
+	var buf bytes.Buffer
+	writeRecentWorkspaceRepos(&buf, repos)
+	out := buf.String()
+	for _, want := range []string{"REPO", "LAST WORKSPACE", "github.com/acme/widget", "2 hr ago"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
 	}
 }
 

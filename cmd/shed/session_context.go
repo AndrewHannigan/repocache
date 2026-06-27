@@ -78,12 +78,11 @@ func printSessionContext(w io.Writer, agentKey string) error {
 }
 
 // sessionContextBody is the bundled guide followed by a live snapshot of the
-// shed (so the agent starts each session already knowing which repos are
-// available — and which workspaces already exist, so it doesn't recreate one —
-// without having to run `shed ls` itself) and a short log of the user's recent
-// shed commands (so the agent has ambient awareness of what they've been
-// working on). Both appendices are best-effort: if either can't be read it is
-// simply omitted.
+// repos the user has most recently had a workspace in (so the agent starts each
+// session already oriented to what they're actively working on, without having
+// to run `shed ls` itself) and a short log of the user's recent shed commands
+// (so the agent has ambient awareness of what they've been working on). Both
+// appendices are best-effort: if either can't be read it is simply omitted.
 func sessionContextBody() string {
 	body := string(agents.DocContent)
 	if w := syncHealthBanner(); w != "" {
@@ -92,8 +91,8 @@ func sessionContextBody() string {
 	if w := cwdCollisionWarning(); w != "" {
 		body = w + "\n" + body
 	}
-	if list := repoListText(); list != "" {
-		body += "\nA snapshot of your shed — tracked repos and any open workspaces (output of `shed ls`):\n\n```\n" + list + "```\n"
+	if list := recentWorkspaceReposText(); list != "" {
+		body += "\nThe repos you've most recently had a workspace in (newest first; run `shed ls` for your full library):\n\n```\n" + list + "```\n"
 	}
 	body += recentHistoryText()
 	return body
