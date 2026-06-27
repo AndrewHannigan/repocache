@@ -276,23 +276,35 @@ func newWorkspacePathCmd() *cobra.Command {
 func newWorkspaceRmCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "rm <repo> <branch>",
-		Short: "Delete a workspace (refuses if dirty or unpushed unless --force)",
-		Args:  cobra.ExactArgs(2),
+		Use:   "rm <name>",
+		Short: "Delete a workspace by name (refuses if dirty or unpushed unless --force)",
+		Long: `rm deletes the workspace with the given name.
+
+Workspace names are unique across every repo (enforced at creation), so the
+name alone identifies exactly one workspace — no <repo> is needed.
+
+Refuses to delete a workspace with uncommitted or unpushed changes unless
+--force is given.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWorkspaceRm(args[0], args[1], force)
+			return runWorkspaceRm(args[0], force)
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "delete even if there are uncommitted or unpushed changes")
 	return cmd
 }
 
-func runWorkspaceRm(name, branch string, force bool) error {
-	name = resolveWorkspaceName(name, branch)
-	if !workspace.Exists(name, branch) {
-		return errs.New(errs.NotFound, "no workspace at %s", workspace.PathFor(name, branch))
+func runWorkspaceRm(name string, force bool) error {
+	c, err := config.Load()
+	if err != nil {
+		return errs.Wrap(errs.Config, err)
 	}
-	path := workspace.PathFor(name, branch)
+	// Workspace names are globally unique, so the name alone locates exactly one
+	// workspace (same lookup `shed resume` uses).
+	repo, path, found := workspace.LocateByName(repoNames(c), name)
+	if !found {
+		return errs.New(errs.NotFound, "no workspace named %q (see `shed ls`)", name)
+	}
 	if !force {
 		dirty, unpushed, err := workspace.CheckClean(path)
 		if err != nil {
@@ -311,7 +323,7 @@ func runWorkspaceRm(name, branch string, force bool) error {
 				joinAnd(parts))
 		}
 	}
-	if err := workspace.Remove(name, branch); err != nil {
+	if err := workspace.Remove(repo, name); err != nil {
 		return errs.Wrap(errs.Config, err)
 	}
 	fmt.Printf("removed %s\n", paths.Display(path))

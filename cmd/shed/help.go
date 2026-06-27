@@ -84,7 +84,7 @@ The whole loop:
     # ... your agent takes it from here: reads the store, and on demand ...
     shed workspace new <repo> <branch>   # creates a writable clone, prints its path
     # ... edits there, commits, pushes, opens a PR ...
-    shed workspace rm <repo> <branch>    # tear down (or 'shed prune' to bulk-clean)
+    shed workspace rm <name>             # tear down (or 'shed prune' to bulk-clean)
 
 You curate the library ('add'/'rm'); let the agent manage workspaces on demand.
 
@@ -300,9 +300,9 @@ sharing object storage but with independent refs. Edits happen here.
   shed workspace path <repo> <branch>
     Print absolute workspace path. Exit 2 if missing.
 
-  shed workspace rm <repo> <branch> [--force]
-    Delete workspace dir. Refuses with exit 4 if dirty or unpushed
-    unless --force.
+  shed workspace rm <name> [--force]
+    Delete the named workspace dir (names are globally unique). Refuses
+    with exit 4 if dirty or unpushed unless --force.
 
 The workspace's origin remote points at the upstream URL, not the store,
 so 'git push' works normally. New branches have no upstream until your

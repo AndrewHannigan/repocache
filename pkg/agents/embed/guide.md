@@ -29,7 +29,7 @@ You have a local library of git repos managed by `shed`.
   commits land. When this applies, a "HEADS UP — local checkout collision" callout appears
   at the top of this context. A checkout that is merely *nearby* on disk (not your cwd) is
   not this case — prefer the fresh workspace.
-- **Clean up**: `shed workspace rm <repo> <branch>` when done.
+- **Clean up**: `shed workspace rm <name>` when done.
 - **Need a repo not in the library?** Ask the user to run `shed add <repo>`
   (a full URL or GitHub `owner/repo` shorthand).
 - **Track a whole user/org?** `shed add <owner>` (a bare `owner` or
