@@ -61,6 +61,13 @@ Once branches land, reclaim the workspaces they left behind:
 shed prune          # remove workspaces whose work is already merged
 ```
 
+> **Who runs what.** `shed add` / `shed rm` curate the library — run them yourself,
+> or let your agent run them when it needs a repo. The `shed workspace` commands are
+> best left to the agent: it creates a workspace the moment it needs to make a change
+> and tears it down when done. You generally don't pre-create workspaces — a stale,
+> hand-made one just risks the agent branching off the wrong base, which is exactly
+> what shed exists to avoid. Set up the library; let the agent manage its own scratch space.
+
 ---
 
 ## Supported agents
