@@ -131,7 +131,7 @@ All edits are idempotent and recorded in a sidecar state file, so `shed init --u
 
 ~/.shed/
 ├── repos/<host>/<owner>/<repo>/             # store (chmod a-w)
-└── workspaces/<host>/<owner>/<repo>/<br>/   # editable (git clone --reference)
+└── workspaces/<host>/<owner>/<repo>/<br>/   # editable (clone of the local store)
 ```
 
 Config example:
@@ -171,9 +171,9 @@ The natural first instinct is "just keep a normal clone of each repo and let age
 
 So read-only isn't the goal in itself — it's what makes the *writable* workspaces safe to hand out freely. You get a stable baseline to read from **and** isolated, always-fresh scratch space to write in, instead of having to trade one for the other.
 
-## Why `git clone --reference`, not `git worktree`
+## Why a clone of the local store, not `git worktree`
 
-Both share the store's object database — a worktree through the common `.git/`, a `--reference` clone through git's alternates — so the two tie on per-workspace disk. The reason to prefer the clone is the *shape* of the isolation, which fits disposable, hand-to-an-agent scratch space:
+Workspaces are cloned from the local store rather than the remote, so creating one needs no network — once a repo is synced, every workspace off it works offline. Both a clone and a worktree share the store's object database — a worktree through the common `.git/`, a local clone through hardlinked objects — so the two tie on per-workspace disk. The reason to prefer the clone is the *shape* of the isolation, which fits disposable, hand-to-an-agent scratch space:
 
 - **Each workspace is just an ordinary repo, with no shared namespace to coordinate.** Worktrees pool one `refs/heads/*` (and the branch reflogs under it), and by default one `.git/config`, across every tree and the store — so git has to police the sharing: you can't check out or delete a branch another worktree holds, and giving a workspace its own identity or remote means opting into the `extensions.worktreeConfig` overlay. A clone owns its refs, branch reflogs, config, index, `HEAD`, and an `origin` pointing at the real upstream. An agent can branch, delete, retarget `origin`, change `user.email`, or rewrite history, and none of it touches another workspace or needs any special setup — fewer rules to know, no cross-workspace coupling to reason about.
 - **Teardown is a plain `rm -rf`** — all `shed prune` and `workspace rm` do. The worktree equivalent is `git worktree remove`; a bare `rm -rf` instead leaves a registration in the store for a later `git worktree prune` to sweep (harmless, but not nothing).

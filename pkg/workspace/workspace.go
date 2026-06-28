@@ -42,12 +42,19 @@ func Exists(name, branch string) bool {
 	return err == nil && s.IsDir()
 }
 
-// New creates a new workspace via `git clone --reference`. Returns the
-// absolute workspace path on success.
+// New creates a new workspace by cloning the local store, so it works fully
+// offline once the store has been synced. Returns the absolute workspace path
+// on success.
 //
-// If branch exists on the store's origin refs, checks it out. Otherwise
-// clones starting from base (or origin/HEAD if base is empty) and
-// creates a new local branch named branch.
+// The clone is sourced from the on-disk store rather than the remote, so no
+// network is touched. A local clone copies only the store's local heads, so we
+// then mirror the store's refs/remotes/origin/* into the workspace (that's
+// where the store keeps every branch) and repoint origin at the real remote
+// URL, so a later push/pull/fetch reaches GitHub.
+//
+// If branch exists on the store's origin refs, checks it out tracking
+// origin/<branch>. Otherwise creates a new local branch named branch off base
+// (or origin/HEAD if base is empty) with no upstream.
 //
 // gitConfig is seeded into the new workspace's .git/config at clone time via
 // `git clone --config`, so the repo's configured git options apply to every
@@ -56,8 +63,7 @@ func Exists(name, branch string) bool {
 func New(name, branch, base, url string, gitConfig map[string]string) (string, error) {
 	// Guard the path-forming inputs so a name/branch can't escape WorkspacesDir
 	// (filepath.Join would resolve a ".." away). base only ever becomes a git
-	// ref, but validating it too keeps option-injection out of `git clone
-	// --branch`.
+	// ref, but validating it too keeps option-injection out of `git checkout`.
 	if err := paths.ValidateName(name); err != nil {
 		return "", err
 	}
@@ -93,30 +99,53 @@ func New(name, branch, base, url string, gitConfig map[string]string) (string, e
 	}
 
 	storePath := paths.RepoStorePath(name)
+	// Clone from the local store (offline). The clone brings only the store's
+	// local heads, so mirror its remote-tracking refs into the workspace's own
+	// refs/remotes/origin/* — every branch lives there — and repoint origin at
+	// the real remote so push/pull/fetch reach it once online.
+	if err := runGitClone(storePath, wsPath, gitConfig); err != nil {
+		return "", err
+	}
+	if err := runGit(wsPath, "fetch", storePath, "+refs/remotes/origin/*:refs/remotes/origin/*"); err != nil {
+		return "", err
+	}
+	if err := runGit(wsPath, "remote", "set-url", "origin", url); err != nil {
+		return "", err
+	}
+	// Reproduce origin/HEAD so default-branch resolution (the base below, and
+	// prune's LandedInDefault) works in the workspace. Resolved once and reused
+	// as the default base.
+	def, defErr := defaultBranch(name)
+	if defErr == nil {
+		// Best-effort: an empty remote has no origin/HEAD, but a workspace can
+		// still be made from an explicit branch.
+		_ = runGit(wsPath, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/"+def)
+	}
+
 	if branchExists {
-		if err := runGitClone(storePath, url, branch, wsPath, gitConfig); err != nil {
+		// Track origin/<branch> so unpushed-commit accounting works.
+		if err := runGit(wsPath, "checkout", "-b", branch, "--track", "refs/remotes/origin/"+branch); err != nil {
 			return "", err
 		}
 	} else {
 		baseBranch := base
 		if baseBranch == "" {
-			baseBranch, err = defaultBranch(name)
-			if err != nil {
-				return "", err
+			if defErr != nil {
+				return "", defErr
 			}
+			baseBranch = def
 		}
-		if err := runGitClone(storePath, url, baseBranch, wsPath, gitConfig); err != nil {
-			return "", err
-		}
-		if err := runGit(wsPath, "checkout", "-b", branch); err != nil {
+		// A fresh branch has no upstream yet (it isn't on origin); --no-track
+		// stops git from adopting the base branch's upstream as its own.
+		if err := runGit(wsPath, "checkout", "-b", branch, "--no-track", "refs/remotes/origin/"+baseBranch); err != nil {
 			return "", err
 		}
 	}
 	return wsPath, nil
 }
 
-func runGitClone(referencePath, url, branch, dest string, gitConfig map[string]string) error {
-	cmd := exec.Command("git", cloneArgs(referencePath, url, branch, dest, gitConfig)...)
+func runGitClone(storePath, dest string, gitConfig map[string]string) error {
+	cmd := exec.Command("git", cloneArgs(storePath, dest, gitConfig)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git clone: %w (output: %s)", err, strings.TrimSpace(string(out)))
@@ -124,18 +153,23 @@ func runGitClone(referencePath, url, branch, dest string, gitConfig map[string]s
 	return nil
 }
 
-// cloneArgs builds the `git clone` argv. Each --config <key>=<value> persists
-// into the new clone's .git/config; they are emitted in sorted order for
-// deterministic behavior. Keys are validated by config (no leading "-") so
-// they can't be parsed as git options. The trailing "--" terminates options
-// so a url beginning with "-" can't be parsed as a git flag (argument
-// injection); url and dest are strictly positional.
-func cloneArgs(referencePath, url, branch, dest string, gitConfig map[string]string) []string {
-	args := []string{"clone", "--reference", referencePath, "--branch", branch}
+// cloneArgs builds the `git clone` argv. The workspace is cloned from the local
+// store, so creation needs no network; a local clone hardlinks objects, so the
+// workspace shares the store's object storage on disk without depending on it
+// surviving. --no-checkout defers populating the working tree until New has
+// checked out the requested branch.
+//
+// Each --config <key>=<value> persists into the new clone's .git/config; they
+// are emitted in sorted order for deterministic behavior. Keys are validated by
+// config (no leading "-") so they can't be parsed as git options. The trailing
+// "--" terminates options so a path beginning with "-" can't be parsed as a git
+// flag (argument injection); storePath and dest are strictly positional.
+func cloneArgs(storePath, dest string, gitConfig map[string]string) []string {
+	args := []string{"clone", "--no-checkout"}
 	for _, k := range sortedKeys(gitConfig) {
 		args = append(args, "--config", k+"="+gitConfig[k])
 	}
-	return append(args, "--", url, dest)
+	return append(args, "--", storePath, dest)
 }
 
 func sortedKeys(m map[string]string) []string {

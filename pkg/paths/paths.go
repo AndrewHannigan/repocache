@@ -154,8 +154,8 @@ func ValidateName(name string) error {
 // ValidateBranch is ValidateName's analog for branch names, which become
 // nested directories under a workspace and must likewise stay contained. It
 // additionally rejects a leading "-" so the branch can't be parsed as an
-// option when passed to git (e.g. `git clone --branch`, `git checkout -b`);
-// git refs cannot begin with "-" anyway.
+// option when passed to git (e.g. `git checkout -b`); git refs cannot begin
+// with "-" anyway.
 func ValidateBranch(branch string) error {
 	if branch == "" {
 		return errors.New("branch is empty")
