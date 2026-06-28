@@ -4,35 +4,44 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/AndrewHannigan/shed/pkg/paths"
 )
 
 // The init gate exempts exactly the commands that must run before `shed init`:
 // init itself (it does the bootstrapping), help (docs on a fresh install), and
 // the hidden __* hook commands (invoked by agents, sometimes before any manual
-// init). Every other command is gated.
+// init). Every other command is gated. Commands are built directly rather than
+// via root.Find because cobra adds the help command lazily during Execute.
 func TestInitExempt(t *testing.T) {
-	root := newRootCmd()
-
-	exempt := []string{"init", "help", "__bg-sync", "__on-tool-call", "__session-context", "__welcome-tour"}
-	for _, name := range exempt {
-		cmd, _, err := root.Find([]string{name})
-		if err != nil {
-			t.Fatalf("find %q: %v", name, err)
-		}
-		if !initExempt(cmd) {
-			t.Errorf("%q should be exempt from the init gate", name)
+	exempt := []*cobra.Command{
+		newInitCmd(),
+		newHelpCmd(),
+		newBgSyncCmd(),
+		newOnToolCallCmd(),
+		newSessionContextCmd(),
+		newWelcomeTourCmd(),
+	}
+	for _, c := range exempt {
+		if !initExempt(c) {
+			t.Errorf("%q should be exempt from the init gate", c.Name())
 		}
 	}
 
-	gated := []string{"add", "rm", "ls", "sync", "status", "prune", "history", "resume"}
-	for _, name := range gated {
-		cmd, _, err := root.Find([]string{name})
-		if err != nil {
-			t.Fatalf("find %q: %v", name, err)
-		}
-		if initExempt(cmd) {
-			t.Errorf("%q must be gated on init, not exempt", name)
+	gated := []*cobra.Command{
+		newAddCmd(),
+		newRmCmd(),
+		newLsCmd(),
+		newSyncCmd(),
+		newStatusCmd(),
+		newPruneCmd(),
+		newHistoryCmd(),
+		newResumeCmd(),
+	}
+	for _, c := range gated {
+		if initExempt(c) {
+			t.Errorf("%q must be gated on init, not exempt", c.Name())
 		}
 	}
 }
