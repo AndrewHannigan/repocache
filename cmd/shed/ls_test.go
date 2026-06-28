@@ -3,12 +3,28 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/AndrewHannigan/shed/pkg/config"
+	"github.com/AndrewHannigan/shed/pkg/paths"
+	"github.com/AndrewHannigan/shed/pkg/repostore"
 	"github.com/AndrewHannigan/shed/pkg/workspace"
 )
+
+// mkWorkspace creates a workspace checkout dir (a <branch>/.git directory under
+// the repo's workspaces path) so collectWorkspaces sees the repo as checked
+// out. Requires an isolated HOME (t.Setenv) like mkMeta.
+func mkWorkspace(t *testing.T, name, branch string) {
+	t.Helper()
+	gitDir := filepath.Join(paths.WorkspacesDir(), filepath.FromSlash(name), branch, ".git")
+	if err := os.MkdirAll(gitDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // writeLibrary renders a captioned section per kind of thing shed manages, so a
 // newcomer can tell what each table is.
@@ -224,6 +240,82 @@ func TestWriteRecentWorkspaceRepos(t *testing.T) {
 	writeRecentWorkspaceRepos(&buf, repos)
 	out := buf.String()
 	for _, want := range []string{"REPO", "LAST WORKSPACE", "github.com/acme/widget", "2 hr ago"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// recentlyAddedRepos surfaces only repos added within the window that have no
+// workspace yet: stale (too old), workspace-backed, and pre-feature (zero
+// FirstSyncAt) repos are all excluded.
+func TestRecentlyAddedRepos(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	now := time.Now().UTC()
+
+	// fresh: added 2h ago, no workspace → the one repo that should appear.
+	mkMeta(t, "github.com/acme/fresh", repostore.Meta{LastSyncAt: now, FirstSyncAt: now.Add(-2 * time.Hour)})
+	// stale: added 3 days ago → outside the 24h window.
+	mkMeta(t, "github.com/acme/stale", repostore.Meta{LastSyncAt: now, FirstSyncAt: now.Add(-72 * time.Hour)})
+	// withws: added 1h ago but already has a workspace → belongs to the
+	// workspace section only, never double-listed here.
+	mkMeta(t, "github.com/acme/withws", repostore.Meta{LastSyncAt: now, FirstSyncAt: now.Add(-1 * time.Hour)})
+	mkWorkspace(t, "github.com/acme/withws", "main")
+	// legacy: a pre-feature repo whose FirstSyncAt is zero → treated as
+	// "added time unknown", not just-added.
+	mkMeta(t, "github.com/acme/legacy", repostore.Meta{LastSyncAt: now})
+
+	c := &config.Config{Repos: []config.Repo{
+		{URL: "https://github.com/acme/fresh", Name: "github.com/acme/fresh"},
+		{URL: "https://github.com/acme/stale", Name: "github.com/acme/stale"},
+		{URL: "https://github.com/acme/withws", Name: "github.com/acme/withws"},
+		{URL: "https://github.com/acme/legacy", Name: "github.com/acme/legacy"},
+	}}
+
+	got := recentlyAddedRepos(c, now, recentlyAddedWindow, recentlyAddedLimit)
+	if len(got) != 1 || got[0].Name != "github.com/acme/fresh" {
+		t.Fatalf("want only github.com/acme/fresh, got %+v", got)
+	}
+	// The row carries the repo's FirstSyncAt so the ADDED column reads true.
+	if !got[0].Age.Equal(now.Add(-2 * time.Hour)) {
+		t.Errorf("repo should carry its FirstSyncAt, got %v", got[0].Age)
+	}
+}
+
+// The added section ranks newest-first and caps the same way the workspace one
+// does, so an owner-sync burst can't flood the agent's context.
+func TestRecentlyAddedReposOrderAndLimit(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	now := time.Now().UTC()
+
+	var repos []config.Repo
+	for i := 0; i < 5; i++ {
+		name := fmt.Sprintf("github.com/o/r%d", i) // r0 newest … r4 oldest
+		mkMeta(t, name, repostore.Meta{LastSyncAt: now, FirstSyncAt: now.Add(-time.Duration(i) * time.Minute)})
+		repos = append(repos, config.Repo{URL: "https://" + name, Name: name})
+	}
+
+	got := recentlyAddedRepos(&config.Config{Repos: repos}, now, recentlyAddedWindow, 3)
+	if len(got) != 3 {
+		t.Fatalf("limit should cap at 3, got %d", len(got))
+	}
+	for i, r := range got {
+		want := fmt.Sprintf("github.com/o/r%d", i)
+		if r.Name != want {
+			t.Errorf("position %d = %q, want %q", i, r.Name, want)
+		}
+	}
+}
+
+// writeRecentlyAddedRepos renders a REPO / ADDED table with a relative age.
+func TestWriteRecentlyAddedRepos(t *testing.T) {
+	repos := []repoActivity{{Name: "github.com/acme/notes", Age: time.Now().Add(-2 * time.Hour)}}
+	var buf bytes.Buffer
+	writeRecentlyAddedRepos(&buf, repos)
+	out := buf.String()
+	for _, want := range []string{"REPO", "ADDED", "github.com/acme/notes", "2 hr ago"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}

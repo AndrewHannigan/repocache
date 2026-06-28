@@ -42,8 +42,13 @@ func RequireGit() error {
 // Meta is the JSON sidecar written at <store>/.git/shed.meta after a
 // sync. LastSyncAt records the last *successful* sync; LastError/LastErrorAt
 // record the most recent failed attempt (cleared on the next success).
+// FirstSyncAt records the *first* successful sync — effectively when the repo
+// landed in the library — and is set once and never overwritten, so callers
+// can tell how recently a repo was added. Repos that predate this field have
+// it zero; treat that as "added time unknown", not "added just now".
 type Meta struct {
 	LastSyncAt  time.Time `json:"last_sync_at"`
+	FirstSyncAt time.Time `json:"first_sync_at,omitempty"`
 	LastError   string    `json:"last_error,omitempty"`
 	LastErrorAt time.Time `json:"last_error_at,omitempty"`
 }

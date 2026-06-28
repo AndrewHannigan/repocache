@@ -85,6 +85,36 @@ func TestFinishErrFirstCloneRecordsStandalone(t *testing.T) {
 	}
 }
 
+// TestSyncedMeta verifies FirstSyncAt is stamped on the genuine first sync,
+// preserved unchanged on later syncs, and never backfilled onto a pre-feature
+// repo whose prior meta has it zero.
+func TestSyncedMeta(t *testing.T) {
+	now := time.Now().UTC()
+
+	// First sync (no prior meta): FirstSyncAt is stamped to now.
+	first := syncedMeta(nil, now)
+	if !first.FirstSyncAt.Equal(now) || !first.LastSyncAt.Equal(now) {
+		t.Fatalf("first sync should stamp both times to now, got %+v", first)
+	}
+
+	// Later sync: FirstSyncAt is carried over even as LastSyncAt advances.
+	later := now.Add(3 * time.Hour)
+	second := syncedMeta(first, later)
+	if !second.FirstSyncAt.Equal(now) {
+		t.Errorf("FirstSyncAt must not move on a later sync, got %v want %v", second.FirstSyncAt, now)
+	}
+	if !second.LastSyncAt.Equal(later) {
+		t.Errorf("LastSyncAt should advance to the new sync time, got %v want %v", second.LastSyncAt, later)
+	}
+
+	// Pre-feature repo: prior meta with a zero FirstSyncAt is left zero, not
+	// backfilled — otherwise every old repo would look freshly added.
+	legacy := syncedMeta(&repostore.Meta{LastSyncAt: now.Add(-100 * time.Hour)}, now)
+	if !legacy.FirstSyncAt.IsZero() {
+		t.Errorf("a zero prior FirstSyncAt must stay zero, got %v", legacy.FirstSyncAt)
+	}
+}
+
 // TestRepoListMarksFailure verifies the table annotates a repo whose last
 // attempt failed, without hiding the last successful sync time and without
 // marking healthy repos.

@@ -380,7 +380,8 @@ func syncOne(name, url string, git map[string]string, ifOlderThan time.Duration)
 	if err := repostore.LockTree(name); err != nil {
 		return finishErr(r, start, fmt.Errorf("chmod a-w: %w", err))
 	}
-	if err := repostore.SaveMeta(name, &repostore.Meta{LastSyncAt: time.Now().UTC()}); err != nil {
+	prior, _ := repostore.LoadMeta(name)
+	if err := repostore.SaveMeta(name, syncedMeta(prior, time.Now().UTC())); err != nil {
 		return finishErr(r, start, fmt.Errorf("write meta: %w", err))
 	}
 	// Success: drop any standalone first-sync failure record from an earlier
@@ -396,6 +397,22 @@ func syncOne(name, url string, git map[string]string, ifOlderThan time.Duration)
 	}
 	r.DurationMs = time.Since(start).Milliseconds()
 	return r
+}
+
+// syncedMeta builds the meta to persist after a successful sync at now. It
+// carries FirstSyncAt over from prior so the "added to the library" time never
+// moves once stamped. A genuine first sync (prior == nil) stamps it now; a
+// prior meta that predates the field (FirstSyncAt zero) is left zero rather
+// than backfilled, since backfilling would make every pre-existing repo look
+// freshly added on its next sync.
+func syncedMeta(prior *repostore.Meta, now time.Time) *repostore.Meta {
+	m := &repostore.Meta{LastSyncAt: now}
+	if prior != nil {
+		m.FirstSyncAt = prior.FirstSyncAt
+	} else {
+		m.FirstSyncAt = now
+	}
+	return m
 }
 
 func finishErr(r syncResult, start time.Time, err error) syncResult {

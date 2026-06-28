@@ -77,11 +77,12 @@ func printSessionContext(w io.Writer, agentKey string) error {
 	return err
 }
 
-// sessionContextBody is the bundled guide followed by a live snapshot of the
-// repos the user has most recently had a workspace in (so the agent starts each
-// session already oriented to what they're actively working on, without having
-// to run `shed ls` itself). The snapshot is best-effort: if it can't be read it
-// is simply omitted.
+// sessionContextBody is the bundled guide followed by live snapshots of the
+// repos the user has most recently had a workspace in and the repos just added
+// to the library that have no workspace yet (so the agent starts each session
+// already oriented to what they're actively working on or about to, without
+// having to run `shed ls` itself). Each snapshot is best-effort: if it can't be
+// read, or has nothing to show, that section is simply omitted.
 func sessionContextBody() string {
 	body := string(agents.DocContent)
 	if w := syncHealthBanner(); w != "" {
@@ -92,6 +93,9 @@ func sessionContextBody() string {
 	}
 	if list := recentWorkspaceReposText(); list != "" {
 		body += "\nThe repos you've most recently had a workspace in (newest first; run `shed ls` for your full library):\n\n```\n" + list + "```\n"
+	}
+	if list := recentlyAddedReposText(); list != "" {
+		body += "\nRecently added to your library, no workspace yet (newest first) — likely what you're about to work on; create one with `shed workspace new <repo> <branch>`:\n\n```\n" + list + "```\n"
 	}
 	return body
 }

@@ -396,18 +396,23 @@ func recentWorkspaceRepos(infos []workspace.Info, limit int) []repoActivity {
 	for name, age := range newest {
 		repos = append(repos, repoActivity{Name: name, Age: age})
 	}
-	// Most recent first; the repo name breaks ties so the order is deterministic
-	// (the map iteration above is randomized) and callers can rely on it.
+	sortRepoActivityNewestFirst(repos)
+	if limit > 0 && len(repos) > limit {
+		repos = repos[:limit]
+	}
+	return repos
+}
+
+// sortRepoActivityNewestFirst orders repos most-recent first in place, breaking
+// ties by name so the order is deterministic (callers may build the slice from
+// a randomized map iteration) and stable across the workspace and added tables.
+func sortRepoActivityNewestFirst(repos []repoActivity) {
 	sort.Slice(repos, func(a, b int) bool {
 		if repos[a].Age.Equal(repos[b].Age) {
 			return repos[a].Name < repos[b].Name
 		}
 		return repos[a].Age.After(repos[b].Age)
 	})
-	if limit > 0 && len(repos) > limit {
-		repos = repos[:limit]
-	}
-	return repos
 }
 
 // writeRecentWorkspaceRepos renders the recent-workspace repos as a small table
@@ -440,5 +445,76 @@ func recentWorkspaceReposText() string {
 	}
 	var buf bytes.Buffer
 	writeRecentWorkspaceRepos(&buf, recentWorkspaceRepos(workspaces, recentWorkspaceReposLimit))
+	return buf.String()
+}
+
+// recentlyAddedWindow bounds how recently a repo must have been added to its
+// library to count as "recently added" for the session-context section.
+const recentlyAddedWindow = 24 * time.Hour
+
+// recentlyAddedLimit caps that section the same way recentWorkspaceReposLimit
+// caps the workspace one, so a burst of owner-sync discoveries can't flood the
+// agent's context with dozens of fresh rows.
+const recentlyAddedLimit = 10
+
+// recentlyAddedRepos returns library repos added within window of now that have
+// no workspace yet, newest first and capped at limit. "Added" is the repo's
+// FirstSyncAt; a repo whose meta is missing, unreadable, or predates that field
+// (FirstSyncAt zero) is treated as not recent rather than just-added. Repos with
+// a workspace are excluded — they already appear in the workspace section, and
+// surfacing them here too would double-list them.
+func recentlyAddedRepos(c *config.Config, now time.Time, window time.Duration, limit int) []repoActivity {
+	workspaces, _ := collectWorkspaces(c)
+	hasWorkspace := make(map[string]bool, len(workspaces))
+	for _, w := range workspaces {
+		hasWorkspace[w.Name] = true
+	}
+	cutoff := now.Add(-window)
+	var repos []repoActivity
+	for _, r := range c.Repos {
+		name, err := r.ResolvedName()
+		if err != nil || hasWorkspace[name] {
+			continue
+		}
+		meta, err := repostore.LoadMeta(name)
+		if err != nil || meta == nil || meta.FirstSyncAt.IsZero() || meta.FirstSyncAt.Before(cutoff) {
+			continue
+		}
+		repos = append(repos, repoActivity{Name: name, Age: meta.FirstSyncAt})
+	}
+	sortRepoActivityNewestFirst(repos)
+	if limit > 0 && len(repos) > limit {
+		repos = repos[:limit]
+	}
+	return repos
+}
+
+// writeRecentlyAddedRepos renders the recently-added repos as a small table
+// (REPO, and how long ago it was added).
+func writeRecentlyAddedRepos(out io.Writer, repos []repoActivity) {
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "  REPO\tADDED")
+	for _, r := range repos {
+		fmt.Fprintf(w, "  %s\t%s\n", r.Name, relTime(r.Age))
+	}
+	w.Flush()
+}
+
+// recentlyAddedReposText renders, for embedding in session context, library
+// repos added in the last recentlyAddedWindow that have no workspace yet — the
+// repos a session is likely about to work in even though no workspace activity
+// points at them. Best-effort: returns "" if the library can't be read or
+// nothing qualifies, so the section (header and all) is simply omitted.
+func recentlyAddedReposText() string {
+	c, err := config.Load()
+	if err != nil {
+		return ""
+	}
+	repos := recentlyAddedRepos(c, time.Now(), recentlyAddedWindow, recentlyAddedLimit)
+	if len(repos) == 0 {
+		return ""
+	}
+	var buf bytes.Buffer
+	writeRecentlyAddedRepos(&buf, repos)
 	return buf.String()
 }
