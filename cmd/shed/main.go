@@ -79,6 +79,7 @@ func newRootCmd() *cobra.Command {
 		newSyncCmd(),
 		newStatusCmd(),
 		newWorkspaceCmd(),
+		newPathCmd(),
 		newPruneCmd(),
 		newHistoryCmd(),
 		newSessionContextCmd(),

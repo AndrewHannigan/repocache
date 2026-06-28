@@ -98,6 +98,14 @@ func runRepoAddOne(url, overrideName string) error {
 		if c.FindOwnerByName(effectiveName) != nil {
 			return errs.New(errs.Exists, "%q is already tracked as an owner", effectiveName)
 		}
+		// Repo and workspace names share one namespace so `shed path <name>` is
+		// unambiguous. Reject a repo whose name would resolve to an existing
+		// workspace (rename the workspace, or pass a distinct --name).
+		if ws := workspaceNamesShadowedBy(c, effectiveName); len(ws) > 0 {
+			return errs.New(errs.Exists,
+				"repo %s collides with workspace %q; rename the workspace or pass --name so `shed path %s` is unambiguous",
+				effectiveName, ws[0], ws[0])
+		}
 		c.Repos = append(c.Repos, config.Repo{URL: url, Name: overrideName})
 		return config.Save(c)
 	})
