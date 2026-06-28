@@ -56,7 +56,6 @@ var helpAliases = map[string]string{
 	"ls":        "library",
 	"repo":      "library",
 	"new":       "workspace",
-	"path":      "workspace",
 	"uninstall": "init",
 	"purge":     "init",
 }
@@ -97,15 +96,16 @@ Commands:
   init          bootstrap + integrate with detected agents (--uninstall reverses it)
   ls            list owners, repos, and workspaces (everything shed manages)
   owner         {ls,add,rm} of tracked users/orgs
+  path          print the absolute path of a repo or workspace by name
   prune         delete workspaces whose work has already landed
   repo          {ls,add,rm} of the read-only repo library
   resume        reopen the agent session that created a workspace
   rm            remove tracked repos or owners
   status        report sync health; show a repo's error and the likely fix
   sync          fetch tracked repos and re-apply read-only chmod (usually automatic)
-  workspace     {new,ls,path,rm} of writable workspaces
+  workspace     {new,ls,rm} of writable workspaces
 
-Topics: agents, auth, concepts, history, init, library, locking, owner, prune, sync, workspace
+Topics: agents, auth, concepts, history, init, library, locking, owner, path, prune, sync, workspace
 `,
 
 	"concepts": `Concepts
@@ -300,6 +300,36 @@ SessionStart hook) wraps this with a global flock so multiple sessions
 don't stampede.
 `,
 
+	"path": `path — print the absolute path of a repo or workspace by name
+
+  shed path <name>
+    Resolve a single name to a stored repo or a workspace and print its
+    absolute path on stdout — nothing else. It changes no directory; compose
+    it with cd:
+
+      cd "$(shed path projects)"      # a repo (read-only store)
+      cd "$(shed path my-workspace)"  # a workspace (writable)
+
+One name, one path
+  Repo names and workspace names share one namespace: a workspace can never
+  have the same name as a repo, and a repo can never have the same name as a
+  workspace (enforced when each is created). So a single name always resolves
+  to exactly one path. A repo matches the way the rest of shed resolves names —
+  an exact name, or an unambiguous trailing path segment (so "projects" finds
+  "github.com/you/projects").
+
+  Two repos may share a leaf under different owners — e.g.
+  "github.com/alice/projects" and "github.com/bob/projects", which is allowed.
+  A bare "projects" is then ambiguous and errors; pass the owner/repo form
+  ("alice/projects"), or the full name, to choose one.
+
+  The path is always absolute (never a "~"), so 'cd "$(shed path <name>)"'
+  works without tilde-expansion surprises.
+
+Exit 2 if the name matches nothing, matches more than one repo, or matches a
+repo that has not been synced into the store yet.
+`,
+
 	"workspace": `workspace — manage writable workspaces
 
 A workspace is a git clone created with --reference against the store,
@@ -318,10 +348,6 @@ sharing object storage but with independent refs. Edits happen here.
     Every workspace with repo, branch, dirty state, unpushed-commit count,
     age of the newest file.
 
-  shed workspace path <name>
-    Print absolute workspace path. Names are globally unique, so the
-    name alone identifies the workspace. Exit 2 if missing.
-
   shed workspace rm <name>... [--force]
     Delete the named workspace dirs (names are globally unique). Several
     names may be given at once; each is removed independently, so a failure
@@ -331,6 +357,9 @@ sharing object storage but with independent refs. Edits happen here.
 The workspace's origin remote points at the upstream URL, not the store,
 so 'git push' works normally. New branches have no upstream until your
 first 'git push -u origin <branch>'.
+
+A workspace name must also differ from every repo name, so 'shed path <name>'
+resolves unambiguously to one or the other — see 'shed help path'.
 
 To bulk-clean workspaces whose work has already landed, see 'shed help prune'.
 `,

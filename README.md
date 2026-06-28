@@ -92,8 +92,8 @@ re-explaining it.
 | `shed status` | Report sync health; show a repo's error and the likely fix |
 | `shed workspace new <repo> <branch>` | Create a writable clone off the freshly-synced store; prints its path |
 | `shed workspace ls` | List workspaces with dirty/unpushed state and age |
-| `shed workspace path <name>` | Print a workspace's absolute path (names are globally unique) |
 | `shed workspace rm <name>…` | Delete one or more workspaces (refuses dirty/unpushed work without `--force`) |
+| `shed path <name>` | Print the absolute path of a repo or workspace by name (for `cd "$(shed path <name>)"`) |
 | `shed prune` | Delete workspaces whose work has already landed |
 | `shed resume <name>` | Reopen the agent session that created a workspace |
 | `shed history` | Show recent shed commands |

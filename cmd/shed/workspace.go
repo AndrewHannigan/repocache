@@ -27,7 +27,6 @@ func newWorkspaceCmd() *cobra.Command {
 	cmd.AddCommand(
 		newWorkspaceNewCmd(),
 		newWorkspaceLsCmd(),
-		newWorkspacePathCmd(),
 		newWorkspaceRmCmd(),
 	)
 	return cmd
@@ -93,6 +92,13 @@ func runWorkspaceNew(name, branch, base string) error {
 	if other, _, found := workspace.LocateByName(repoNames(c), branch); found && other != name {
 		return errs.New(errs.Exists,
 			"workspace name %q already exists for repo %s; pick a distinct name", branch, other)
+	}
+	// Workspace and repo names share one namespace so `shed path <name>` is
+	// unambiguous. Reject a workspace name that would resolve to a repo.
+	if repos := repoNamesMatching(c, branch); len(repos) > 0 {
+		return errs.New(errs.Exists,
+			"workspace name %q collides with repo %s; pick a distinct name so `shed path %s` is unambiguous",
+			branch, repos[0], branch)
 	}
 	// Refresh the store first so the workspace forks from up-to-date code.
 	// syncOne clones the repo if it isn't stored yet. If the sync fails but a
@@ -225,38 +231,6 @@ func writeWorkspaceListTable(out io.Writer, infos []workspace.Info) error {
 			i.Branch, i.Name, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age))
 	}
 	return w.Flush()
-}
-
-func newWorkspacePathCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "path <name>",
-		Short: "Print the absolute workspace path by name",
-		Long: `path prints the absolute path of the workspace with the given name.
-
-Workspace names are unique across every repo (enforced at creation), so the
-name alone identifies exactly one workspace — no <repo> is needed.
-
-Exits 2 if no workspace has that name.`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWorkspacePath(args[0])
-		},
-	}
-}
-
-func runWorkspacePath(name string) error {
-	c, err := config.Load()
-	if err != nil {
-		return errs.Wrap(errs.Config, err)
-	}
-	// Workspace names are globally unique, so the name alone locates exactly one
-	// workspace (same lookup `shed resume` and `rm` use).
-	_, path, found := workspace.LocateByName(repoNames(c), name)
-	if !found {
-		return errs.New(errs.NotFound, "no workspace named %q (see `shed ls`)", name)
-	}
-	fmt.Println(path)
-	return nil
 }
 
 func newWorkspaceRmCmd() *cobra.Command {
