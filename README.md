@@ -2,9 +2,9 @@
 
 ![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go) ![Status](https://img.shields.io/badge/status-beta-yellow) ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Stop your coding agents from stepping on each other.**
+**git repo management for terminal coding agents.**
 
-Run Claude Code, Cursor, and opencode against the same repos and they clobber each other's checkouts, pile up stale workspaces, and quietly branch off out-of-date code. **shed** is one standard system all your agents share to manage git repos and workspaces — read-only reference repos, isolated writable workspaces, every one built from the latest code.
+Run Claude Code, Cursor, and opencode against the same repos and they clobber each other's checkouts, pile up stale worktrees, and quietly branch off out-of-date code. **shed** is one standard system all your agents share to manage git repos and workspaces — read-only reference repos, isolated writable workspaces, and improved session resumption.
 
 <!-- TODO(visual hook): drop a demo GIF/asciinema here — two agents working the same
      repo through shed: each gets its own fresh `shed workspace new`, neither touches the
@@ -17,9 +17,8 @@ Run Claude Code, Cursor, and opencode against the same repos and they clobber ea
 - 🌱 **Never a stale branch** — every workspace is created from the freshly-synced repo, so an agent never unintentionally works on out-of-date code.
 - 🧹 **One-command cleanup** — workspaces pile up fast; `shed prune` reclaims the ones whose work has already landed (merged PR or merged into the default branch) and leaves anything unpushed untouched.
 - 🔁 **Pick up where you left off** — `shed resume <workspace>` reopens the exact agent session that created a workspace — same agent, same session id, same directory — so a half-finished task is one command away.
-- 🔒 **Reference repos, stored once and never clobbered** — every repo lives read-only in `~/.shed` (`chmod a-w`), refreshed in the background and reused across sessions instead of re-cloned into `/tmp`.
 - 🧰 **Searchable out of the box** — agents run `rg`, `grep`, `git`, and `gh` across the entire catalog directly.
-- ⚙️ **Zero agent setup** — one `shed init` wires up each agent to use shed automatically — no path hallucinations.
+- ⚙️ **Zero agent setup** — one `shed init` wires up each agent to use shed automatically.
 
 ---
 
