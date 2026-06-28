@@ -77,7 +77,7 @@ var helpTopics = map[string]string{
 Manages a read-only store of your git repos and hands your agents isolated,
 writable workspaces to make changes. Run 'shed init' to begin.
 
-The whole loop:
+Getting started:
 
     # One-time init to teach your agents how to use shed
     shed init
