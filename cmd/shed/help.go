@@ -103,7 +103,7 @@ Commands:
   rm            remove tracked repos or owners
   status        report sync health; show a repo's error and the likely fix
   sync          fetch tracked repos and re-apply read-only chmod (usually automatic)
-  workspace     {new,ls,path,rm} of writable workspaces
+  workspace     {new,ls,rm} of writable workspaces
 
 Topics: agents, auth, concepts, history, init, library, locking, owner, path, prune, sync, workspace
 `,
@@ -347,11 +347,6 @@ sharing object storage but with independent refs. Edits happen here.
   shed workspace ls [--json]
     Every workspace with repo, branch, dirty state, unpushed-commit count,
     age of the newest file.
-
-  shed workspace path <name>
-    Alias for 'shed path' (see 'shed help path'). Prints the absolute path
-    for the name — a workspace or a repo. Names are globally unique, so the
-    name alone identifies one path. Exit 2 if missing.
 
   shed workspace rm <name>... [--force]
     Delete the named workspace dirs (names are globally unique). Several

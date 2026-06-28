@@ -27,7 +27,6 @@ func newWorkspaceCmd() *cobra.Command {
 	cmd.AddCommand(
 		newWorkspaceNewCmd(),
 		newWorkspaceLsCmd(),
-		newWorkspacePathCmd(),
 		newWorkspaceRmCmd(),
 	)
 	return cmd
@@ -232,21 +231,6 @@ func writeWorkspaceListTable(out io.Writer, infos []workspace.Info) error {
 			i.Branch, i.Name, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))
 	}
 	return w.Flush()
-}
-
-func newWorkspacePathCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "path <name>",
-		Short: "Alias for `shed path`: print a repo or workspace path by name",
-		Long: `path is an alias for the top-level 'shed path': it resolves the name
-against both repos and workspaces and prints the absolute path. Workspace names
-are globally unique and share one namespace with repo names, so the name alone
-identifies exactly one path — no <repo> is needed. See 'shed help path'.`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPath(args[0])
-		},
-	}
 }
 
 func newWorkspaceRmCmd() *cobra.Command {

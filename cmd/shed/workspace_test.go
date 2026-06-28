@@ -166,23 +166,3 @@ func TestRunWorkspaceRmManyDeduplicates(t *testing.T) {
 		t.Errorf("workspace a should be removed")
 	}
 }
-
-// `shed workspace path` is now an alias for the top-level `shed path`: the
-// subcommand resolves the globally-unique workspace name through the same
-// resolver and prints its absolute path. Driven through the command tree to
-// confirm the alias is wired up.
-func TestWorkspacePathAliasesShedPath(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-
-	saveConfig(t, &config.Config{
-		Repos: []config.Repo{{URL: "https://github.com/AndrewHannigan/shed"}},
-	})
-	// makeWorkspaceDir also creates the data dir, so the init gate is satisfied.
-	want := makeWorkspaceDir(t, "github.com/AndrewHannigan/shed", "fix-thing")
-
-	out := captureStdout(t, func() { runShed("workspace", "path", "fix-thing") })
-	if got := strings.TrimSpace(out); got != want {
-		t.Errorf("`shed workspace path fix-thing` printed %q, want %q", got, want)
-	}
-}

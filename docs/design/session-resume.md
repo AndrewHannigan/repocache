@@ -229,8 +229,8 @@ Tradeoff: no two live workspaces can share a name — most visibly if you tried
 two `main` workspaces across repos. This fits shed's grain (workspaces are
 named per task, e.g. `fix-readme-link`), and the failure is loud and actionable
 ("workspace `main` already exists for `other/repo`; pick a distinct name").
-The same invariant lets `workspace path` / `rm` accept name-only too, though
-that's out of scope here.
+The same invariant lets `shed path` / `workspace rm` accept name-only too,
+though that's out of scope here.
 
 ### 5. `shed resume`
 
