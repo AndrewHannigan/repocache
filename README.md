@@ -41,7 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/AndrewHannigan/shed/main/install.sh
 shed init
 
 # add a repo (github shorthand works)
-shed add octocat/Hello-World
+shed add cli/cli
 
 # now run claude, cursor-agent, or opencode — your agent knows how to use it
 ```
@@ -49,8 +49,8 @@ shed add octocat/Hello-World
 That's it. Now any of your agents have a consistent system for working with your repo catalog — reading the read-only copy, and carving off an isolated, up-to-date workspace the moment they need to make changes:
 
 ```text
-You:   "Fix the broken link in octocat/Hello-World's README"
-Agent: reads ~/.shed/repos/github.com/octocat/Hello-World   (read-only, always fresh)
+You:   "Fix the broken link in cli/cli's README"
+Agent: reads ~/.shed/repos/github.com/cli/cli               (read-only, always fresh)
        → shed workspace new                                 (isolated, off the latest)
        → edits there, opens a PR                            (store + other agents untouched)
 ```
@@ -138,7 +138,7 @@ Config example:
 
 ```toml
 [[repo]]
-url = "https://github.com/octocat/Hello-World"
+url = "https://github.com/cli/cli"
 
 [[repo]]
 url = "git@github.com:foo/bar.git"
