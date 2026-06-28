@@ -141,12 +141,44 @@ func runOwnerAdd(url, overrideName string) error {
 	fmt.Printf("added owner %s\n", effectiveName)
 	// Surface gh problems now rather than only at sync time. Advisory only —
 	// the entry is already saved and will expand once gh becomes available.
-	if gherr := forge.Available(); gherr != nil {
-		fmt.Fprintf(os.Stderr, "warning: %v\n  owner expansion will be skipped until gh is available and authenticated.\n", gherr)
+	ghErr := forge.Available()
+	if ghErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n  owner expansion will be skipped until gh is available and authenticated.\n", ghErr)
 	}
 	// Discover and fetch the owner's repos right away. Scoped to this owner,
 	// runSync reconciles it (adding newly discovered repos) and syncs them.
-	return runSync([]string{effectiveName}, syncDefaultJobs, 0, false)
+	syncErr := runSync([]string{effectiveName}, syncDefaultJobs, 0, false)
+	// When gh worked yet the owner turned up no repos, the name is almost
+	// certainly wrong — a typo, or an org whose GitHub login differs from its
+	// display name ("langchain" for the org "langchain-ai"). Unflagged, the
+	// entry just sits in the config syncing nothing on every pass, which is
+	// exactly how a mistyped owner goes unnoticed. Say so now, while it's easy
+	// to undo. Skipped when gh is unavailable: 0 there means "couldn't look",
+	// not "no repos", and that case is already warned about above.
+	if ghErr == nil {
+		if c, err := config.Load(); err == nil {
+			if hint := ownerEmptyHint(c, effectiveName); hint != "" {
+				fmt.Fprint(os.Stderr, hint)
+			}
+		}
+	}
+	return syncErr
+}
+
+// ownerEmptyHint returns an advisory (or "" when none is warranted) for an
+// owner that, just after being added and synced, manages no repos at all. That
+// is the signature of a wrong owner name — a typo like "klnaselfhuasef", or an
+// org whose GitHub login differs from its display name ("langchain-ai", not
+// "langchain") — which would otherwise linger as a dead config entry that
+// silently syncs nothing. Pure (it decides from the config alone) so both the
+// trigger and the wording are testable without gh or disk.
+func ownerEmptyHint(c *config.Config, ownerName string) string {
+	if len(c.ReposForOwner(ownerName)) > 0 {
+		return ""
+	}
+	return fmt.Sprintf("warning: owner %s has no repos — double-check the owner name "+
+		"(an org's GitHub login can differ from its display name).\n"+
+		"  If it's wrong, remove it with `shed rm %s`.\n", ownerName, ownerName)
 }
 
 // reachableURL returns a clone URL that authenticates with the user's current
