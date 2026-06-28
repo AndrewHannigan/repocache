@@ -174,7 +174,7 @@ func likelyCause(errText, name, url string) string {
 	switch {
 	case isAuthError(low):
 		return authFixHint(url) + ", then " + sync
-	case containsAny(low, "repository not found", "not found", "404", "does not exist"):
+	case looksGoneUpstream(low):
 		return fmt.Sprintf("repo may be renamed or deleted upstream — verify it exists, or remove it with `shed rm %s`", name)
 	case containsAny(low, "could not resolve host", "connection refused", "connection timed out", "timed out", "network is unreachable", "temporary failure in name resolution"):
 		return "network — likely transient; check your connection and re-run " + sync
@@ -185,6 +185,16 @@ func likelyCause(errText, name, url string) string {
 	default:
 		return "re-run " + sync + "; see the full output above"
 	}
+}
+
+// looksGoneUpstream reports whether git's (already-lowercased) output indicates
+// the remote repository no longer resolves — deleted, renamed, or (for a
+// private repo) access revoked, which GitHub reports identically as "Repository
+// not found". Shared by status reporting and sync's gone-upstream handling.
+// It is a heuristic over git's text — an expired credential yields the same
+// "not found" — so it only ever downgrades severity or informs, never deletes.
+func looksGoneUpstream(low string) bool {
+	return containsAny(low, "repository not found", "not found", "does not exist", "404")
 }
 
 // isAuthError reports whether git's (already-lowercased) output looks like an

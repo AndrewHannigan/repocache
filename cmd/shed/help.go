@@ -278,6 +278,12 @@ an owner syncs all of its repos. If 'gh' is unavailable, discovery is
 skipped with a warning and already-known repos still sync. See
 'shed help owner'.
 
+A repo whose remote no longer resolves on fetch (deleted, renamed, or
+access revoked) is reported as "gone upstream" rather than a failure: it is
+counted apart from failures, does not affect the exit code, and is left in
+place with a hint to remove it with 'shed rm'. sync never deletes a repo or
+its workspace on your behalf.
+
 Behavior per repo:
   1. Clone if missing (with gc.auto=0).
   2. Acquire exclusive flock on the stored repo (5 min timeout).
@@ -292,7 +298,7 @@ Behavior per repo:
 Parallelism via --jobs (default 4). Per-repo locks serialize concurrent
 syncs of the same repo. Aggregate exit:
   5 if any per-repo lock acquisition timed out
-  6 if any git fetch/clone failed
+  6 if any git fetch/clone failed (a "gone upstream" repo is not a failure)
   else 0
 
 The background variant ('shed __bg-sync', invoked by Claude's
