@@ -103,6 +103,58 @@ func ListOwnerRepos(ownerURL string, f Filter) ([]Repo, error) {
 	return decodeRepos(out, isSSHURL(ownerURL))
 }
 
+// OwnerExists reports whether ownerURL names a real GitHub user or
+// organization. It shells out to `gh api users/<login>`, whose /users/<login>
+// endpoint resolves both users and orgs, so a 200 means the owner exists and a
+// 404 means it does not. It returns ErrGhMissing / ErrGhUnauthed (wrapped) when
+// gh can't be used, so the caller can decide whether to proceed without the
+// check. An owner that exists but currently has no repos still reports true —
+// distinguishing "doesn't exist" from "exists but empty" is exactly why this
+// uses the user endpoint rather than `repo list`, which can't tell them apart.
+func OwnerExists(ownerURL string) (bool, error) {
+	host, login, err := paths.ParseURL(ownerURL)
+	if err != nil {
+		return false, err
+	}
+	if strings.Contains(login, "/") {
+		return false, fmt.Errorf("%q is a repo URL, not an owner URL", ownerURL)
+	}
+	if _, err := exec.LookPath("gh"); err != nil {
+		return false, ErrGhMissing
+	}
+	cmd := exec.Command("gh", buildOwnerCheckArgs(login)...)
+	if host != "" && host != "github.com" {
+		cmd.Env = append(os.Environ(), "GH_HOST="+host)
+	}
+	var stderr strings.Builder
+	cmd.Stderr = &stderr // Stdout is left nil so the response body is discarded.
+	return classifyOwnerCheck(cmd.Run(), stderr.String())
+}
+
+// buildOwnerCheckArgs builds the `gh api` argument vector that fetches the
+// account named login. Kept pure (no exec) so it can be unit-tested.
+func buildOwnerCheckArgs(login string) []string {
+	// "users/"+login can never begin with "-", so it can't be read as a flag
+	// even when login itself starts with a dash (argument injection).
+	return []string{"api", "users/" + login}
+}
+
+// classifyOwnerCheck interprets the result of `gh api users/<login>`: a nil err
+// means the owner exists; a 404 in stderr means it does not (false, nil); auth
+// and missing-binary failures surface as sentinels and anything else as a real
+// error, so a transient failure is never mistaken for "does not exist". Pure
+// for testability.
+func classifyOwnerCheck(runErr error, stderr string) (bool, error) {
+	if runErr == nil {
+		return true, nil
+	}
+	s := strings.ToLower(stderr)
+	if strings.Contains(s, "http 404") || strings.Contains(s, "not found") {
+		return false, nil
+	}
+	return false, classifyExecErr("gh api", runErr, stderr)
+}
+
 // MergedPR returns the number of a merged pull request whose head branch is
 // branch in repo (an "owner/name" slug), or 0 if there is none. host selects
 // the GitHub host: "" or "github.com" use gh's default; any other value

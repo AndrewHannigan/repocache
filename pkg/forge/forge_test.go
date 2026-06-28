@@ -129,6 +129,63 @@ func TestClassifyExecErr(t *testing.T) {
 	}
 }
 
+func TestBuildOwnerCheckArgs(t *testing.T) {
+	got := buildOwnerCheckArgs("octocat")
+	want := []string{"api", "users/octocat"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("buildOwnerCheckArgs() = %v, want %v", got, want)
+	}
+	// A login starting with "-" must stay a path segment, never a flag.
+	if got := buildOwnerCheckArgs("-x"); got[len(got)-1] != "users/-x" {
+		t.Fatalf("dash login should be prefixed, got %v", got)
+	}
+}
+
+func TestClassifyOwnerCheck(t *testing.T) {
+	t.Run("success means exists", func(t *testing.T) {
+		exists, err := classifyOwnerCheck(nil, "")
+		if !exists || err != nil {
+			t.Fatalf("nil run error should mean exists, got exists=%v err=%v", exists, err)
+		}
+	})
+
+	// gh prints "gh: Not Found (HTTP 404)" for an unknown account; that's
+	// "doesn't exist", not a failure to surface.
+	for _, stderr := range []string{"gh: Not Found (HTTP 404)", "HTTP 404: Not Found"} {
+		t.Run("404 means absent: "+stderr, func(t *testing.T) {
+			exists, err := classifyOwnerCheck(errors.New("exit status 1"), stderr)
+			if exists || err != nil {
+				t.Fatalf("404 should mean absent with no error, got exists=%v err=%v", exists, err)
+			}
+		})
+	}
+
+	t.Run("auth failure surfaces as sentinel", func(t *testing.T) {
+		exists, err := classifyOwnerCheck(errors.New("exit status 1"), "HTTP 401: requires authentication")
+		if exists {
+			t.Fatal("auth failure should not report the owner as existing")
+		}
+		if !errors.Is(err, ErrGhUnauthed) {
+			t.Fatalf("want ErrGhUnauthed, got %v", err)
+		}
+	})
+
+	// A transient/unknown failure must be an error, never silently "absent" —
+	// otherwise a flaky network would delete-by-omission a real owner.
+	t.Run("other failure is a real error", func(t *testing.T) {
+		exists, err := classifyOwnerCheck(errors.New("exit status 1"), "could not resolve host")
+		if exists {
+			t.Fatal("unknown failure should not report the owner as existing")
+		}
+		if err == nil {
+			t.Fatal("unknown failure should surface an error, not nil")
+		}
+		if errors.Is(err, ErrGhUnauthed) || errors.Is(err, ErrGhMissing) {
+			t.Fatalf("want a non-sentinel error, got %v", err)
+		}
+	})
+}
+
 func TestBuildPRListArgs(t *testing.T) {
 	got := buildPRListArgs("acme/widgets", "feature/login")
 	want := []string{

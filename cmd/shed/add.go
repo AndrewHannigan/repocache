@@ -36,7 +36,9 @@ both just work.
 If <repo> points at a bare user or org (a single path segment, e.g.
 octocat or https://github.com/octocat), it is tracked as an owner instead:
 each sync discovers that owner's repos via gh and adds any new ones
-automatically.
+automatically. The owner is checked against GitHub first and rejected if no
+such user or org exists, so a typo can't become a dead entry that syncs
+nothing.
 
 Detection is automatic from the shape; force it with --owner / --repo.`,
 		Args: cobra.ExactArgs(1),
@@ -121,6 +123,27 @@ func runOwnerAdd(url, overrideName string) error {
 		effectiveName = overrideName
 	}
 
+	// Validate the owner against the forge before committing it to the config.
+	// A name that resolves to no GitHub account — a typo, or an org whose login
+	// differs from its display name ("langchain" for the org "langchain-ai") —
+	// would otherwise linger as a dead config entry that silently syncs nothing
+	// on every pass, so refuse it outright. When gh is unavailable we can't
+	// look; save anyway (the entry will expand once gh returns) and warn below.
+	// An owner that exists but has no repos is allowed through and warned about
+	// after sync — see ownerEmptyHint.
+	ghErr := forge.Available()
+	if ghErr == nil {
+		exists, err := forge.OwnerExists(url)
+		if err != nil {
+			return errs.Wrap(errs.Config, err)
+		}
+		if !exists {
+			return errs.New(errs.NotFound,
+				"%s is not a user or organization on GitHub — check the spelling "+
+					"(an org's GitHub login can differ from its display name)", effectiveName)
+		}
+	}
+
 	err = config.WithLock(configLockTimeout, func(c *config.Config) error {
 		if c.FindOwnerByName(effectiveName) != nil {
 			return errs.New(errs.Exists, "owner %q is already in the config", effectiveName)
@@ -139,22 +162,16 @@ func runOwnerAdd(url, overrideName string) error {
 	}
 
 	fmt.Printf("added owner %s\n", effectiveName)
-	// Surface gh problems now rather than only at sync time. Advisory only —
-	// the entry is already saved and will expand once gh becomes available.
-	ghErr := forge.Available()
 	if ghErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n  owner expansion will be skipped until gh is available and authenticated.\n", ghErr)
 	}
 	// Discover and fetch the owner's repos right away. Scoped to this owner,
 	// runSync reconciles it (adding newly discovered repos) and syncs them.
 	syncErr := runSync([]string{effectiveName}, syncDefaultJobs, 0, false)
-	// When gh worked yet the owner turned up no repos, the name is almost
-	// certainly wrong — a typo, or an org whose GitHub login differs from its
-	// display name ("langchain" for the org "langchain-ai"). Unflagged, the
-	// entry just sits in the config syncing nothing on every pass, which is
-	// exactly how a mistyped owner goes unnoticed. Say so now, while it's easy
-	// to undo. Skipped when gh is unavailable: 0 there means "couldn't look",
-	// not "no repos", and that case is already warned about above.
+	// The owner is known to exist (validated above), so zero repos here means it
+	// is genuinely empty — nothing to sync but not a mistake to refuse. Point at
+	// `shed rm` in case that's unexpected. Skipped when gh is unavailable: 0
+	// there means "couldn't look", not "no repos", already warned about above.
 	if ghErr == nil {
 		if c, err := config.Load(); err == nil {
 			if hint := ownerEmptyHint(c, effectiveName); hint != "" {
@@ -166,19 +183,18 @@ func runOwnerAdd(url, overrideName string) error {
 }
 
 // ownerEmptyHint returns an advisory (or "" when none is warranted) for an
-// owner that, just after being added and synced, manages no repos at all. That
-// is the signature of a wrong owner name — a typo like "klnaselfhuasef", or an
-// org whose GitHub login differs from its display name ("langchain-ai", not
-// "langchain") — which would otherwise linger as a dead config entry that
-// silently syncs nothing. Pure (it decides from the config alone) so both the
+// owner that, just after being added and synced, manages no repos at all. The
+// owner is already known to exist (add validates that before saving), so this
+// is the benign "exists but empty" case — nothing to sync now, though new repos
+// will be picked up on a later sync. It still points at `shed rm` in case the
+// emptiness is unexpected. Pure (it decides from the config alone) so both the
 // trigger and the wording are testable without gh or disk.
 func ownerEmptyHint(c *config.Config, ownerName string) string {
 	if len(c.ReposForOwner(ownerName)) > 0 {
 		return ""
 	}
-	return fmt.Sprintf("warning: owner %s has no repos — double-check the owner name "+
-		"(an org's GitHub login can differ from its display name).\n"+
-		"  If it's wrong, remove it with `shed rm %s`.\n", ownerName, ownerName)
+	return fmt.Sprintf("warning: owner %s has no repos to sync yet.\n"+
+		"  Remove it with `shed rm %s` if that's unexpected.\n", ownerName, ownerName)
 }
 
 // reachableURL returns a clone URL that authenticates with the user's current
