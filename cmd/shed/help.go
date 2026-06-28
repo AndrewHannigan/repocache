@@ -94,14 +94,13 @@ Supports claude, cursor-agent, and opencode.
 
 Commands:
   add           add a repo (or a whole user/org) to the library
-  describe      set or show a repo's one-line description
   help <topic>  long-form docs (also accepts a command name, e.g. 'shed help add')
   history       show recent shed commands
   init          bootstrap + integrate with detected agents (--uninstall reverses it)
   ls            list owners, repos, and workspaces (everything shed manages)
   owner         {ls,add,rm} of tracked users/orgs
   prune         delete workspaces whose work has already landed
-  repo          {ls,add,rm} of the read-only repo library
+  repo          {ls,add,rm,describe} of the read-only repo library
   resume        reopen the agent session that created a workspace
   rm            remove tracked repos or owners
   status        report sync health; show a repo's error and the likely fix
@@ -223,7 +222,7 @@ Reversing integration ('shed init --uninstall')
     create your first workspace is shown when you have repos but none yet).
     When any repo has a description, a DESC column is added.
 
-  shed describe <repo> [description] [--clear]
+  shed repo describe <repo> [description] [--clear]
     Attach a short, human-written summary to a tracked repo. It shows in
     'shed ls' and is surfaced in the agent session-context, so an agent
     starts oriented to what each repo is for. With no description argument,
@@ -231,11 +230,11 @@ Reversing integration ('shed init --uninstall')
     it. Capped at 100 characters and single-line. <repo> resolves the usual
     way: an exact name or an unambiguous suffix.
 
-These are also grouped under a 'repo' noun (mirroring 'workspace'):
-'shed repo add', 'shed repo rm', and 'shed repo describe' are the same as
-'shed add'/'shed rm'/'shed describe', and 'shed repo ls' lists just the
-repos — where plain 'shed ls' also includes the Owners and Workspaces
-sections.
+'shed add', 'shed rm', and 'shed ls' are also grouped under a 'repo' noun
+(mirroring 'workspace'): 'shed repo add' and 'shed repo rm' are the same
+commands, and 'shed repo ls' lists just the repos — where plain 'shed ls'
+also includes the Owners and Workspaces sections. 'shed repo describe'
+(above) lives only under that noun.
 `,
 
 	"owner": `owner — track a whole user or org

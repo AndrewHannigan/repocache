@@ -21,9 +21,9 @@ func newDescribeCmd() *cobra.Command {
 The description is shown in 'shed ls' and surfaced in the agent
 session-context, so an agent starts each session knowing what each repo is for.
 
-  shed describe <repo>                 show the repo's current description
-  shed describe <repo> "<text>"        set it (quote text containing spaces)
-  shed describe <repo> --clear         remove it
+  shed repo describe <repo>                show the repo's current description
+  shed repo describe <repo> "<text>"       set it (quote text containing spaces)
+  shed repo describe <repo> --clear        remove it
 
 The description is capped at 100 characters and must be a single line.
 <repo> resolves like every other command: an exact name, or an unambiguous
@@ -98,7 +98,7 @@ func showDescription(name string) error {
 	}
 	resolved, _ := r.ResolvedName()
 	if r.Description == "" {
-		fmt.Printf("%s has no description (set one with `shed describe %s \"<text>\"`)\n", resolved, name)
+		fmt.Printf("%s has no description (set one with `shed repo describe %s \"<text>\"`)\n", resolved, name)
 		return nil
 	}
 	fmt.Printf("%s: %s\n", resolved, r.Description)
