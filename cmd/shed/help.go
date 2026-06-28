@@ -77,8 +77,6 @@ var helpTopics = map[string]string{
 Manages a read-only store of your git repos and hands your agents isolated,
 writable workspaces to make changes. Run 'shed init' to begin.
 
-Supports claude, cursor-agent, and opencode.
-
 The whole loop:
 
     # One-time init to teach your agents how to use shed
@@ -88,7 +86,9 @@ The whole loop:
     shed add AndrewHannigan/shed       # Add a repo
     shed add octocat                   # Add an owner, auto-sync future repos
 
-    # That's it. Your agent knows how to use shed from here. Ask it for a tour.
+    # Your agents know how to use shed from here. Ask for a tour.
+
+Supports claude, cursor-agent, and opencode.
 
 Commands:
   add           add a repo (or a whole user/org) to the library
