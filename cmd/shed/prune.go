@@ -25,9 +25,14 @@ func newPruneCmd() *cobra.Command {
 		Short: "Delete workspaces whose work has already landed",
 		Long: `prune removes every workspace whose work has already landed, reclaiming
 the ones that are safe to delete. A workspace is reclaimed when its branch
-has a merged pull request, or its commits are already contained in the
+has a merged pull request, or its own commits are already contained in the
 remote default branch (a merge- or rebase-merge with no PR). The merged-PR
 check asks GitHub via the gh CLI, so gh must be installed and authenticated.
+
+A workspace that never committed anything of its own is kept, even though its
+tip already sits on the default branch: an empty workspace has nothing to
+reclaim, so "no commits beyond the default branch" is not on its own a reason
+to delete it.
 
 With --if-older-than, also reclaim workspaces whose last activity (newest
 reflog entry) is older than the given duration, regardless of merge status.
@@ -113,7 +118,7 @@ func runPrune(dryRun, force, yes bool, ifOlderThan time.Duration) error {
 			}
 		}
 		expired := ifOlderThan > 0 && !i.Age.IsZero() && now.Sub(i.Age) > ifOlderThan
-		prunable := pr != 0 || landed || expired
+		prunable := reclaimable(pr, landed, hasOwnCommits, expired)
 		reason := pruneReason(pr, landed, hasOwnCommits, defaultBranch, expired, now.Sub(i.Age))
 		switch decidePrune(prunable, i.Dirty, i.Unpushed, force) {
 		case pruneKeep:
@@ -172,6 +177,20 @@ func runPrune(dryRun, force, yes bool, ifOlderThan time.Duration) error {
 	return nil
 }
 
+// reclaimable reports whether some condition marks a workspace's work as having
+// landed (or otherwise safe to reclaim): a merged PR, its own commits already
+// contained in the default branch, or age (expired).
+//
+// A branch that landed but never committed anything of its own (landed &&
+// !hasOwnCommits) is deliberately NOT reclaimable on that basis: its tip merely
+// sits on the default branch because a fresh workspace never diverged, and an
+// empty workspace has nothing to reclaim — having no commits beyond the default
+// branch is not, on its own, a reason to delete it. Age can still reclaim such a
+// workspace via --if-older-than. Pure, so it is unit-testable.
+func reclaimable(prNumber int, landed, hasOwnCommits, expired bool) bool {
+	return prNumber != 0 || (landed && hasOwnCommits) || expired
+}
+
 // pruneAction is what prune decides to do with one workspace.
 type pruneAction int
 
@@ -199,19 +218,14 @@ func decidePrune(prunable, dirty bool, unpushed int, force bool) pruneAction {
 // pruneReason describes why a workspace is being pruned, for status messages.
 // Reasons are reported in priority order: a merged PR is the clearest signal,
 // then containment in the default branch, then age. A landed branch that never
-// committed anything (hasOwnCommits is false) is reported as "no commits beyond
-// <default>" rather than "merged", since nothing was actually merged — its tip
-// is still the default branch.
+// committed anything (hasOwnCommits is false) is not a prune reason on its own —
+// an empty workspace has nothing to reclaim — so it falls through to age (or
+// none), never to "merged".
 func pruneReason(prNumber int, landed, hasOwnCommits bool, defaultBranch string, expired bool, inactive time.Duration) string {
 	switch {
 	case prNumber != 0:
 		return fmt.Sprintf("PR #%d merged", prNumber)
-	case landed && !hasOwnCommits:
-		if defaultBranch != "" {
-			return fmt.Sprintf("no commits beyond %s", defaultBranch)
-		}
-		return "no commits beyond the default branch"
-	case landed:
+	case landed && hasOwnCommits:
 		if defaultBranch != "" {
 			return fmt.Sprintf("merged into %s", defaultBranch)
 		}

@@ -299,8 +299,11 @@ func parseReflogUnix(selector string) time.Time {
 // from one that never committed anything: a freshly created workspace whose tip
 // is still a commit on the default branch's first-parent mainline has not
 // "merged" anything, it simply never diverged. It is only meaningful when
-// landed is true. Callers use it to phrase the reason ("merged into main" vs
-// "no commits beyond main").
+// landed is true. prune treats it as load-bearing: a workspace is reclaimed for
+// having landed only when its own commits made it in. An empty workspace whose
+// tip merely sits on the default branch (landed, !hasOwnCommits) has nothing to
+// reclaim and is kept, so a fresh workspace is never deleted just for not having
+// diverged yet.
 //
 // defaultBranch is the default branch's short name (e.g. "main") for use in
 // messages. landed is false when the default branch can't be resolved (treated
