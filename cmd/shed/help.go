@@ -75,7 +75,7 @@ var helpTopics = map[string]string{
 	"overview": `shed — git repo management for terminal coding agents
 
 Manages a read-only store of your git repos and hands your agents isolated,
-writable workspaces to make changes. Run `shed init` to begin.
+writable workspaces to make changes. Run 'shed init' to begin.
 
 Supports claude, cursor-agent, and opencode.
 
