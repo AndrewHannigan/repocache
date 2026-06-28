@@ -25,6 +25,7 @@ func newRepoCmd() *cobra.Command {
 		// call, so the same definition can live under both root and `repo`.
 		newAddCmd(),
 		newRmCmd(),
+		newDescribeCmd(),
 	)
 	return cmd
 }

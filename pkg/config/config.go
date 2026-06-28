@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/gofrs/flock"
 	"github.com/pelletier/go-toml/v2"
@@ -43,6 +45,34 @@ type Repo struct {
 	// Set/update only — removing a key here does not unset it from a clone
 	// that already has it (re-add the repo to fully reset).
 	Git map[string]string `toml:"git,omitempty"`
+	// Description is an optional one-line, human-written summary of what this
+	// repo is for. It is shown in `shed ls` and surfaced in the agent
+	// session-context so an agent starts oriented to each tracked repo. Set it
+	// with `shed describe <repo> <text>`. Bounded by MaxDescriptionLen runes
+	// and single-line (see ValidateDescription) so it stays a label, not a doc.
+	Description string `toml:"description,omitempty"`
+}
+
+// MaxDescriptionLen caps a repo description's length, counted in runes (not
+// bytes) so the limit means the same for non-ASCII text. Kept short on
+// purpose: a description is a one-line label for `shed ls` and the
+// session-context, not a README.
+const MaxDescriptionLen = 100
+
+// ValidateDescription enforces the repo-description rules: at most
+// MaxDescriptionLen runes and single-line — no newline, tab, or other control
+// character that would break the `ls` table layout or the session-context
+// banner. The empty string is valid: it means "no description".
+func ValidateDescription(desc string) error {
+	if n := utf8.RuneCountInString(desc); n > MaxDescriptionLen {
+		return fmt.Errorf("description is %d characters; the limit is %d", n, MaxDescriptionLen)
+	}
+	for _, r := range desc {
+		if unicode.IsControl(r) {
+			return errors.New("description must be a single line (no line breaks, tabs, or other control characters)")
+		}
+	}
+	return nil
 }
 
 // Owner is a tracked user or org. On each sync, shed lists the owner's
@@ -183,6 +213,9 @@ func (c *Config) Validate() error {
 			if err := ValidateGitConfigKey(key); err != nil {
 				return fmt.Errorf("repo[%d] (%q): %w", i, r.URL, err)
 			}
+		}
+		if err := ValidateDescription(r.Description); err != nil {
+			return fmt.Errorf("repo[%d] (%q): %w", i, r.URL, err)
 		}
 		if prev, ok := seen[name]; ok {
 			return fmt.Errorf("name %q appears in both %s and repo %d", name, prev, i)

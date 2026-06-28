@@ -41,12 +41,13 @@ copy is stale — run 'shed status <repo>' for the error and the fix.`,
 }
 
 type repoRow struct {
-	Name       string `json:"name"`
-	URL        string `json:"url"`
-	Source     string `json:"source,omitempty"`
-	Path       string `json:"path,omitempty"`
-	LastSyncAt any    `json:"last_sync_at"`
-	LastError  string `json:"last_error,omitempty"`
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	Source      string `json:"source,omitempty"`
+	Description string `json:"description,omitempty"`
+	Path        string `json:"path,omitempty"`
+	LastSyncAt  any    `json:"last_sync_at"`
+	LastError   string `json:"last_error,omitempty"`
 }
 
 type ownerRow struct {
@@ -164,7 +165,7 @@ func collectRepoList(c *config.Config) ([]repoRow, []ownerRow, error) {
 		if err != nil {
 			return nil, nil, errs.Wrap(errs.Config, err)
 		}
-		row := repoRow{Name: name, URL: r.URL, Source: r.Source, LastSyncAt: nil}
+		row := repoRow{Name: name, URL: r.URL, Source: r.Source, Description: r.Description, LastSyncAt: nil}
 		if repostore.Exists(name) {
 			row.Path = paths.RepoStorePath(name)
 			if meta, err := repostore.LoadMeta(name); err == nil && meta != nil {
@@ -279,32 +280,50 @@ func writeReposSection(out io.Writer, repos []repoRow, indent string, caption bo
 	if caption {
 		fmt.Fprintln(out, "Repos")
 	}
-	// The "FROM" column only matters when an owner auto-added some repo;
-	// hide it otherwise so the common (no-owners) case isn't cluttered with
-	// a column of em-dashes.
+	// The "FROM" and "DESC" columns are each shown only when at least one repo
+	// would fill them, so the common case (no owners, no descriptions) isn't
+	// cluttered with a column of em-dashes.
 	showSource := false
+	showDesc := false
 	for _, r := range repos {
 		if r.Source != "" {
 			showSource = true
-			break
+		}
+		if r.Description != "" {
+			showDesc = true
 		}
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	header := indent + "NAME\tLAST SYNC"
 	if showSource {
-		fmt.Fprintln(w, indent+"NAME\tLAST SYNC\tFROM\tPATH")
-	} else {
-		fmt.Fprintln(w, indent+"NAME\tLAST SYNC\tPATH")
+		header += "\tFROM"
 	}
+	header += "\tPATH"
+	if showDesc {
+		// DESC trails PATH: it's the column most likely to be long, so keeping
+		// it last leaves the fixed-width columns aligned instead of pushed far
+		// right by a 100-char description in the middle.
+		header += "\tDESC"
+	}
+	fmt.Fprintln(w, header)
 	for _, r := range repos {
+		row := fmt.Sprintf("%s%s\t%s", indent, r.Name, lastSyncLabel(r))
 		if showSource {
 			source := "—"
 			if r.Source != "" {
 				source = r.Source
 			}
-			fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\n", indent, r.Name, lastSyncLabel(r), source, repoPathLabel(r))
-		} else {
-			fmt.Fprintf(w, "%s%s\t%s\t%s\n", indent, r.Name, lastSyncLabel(r), repoPathLabel(r))
+			row += "\t" + source
 		}
+		row += "\t" + repoPathLabel(r)
+		if showDesc {
+			desc := "—"
+			if r.Description != "" {
+				desc = r.Description
+			}
+			row += "\t" + desc
+		}
+		fmt.Fprintln(w, row)
 	}
 	w.Flush()
 }

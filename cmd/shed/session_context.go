@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
@@ -90,10 +93,50 @@ func sessionContextBody() string {
 	if w := cwdCollisionWarning(); w != "" {
 		body = w + "\n" + body
 	}
+	if list := repoDescriptionsText(); list != "" {
+		body += "\nWhat your tracked repos are (only those with a description set; run `shed ls` for the full library):\n\n```\n" + list + "```\n"
+	}
 	if list := recentWorkspaceReposText(); list != "" {
 		body += "\nThe repos you've most recently had a workspace in (newest first; run `shed ls` for your full library):\n\n```\n" + list + "```\n"
 	}
 	return body
+}
+
+// repoDescriptionsText renders, for embedding in session context, the tracked
+// repos that carry a human-written description: one "name  description" row
+// each, sorted by name. Unlike recentWorkspaceReposText it is not capped — it
+// lists only the repos the user deliberately described (a naturally small set),
+// and those one-line summaries are exactly the orientation an agent wants up
+// front. Best-effort: returns "" if the library can't be read or no repo has a
+// description, so a config hiccup never breaks session startup.
+func repoDescriptionsText() string {
+	c, err := config.Load()
+	if err != nil {
+		return ""
+	}
+	type describedRepo struct{ name, desc string }
+	var described []describedRepo
+	for _, r := range c.Repos {
+		if r.Description == "" {
+			continue
+		}
+		name, err := r.ResolvedName()
+		if err != nil {
+			continue
+		}
+		described = append(described, describedRepo{name, r.Description})
+	}
+	if len(described) == 0 {
+		return ""
+	}
+	sort.Slice(described, func(a, b int) bool { return described[a].name < described[b].name })
+	var buf bytes.Buffer
+	w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
+	for _, r := range described {
+		fmt.Fprintf(w, "%s\t%s\n", r.name, r.desc)
+	}
+	w.Flush()
+	return buf.String()
 }
 
 // syncHealthBanner returns a prominent callout when one or more tracked repos

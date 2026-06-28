@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/AndrewHannigan/shed/pkg/errs"
@@ -193,5 +194,44 @@ func TestResolve(t *testing.T) {
 				t.Fatalf("got %q, want %q", r.URL, tt.wantURL)
 			}
 		})
+	}
+}
+
+func TestValidateDescription(t *testing.T) {
+	tests := []struct {
+		name    string
+		desc    string
+		wantErr bool
+	}{
+		{name: "empty is allowed", desc: ""},
+		{name: "ordinary text", desc: "the relocation evaluation site generator"},
+		{name: "non-ASCII counts by rune, not byte", desc: strings.Repeat("é", MaxDescriptionLen)},
+		{name: "exactly at the limit", desc: strings.Repeat("a", MaxDescriptionLen)},
+		{name: "one rune over the limit", desc: strings.Repeat("a", MaxDescriptionLen+1), wantErr: true},
+		{name: "newline rejected", desc: "line one\nline two", wantErr: true},
+		{name: "tab rejected", desc: "col one\tcol two", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDescription(tt.desc)
+			if tt.wantErr && err == nil {
+				t.Fatalf("ValidateDescription(%q) = nil, want error", tt.desc)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("ValidateDescription(%q) = %v, want nil", tt.desc, err)
+			}
+		})
+	}
+}
+
+// A bad description must fail whole-config validation too, so it can never be
+// persisted by Save (which calls Validate).
+func TestValidateRejectsOverlongDescription(t *testing.T) {
+	c := &Config{Repos: []Repo{{
+		URL:         "https://github.com/acme/widget",
+		Description: strings.Repeat("x", MaxDescriptionLen+1),
+	}}}
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected validation error for an over-long repo description")
 	}
 }

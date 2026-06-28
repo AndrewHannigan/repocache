@@ -5,6 +5,9 @@ You have a local library of git repos managed by `shed`.
 - **Read repos** at `~/.shed/repos/<host>/<owner>/<repo>/` (read-only).
 - **List everything**: `shed ls` shows your tracked owners, the read-only repos, and
   any writable workspaces that already exist.
+- **Describe a repo**: `shed describe <repo> <text>` attaches a one-line summary (≤100
+  chars). It shows in `shed ls` and is surfaced to you below, so suggest setting one for
+  any repo whose purpose isn't obvious from its name.
 - **Edit a repo**: `shed workspace new <repo> <name>` creates a writable workspace
   and prints its path. It syncs the local repo first so workspaces are always up to date 
   when created.

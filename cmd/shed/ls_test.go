@@ -134,6 +134,35 @@ func TestWriteReposSectionCaptionAndIndent(t *testing.T) {
 	}
 }
 
+// The DESC column appears only when at least one repo has a description, and
+// then carries that text — so a described repo is labeled in `shed ls` while
+// the common (no-descriptions) case stays uncluttered.
+func TestWriteReposSectionDescColumn(t *testing.T) {
+	// No descriptions: no DESC column.
+	plain := []repoRow{{Name: "github.com/acme/widget", LastSyncAt: time.Now().UTC().Format(time.RFC3339)}}
+	var noDesc bytes.Buffer
+	writeReposSection(&noDesc, plain, "", false)
+	if strings.Contains(noDesc.String(), "DESC") {
+		t.Errorf("DESC column should be hidden when no repo has a description:\n%s", noDesc.String())
+	}
+
+	// One described repo: the DESC header and the text both show.
+	described := []repoRow{
+		{Name: "github.com/acme/widget", Description: "the widget service", LastSyncAt: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "github.com/acme/gadget", LastSyncAt: time.Now().UTC().Format(time.RFC3339)},
+	}
+	var withDesc bytes.Buffer
+	writeReposSection(&withDesc, described, "", false)
+	out := withDesc.String()
+	if !strings.Contains(out, "DESC") || !strings.Contains(out, "the widget service") {
+		t.Errorf("expected DESC column with the description text:\n%s", out)
+	}
+	// A repo without a description gets the "—" placeholder in the shown column.
+	if !strings.Contains(out, "—") {
+		t.Errorf("a repo without a description should show the placeholder:\n%s", out)
+	}
+}
+
 // The Workspaces section lists workspaces most-recently-active first, so the
 // one a user just touched sits at the top.
 func TestWriteWorkspacesSectionSortsByAge(t *testing.T) {

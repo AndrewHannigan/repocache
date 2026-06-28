@@ -54,6 +54,8 @@ var helpAliases = map[string]string{
 	"add":       "library",
 	"rm":        "library",
 	"ls":        "library",
+	"describe":  "library",
+	"desc":      "library",
 	"repo":      "library",
 	"new":       "workspace",
 	"path":      "workspace",
@@ -92,6 +94,7 @@ Supports claude, cursor-agent, and opencode.
 
 Commands:
   add           add a repo (or a whole user/org) to the library
+  describe      set or show a repo's one-line description
   help <topic>  long-form docs (also accepts a command name, e.g. 'shed help add')
   history       show recent shed commands
   init          bootstrap + integrate with detected agents (--uninstall reverses it)
@@ -218,11 +221,21 @@ Reversing integration ('shed init --uninstall')
       Workspaces  isolated writable clones, with dirty/unpushed state and age
     The Owners and Workspaces sections are omitted when empty (a hint to
     create your first workspace is shown when you have repos but none yet).
+    When any repo has a description, a DESC column is added.
+
+  shed describe <repo> [description] [--clear]
+    Attach a short, human-written summary to a tracked repo. It shows in
+    'shed ls' and is surfaced in the agent session-context, so an agent
+    starts oriented to what each repo is for. With no description argument,
+    prints the repo's current one; --clear (or an empty description) removes
+    it. Capped at 100 characters and single-line. <repo> resolves the usual
+    way: an exact name or an unambiguous suffix.
 
 These are also grouped under a 'repo' noun (mirroring 'workspace'):
-'shed repo add' and 'shed repo rm' are the same as 'shed add'/'shed rm',
-and 'shed repo ls' lists just the repos — where plain 'shed ls' also
-includes the Owners and Workspaces sections.
+'shed repo add', 'shed repo rm', and 'shed repo describe' are the same as
+'shed add'/'shed rm'/'shed describe', and 'shed repo ls' lists just the
+repos — where plain 'shed ls' also includes the Owners and Workspaces
+sections.
 `,
 
 	"owner": `owner — track a whole user or org

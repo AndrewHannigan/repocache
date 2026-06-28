@@ -159,6 +159,47 @@ func TestSessionContextBodyNoWorkspaces(t *testing.T) {
 	}
 }
 
+// A repo with a description is surfaced in the session-context body (with its
+// name and the description text), so an agent starts oriented to what it is —
+// even with no workspace present.
+func TestSessionContextBodyIncludesRepoDescriptions(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if err := config.Save(&config.Config{
+		Repos: []config.Repo{
+			{URL: "https://github.com/acme/widget", Description: "the widget service"},
+			{URL: "https://github.com/acme/gadget"}, // no description: omitted
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	body := sessionContextBody()
+	for _, want := range []string{"description set", "github.com/acme/widget", "the widget service"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body should contain %q\n%s", want, body)
+		}
+	}
+	// A repo with no description doesn't appear in the descriptions section.
+	if strings.Contains(body, "github.com/acme/gadget") {
+		t.Errorf("an undescribed repo should not be listed in the descriptions section\n%s", body)
+	}
+}
+
+// With no repo described, the body omits the descriptions section entirely
+// rather than printing an empty block.
+func TestSessionContextBodyNoDescriptions(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if err := config.Save(&config.Config{
+		Repos: []config.Repo{{URL: "https://github.com/acme/widget"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if body := sessionContextBody(); strings.Contains(body, "description set") {
+		t.Errorf("a shed with no descriptions should omit the descriptions section\n%s", body)
+	}
+}
+
 // makeGitWorkspace creates a minimal git repo at path so workspace.List treats
 // it as a workspace (a dir containing .git) with a reflog backing its ACTIVE column.
 func makeGitWorkspace(t *testing.T, path string) {
