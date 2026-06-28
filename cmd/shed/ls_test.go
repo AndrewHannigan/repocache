@@ -34,8 +34,6 @@ func TestWriteLibraryCaptionedSections(t *testing.T) {
 	for _, want := range []string{
 		"Tracked Owners", "OWNER", "octocat",
 		"Repos", "NAME", "LAST SYNC", "github.com/octocat/Hello-World",
-		// The Repos section shows each stored copy's path, just like Workspaces.
-		"PATH", "/home/u/.shed/repos/github.com/octocat/Hello-World",
 		"Workspaces", "fix-typo", "DIRTY", "UNPUSHED",
 	} {
 		if !strings.Contains(out, want) {
@@ -63,10 +61,10 @@ func TestWriteLibraryHidesSourceColumnWhenUnused(t *testing.T) {
 	if strings.Contains(out, "FROM") {
 		t.Errorf("FROM column should be hidden when no repo has a source:\n%s", out)
 	}
-	// The PATH column still shows; a repo that has never synced has no copy on
-	// disk yet, so its path cell is the "—" placeholder.
-	if !strings.Contains(out, "PATH") || !strings.Contains(out, "—") {
-		t.Errorf("expected PATH column with a placeholder for an un-synced repo:\n%s", out)
+	// The PATH column is gone: a repo's stored-copy path is derivable from its
+	// name (~/.shed/repos/<name>), so the table drops it to stay narrow.
+	if strings.Contains(out, "PATH") {
+		t.Errorf("PATH column should not be shown:\n%s", out)
 	}
 	// With no owners and no workspaces, only the Repos section appears.
 	if strings.Contains(out, "Owners\n") || strings.Contains(out, "Workspaces\n") {

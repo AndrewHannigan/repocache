@@ -291,9 +291,9 @@ func writeReposSection(out io.Writer, repos []repoRow, indent string, caption bo
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	if showSource {
-		fmt.Fprintln(w, indent+"NAME\tLAST SYNC\tFROM\tPATH")
+		fmt.Fprintln(w, indent+"NAME\tLAST SYNC\tFROM")
 	} else {
-		fmt.Fprintln(w, indent+"NAME\tLAST SYNC\tPATH")
+		fmt.Fprintln(w, indent+"NAME\tLAST SYNC")
 	}
 	for _, r := range repos {
 		if showSource {
@@ -301,22 +301,12 @@ func writeReposSection(out io.Writer, repos []repoRow, indent string, caption bo
 			if r.Source != "" {
 				source = r.Source
 			}
-			fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\n", indent, r.Name, lastSyncLabel(r), source, repoPathLabel(r))
+			fmt.Fprintf(w, "%s%s\t%s\t%s\n", indent, r.Name, lastSyncLabel(r), source)
 		} else {
-			fmt.Fprintf(w, "%s%s\t%s\t%s\n", indent, r.Name, lastSyncLabel(r), repoPathLabel(r))
+			fmt.Fprintf(w, "%s%s\t%s\n", indent, r.Name, lastSyncLabel(r))
 		}
 	}
 	w.Flush()
-}
-
-// repoPathLabel renders a repo's stored-copy path with $HOME collapsed to "~",
-// matching the Workspaces section's PATH column. A repo that has never synced
-// has no copy on disk yet (its Path is empty), shown as "—".
-func repoPathLabel(r repoRow) string {
-	if r.Path == "" {
-		return "—"
-	}
-	return paths.Display(r.Path)
 }
 
 // lastSyncLabel renders a repo's last-sync cell: a relative time (or "never"),
@@ -361,10 +351,10 @@ func writeWorkspacesSection(out io.Writer, infos []workspace.Info) {
 		return
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  NAME\tREPO\tDIRTY\tUNPUSHED\tACTIVE\tPATH")
+	fmt.Fprintln(w, "  NAME\tREPO\tDIRTY\tUNPUSHED\tACTIVE")
 	for _, i := range sortWorkspacesByAge(infos) {
-		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
-			i.Branch, i.Name, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))
+		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n",
+			i.Branch, i.Name, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age))
 	}
 	w.Flush()
 }
