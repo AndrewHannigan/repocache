@@ -16,7 +16,7 @@ import (
 func newRepoCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "repo",
-		Aliases: []string{"repos"},
+		Aliases: []string{"repos", "r"},
 		Short:   "Manage the read-only repo library (list, add, remove tracked repos)",
 	}
 	cmd.AddCommand(

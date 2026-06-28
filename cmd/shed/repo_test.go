@@ -108,14 +108,16 @@ func TestRepoSubcommandsRecorded(t *testing.T) {
 	}
 }
 
-// The `repos` alias resolves to the same command as `repo`.
+// The `repos` and `r` aliases resolve to the same command as `repo`.
 func TestRepoAliasResolves(t *testing.T) {
-	root := newRootCmd()
-	cmd, _, err := root.Find([]string{"repos", "ls"})
-	if err != nil {
-		t.Fatalf("find repos ls: %v", err)
-	}
-	if cmd.CommandPath() != "shed repo ls" {
-		t.Errorf("`repos` should alias `repo`, got command path %q", cmd.CommandPath())
+	for _, alias := range []string{"repos", "r"} {
+		root := newRootCmd()
+		cmd, _, err := root.Find([]string{alias, "ls"})
+		if err != nil {
+			t.Fatalf("find %s ls: %v", alias, err)
+		}
+		if cmd.CommandPath() != "shed repo ls" {
+			t.Errorf("`%s` should alias `repo`, got command path %q", alias, cmd.CommandPath())
+		}
 	}
 }
