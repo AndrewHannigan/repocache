@@ -24,14 +24,14 @@ func TestOwnerOnlyListShowsOwnersOnly(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"Tracked Owners", "github.com/acme"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("owner ls output missing %q:\n%s", want, out)
-		}
+	if !strings.Contains(out, "github.com/acme") {
+		t.Errorf("owner ls output missing the owner name:\n%s", out)
 	}
 	// The repo's own name must not leak in (its appearance would mean the Repos
-	// section rendered); "Repos"/"Workspaces" captions must be absent too.
-	for _, unwanted := range []string{"github.com/acme/widget", "Repos", "Workspaces"} {
+	// section rendered); the section captions must be absent too — including
+	// "Tracked Owners", which labels this table only inside the `shed ls`
+	// overview, not in the standalone single-table view.
+	for _, unwanted := range []string{"github.com/acme/widget", "Tracked Owners", "Repos", "Workspaces"} {
 		if strings.Contains(out, unwanted) {
 			t.Errorf("owner ls must not render %q:\n%s", unwanted, out)
 		}
