@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,7 +51,7 @@ Runs in parallel up to --jobs.`,
 
 type syncResult struct {
 	Name       string `json:"name"`
-	Status     string `json:"status"` // "ok" | "skipped" | "error"
+	Status     string `json:"status"` // "ok" | "skipped" | "error" | "gone"
 	DurationMs int64  `json:"duration_ms"`
 	Error      string `json:"error,omitempty"`
 	Note       string `json:"note,omitempty"`
@@ -135,7 +136,29 @@ func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) 
 	}
 	wg.Wait()
 
+	reconcileGone(results, jsonOut)
 	return summarizeSync(results, len(targets), jsonOut)
+}
+
+// reconcileGone reports the repos whose remote vanished during the fetch pass.
+// It only informs; it never deletes — removing a tracked repo (and any
+// workspace under it) is always an explicit `shed rm`, never a side effect of
+// sync. Each note points the user there. A repo stays "gone" on every sync
+// until they remove it, which is the intended standing reminder.
+func reconcileGone(results []syncResult, jsonOut bool) {
+	// In --json mode the per-repo "gone" record is already on stdout as NDJSON;
+	// route these human notes to stderr so they don't corrupt it.
+	out := os.Stdout
+	if jsonOut {
+		out = os.Stderr
+	}
+	for _, r := range results {
+		if r.Status != "gone" {
+			continue
+		}
+		fmt.Fprintf(out, "  note: %s is gone upstream (deleted, renamed, or access revoked)\n", r.Name)
+		fmt.Fprintf(out, "        remove it with `shed rm %s`\n", r.Name)
+	}
 }
 
 func resolveSyncTargets(c *config.Config, names []string) ([]syncTarget, error) {
@@ -231,9 +254,11 @@ func ownerFilter(o config.Owner) forge.Filter {
 
 // reconcileOwners discovers each owner's repos via list and adds any new ones
 // to config as Source-tagged entries. It is additive only — it never removes
-// repos that disappeared upstream, which would risk deleting a workspace with
-// unpushed work. Discovery failures are warned about and skipped so that
-// already-known repos still sync (graceful degradation when gh is unavailable).
+// repos that disappeared upstream; a vanished repo is surfaced as "gone" by the
+// fetch pass and left for the user to `shed rm`, so sync never deletes a repo
+// (or its workspace) on the user's behalf. Discovery failures are warned about
+// and skipped so already-known repos still sync (graceful degradation when gh
+// is unavailable).
 func reconcileOwners(owners []config.Owner, list ownerLister, jsonOut bool) {
 	for _, o := range owners {
 		ownerName, err := o.ResolvedName()
@@ -325,7 +350,7 @@ func syncOne(name, url string, git map[string]string, ifOlderThan time.Duration)
 
 	if !repostore.Exists(name) {
 		if err := repostore.Clone(url, name); err != nil {
-			return finishErr(r, start, err)
+			return finishFetch(r, start, err)
 		}
 	}
 
@@ -358,7 +383,7 @@ func syncOne(name, url string, git map[string]string, ifOlderThan time.Duration)
 		return finishErr(r, start, fmt.Errorf("chmod u+w: %w", err))
 	}
 	if err := repostore.Fetch(name); err != nil {
-		return finishErr(r, start, err)
+		return finishFetch(r, start, err)
 	}
 	// Reconcile per-repo git config into the store's .git/config so options
 	// added to config after the initial clone take effect on the next sync.
@@ -398,8 +423,37 @@ func syncOne(name, url string, git map[string]string, ifOlderThan time.Duration)
 	return r
 }
 
+// finishFetch records a clone/fetch failure. A vanished remote (deleted,
+// renamed, or access revoked — git reports them all as "Repository not found")
+// is classified as the distinct "gone" status rather than a transient error,
+// so summarizeSync keeps it out of the failure tally and reconcileGone can
+// point the user at `shed rm` instead of alarming. Any other fetch error stays
+// a plain "error".
+func finishFetch(r syncResult, start time.Time, err error) syncResult {
+	if looksGoneUpstream(strings.ToLower(err.Error())) {
+		return finishGone(r, start, err)
+	}
+	return finishErr(r, start, err)
+}
+
 func finishErr(r syncResult, start time.Time, err error) syncResult {
 	r.Status = "error"
+	return recordSyncError(r, start, err)
+}
+
+// finishGone marks a sync whose remote no longer resolves. Like finishErr it
+// persists the error so `status` can explain it, but the "gone" status spares
+// it from the failure count and the non-zero exit.
+func finishGone(r syncResult, start time.Time, err error) syncResult {
+	r.Status = "gone"
+	return recordSyncError(r, start, err)
+}
+
+// recordSyncError fills Error/DurationMs and persists the failure to the repo's
+// meta sidecar (or the standalone first-sync store when a failed first clone
+// left no store dir) so `ls`, `status`, and the session-context banner surface
+// it. Shared by the "error" and "gone" finishers.
+func recordSyncError(r syncResult, start time.Time, err error) syncResult {
 	r.Error = err.Error()
 	r.DurationMs = time.Since(start).Milliseconds()
 	// Persist the failure so `ls`, `status`, and the session-context snapshot
@@ -433,19 +487,23 @@ func printSyncLine(r syncResult) {
 		}
 	case "skipped":
 		fmt.Printf("  %s  -  skipped (%s)\n", r.Name, r.Note)
+	case "gone":
+		fmt.Printf("  %s  ⚠  gone upstream\n", r.Name)
 	case "error":
 		fmt.Printf("  %s  ✗  %s\n", r.Name, r.Error)
 	}
 }
 
 func summarizeSync(results []syncResult, total int, jsonOut bool) error {
-	var ok, skip, errCnt, lockCnt, netCnt int
+	var ok, skip, gone, errCnt, lockCnt, netCnt int
 	for _, r := range results {
 		switch r.Status {
 		case "ok":
 			ok++
 		case "skipped":
 			skip++
+		case "gone":
+			gone++
 		case "error":
 			errCnt++
 			if r.locked {
@@ -456,8 +514,17 @@ func summarizeSync(results []syncResult, total int, jsonOut bool) error {
 		}
 	}
 	if !jsonOut {
-		fmt.Printf("%d of %d ok; %d failed; %d skipped\n", ok, total, errCnt, skip)
+		// "gone upstream" is tallied apart from "failed" so a deleted repo never
+		// reads as a sync failure, and only shown when it happened.
+		line := fmt.Sprintf("%d of %d ok", ok, total)
+		if gone > 0 {
+			line += fmt.Sprintf("; %d gone upstream", gone)
+		}
+		line += fmt.Sprintf("; %d failed; %d skipped", errCnt, skip)
+		fmt.Println(line)
 	}
+	// A vanished remote is an expected lifecycle event, not a failure: it must
+	// not flip the exit code. Only lock/network errors do.
 	if lockCnt > 0 {
 		return errs.New(errs.Locked, "%d repos failed to acquire lock", lockCnt)
 	}
