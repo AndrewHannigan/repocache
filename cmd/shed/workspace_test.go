@@ -167,39 +167,22 @@ func TestRunWorkspaceRmManyDeduplicates(t *testing.T) {
 	}
 }
 
-// `workspace path` now takes just the globally-unique workspace name and
-// resolves it to the one repo it lives under, the same lookup `rm`/`resume` use.
-func TestRunWorkspacePathByName(t *testing.T) {
+// `shed workspace path` is now an alias for the top-level `shed path`: the
+// subcommand resolves the globally-unique workspace name through the same
+// resolver and prints its absolute path. Driven through the command tree to
+// confirm the alias is wired up.
+func TestWorkspacePathAliasesShedPath(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	saveConfig(t, &config.Config{
 		Repos: []config.Repo{{URL: "https://github.com/AndrewHannigan/shed"}},
 	})
-	const repo = "github.com/AndrewHannigan/shed"
-	want := makeWorkspaceDir(t, repo, "fix-thing")
+	// makeWorkspaceDir also creates the data dir, so the init gate is satisfied.
+	want := makeWorkspaceDir(t, "github.com/AndrewHannigan/shed", "fix-thing")
 
-	out := captureStdout(t, func() {
-		if err := runWorkspacePath("fix-thing"); err != nil {
-			t.Fatalf("runWorkspacePath(fix-thing) = %v, want nil", err)
-		}
-	})
+	out := captureStdout(t, func() { runShed("workspace", "path", "fix-thing") })
 	if got := strings.TrimSpace(out); got != want {
-		t.Errorf("runWorkspacePath(fix-thing) printed %q, want %q", got, want)
-	}
-}
-
-func TestRunWorkspacePathNotFound(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-
-	saveConfig(t, &config.Config{
-		Repos: []config.Repo{{URL: "https://github.com/AndrewHannigan/shed"}},
-	})
-
-	err := runWorkspacePath("nope")
-	var c *errs.Coded
-	if !errors.As(err, &c) || c.Code != errs.NotFound {
-		t.Fatalf("runWorkspacePath(nope) = %v, want errs.NotFound", err)
+		t.Errorf("`shed workspace path fix-thing` printed %q, want %q", got, want)
 	}
 }

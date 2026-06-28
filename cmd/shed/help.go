@@ -318,6 +318,11 @@ One name, one path
   an exact name, or an unambiguous trailing path segment (so "projects" finds
   "github.com/you/projects").
 
+  Two repos may share a leaf under different owners — e.g.
+  "github.com/alice/projects" and "github.com/bob/projects", which is allowed.
+  A bare "projects" is then ambiguous and errors; pass the owner/repo form
+  ("alice/projects"), or the full name, to choose one.
+
   The path is always absolute (never a "~"), so 'cd "$(shed path <name>)"'
   works without tilde-expansion surprises.
 
@@ -344,8 +349,9 @@ sharing object storage but with independent refs. Edits happen here.
     age of the newest file.
 
   shed workspace path <name>
-    Print absolute workspace path. Names are globally unique, so the
-    name alone identifies the workspace. Exit 2 if missing.
+    Alias for 'shed path' (see 'shed help path'). Prints the absolute path
+    for the name — a workspace or a repo. Names are globally unique, so the
+    name alone identifies one path. Exit 2 if missing.
 
   shed workspace rm <name>... [--force]
     Delete the named workspace dirs (names are globally unique). Several

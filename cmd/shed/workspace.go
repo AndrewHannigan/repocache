@@ -237,33 +237,16 @@ func writeWorkspaceListTable(out io.Writer, infos []workspace.Info) error {
 func newWorkspacePathCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "path <name>",
-		Short: "Print the absolute workspace path by name",
-		Long: `path prints the absolute path of the workspace with the given name.
-
-Workspace names are unique across every repo (enforced at creation), so the
-name alone identifies exactly one workspace — no <repo> is needed.
-
-Exits 2 if no workspace has that name.`,
+		Short: "Alias for `shed path`: print a repo or workspace path by name",
+		Long: `path is an alias for the top-level 'shed path': it resolves the name
+against both repos and workspaces and prints the absolute path. Workspace names
+are globally unique and share one namespace with repo names, so the name alone
+identifies exactly one path — no <repo> is needed. See 'shed help path'.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWorkspacePath(args[0])
+			return runPath(args[0])
 		},
 	}
-}
-
-func runWorkspacePath(name string) error {
-	c, err := config.Load()
-	if err != nil {
-		return errs.Wrap(errs.Config, err)
-	}
-	// Workspace names are globally unique, so the name alone locates exactly one
-	// workspace (same lookup `shed resume` and `rm` use).
-	_, path, found := workspace.LocateByName(repoNames(c), name)
-	if !found {
-		return errs.New(errs.NotFound, "no workspace named %q (see `shed ls`)", name)
-	}
-	fmt.Println(path)
-	return nil
 }
 
 func newWorkspaceRmCmd() *cobra.Command {

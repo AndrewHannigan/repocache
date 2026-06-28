@@ -30,6 +30,11 @@ the same name as a repo, and a repo can never have the same name as a workspace
 repo matches by exact name or an unambiguous trailing path segment (so
 "projects" finds "github.com/you/projects").
 
+Two repos may share a leaf name under different owners (e.g.
+"github.com/alice/projects" and "github.com/bob/projects") — that's allowed. A
+bare "projects" is then ambiguous and errors; pass the owner/repo form
+("alice/projects"), or the full name, to choose one.
+
 Exits 2 if the name matches nothing, matches more than one repo, or matches a
 repo that isn't synced yet.`,
 		Args: cobra.ExactArgs(1),
@@ -70,8 +75,12 @@ func runPath(name string) error {
 		fmt.Println(paths.RepoStorePath(repoName))
 		return nil
 	case len(repoMatches) > 1:
+		// Several repos share this leaf (same name under different owners/hosts,
+		// which is allowed). The bare name can't pick one — ask for the more
+		// specific owner/repo (or full) form, which resolves by the same rule.
 		return errs.New(errs.NotFound,
-			"name %q is ambiguous; matches repos: %s", name, strings.Join(repoMatches, ", "))
+			"%q matches several repos; pass owner/repo (or the full name) to choose one: %s",
+			name, strings.Join(repoMatches, ", "))
 	default:
 		return errs.New(errs.NotFound, "no repo or workspace named %q (see `shed ls`)", name)
 	}

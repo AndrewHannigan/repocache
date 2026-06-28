@@ -144,6 +144,45 @@ func TestRunPathAmbiguousBoth(t *testing.T) {
 	}
 }
 
+// Two repos sharing a leaf name under different owners are allowed. The bare
+// leaf is ambiguous and the error points at the owner/repo form, which then
+// resolves to exactly one.
+func TestRunPathAmbiguousAcrossOwners(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	saveConfig(t, &config.Config{
+		Repos: []config.Repo{
+			{URL: "https://github.com/alice/projects"},
+			{URL: "https://github.com/bob/projects"},
+		},
+	})
+
+	// Bare leaf can't pick one of the two owners.
+	err := runPath("projects")
+	var c *errs.Coded
+	if !errors.As(err, &c) || c.Code != errs.NotFound {
+		t.Fatalf("runPath(projects) = %v, want errs.NotFound (ambiguous)", err)
+	}
+	if !strings.Contains(err.Error(), "owner/repo") {
+		t.Errorf("ambiguity error should point at the owner/repo form, got: %v", err)
+	}
+
+	// The owner/repo form disambiguates to exactly one repo.
+	const repo = "github.com/alice/projects"
+	if mkErr := os.MkdirAll(paths.RepoStorePath(repo), 0755); mkErr != nil {
+		t.Fatalf("make store dir: %v", mkErr)
+	}
+	out := captureStdout(t, func() {
+		if err := runPath("alice/projects"); err != nil {
+			t.Fatalf("runPath(alice/projects) = %v, want nil", err)
+		}
+	})
+	if got, want := strings.TrimSpace(out), paths.RepoStorePath(repo); got != want {
+		t.Errorf("runPath(alice/projects) = %q, want %q", got, want)
+	}
+}
+
 // repoNamesMatching mirrors config.Resolve: an exact name or an unambiguous
 // trailing "/"-segment selects a repo; an unknown name selects none; a shared
 // leaf across hosts selects several (an ambiguous reference).
