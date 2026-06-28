@@ -88,6 +88,85 @@ func TestRunWorkspaceRmNotFound(t *testing.T) {
 	}
 }
 
+// `workspace rm` accepts several names at once and removes each of them.
+func TestRunWorkspaceRmManyRemovesAll(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	saveConfig(t, &config.Config{
+		Repos: []config.Repo{{URL: "https://github.com/AndrewHannigan/shed"}},
+	})
+	const repo = "github.com/AndrewHannigan/shed"
+	makeWorkspaceDir(t, repo, "a")
+	makeWorkspaceDir(t, repo, "b")
+	makeWorkspaceDir(t, repo, "c")
+
+	// --force skips the clean check (the bare dirs aren't real git repos).
+	captureStdout(t, func() {
+		if err := runWorkspaceRmMany([]string{"a", "c"}, true); err != nil {
+			t.Fatalf("runWorkspaceRmMany(a, c) = %v, want nil", err)
+		}
+	})
+	if workspace.Exists(repo, "a") || workspace.Exists(repo, "c") {
+		t.Errorf("workspaces a and c should be removed")
+	}
+	if !workspace.Exists(repo, "b") {
+		t.Errorf("workspace b should survive")
+	}
+}
+
+// A failure on one name (a typo) does not stop the others from being removed,
+// and rm reports the failure with a non-zero (NotFound) exit code.
+func TestRunWorkspaceRmManyContinuesPastFailure(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	saveConfig(t, &config.Config{
+		Repos: []config.Repo{{URL: "https://github.com/AndrewHannigan/shed"}},
+	})
+	const repo = "github.com/AndrewHannigan/shed"
+	makeWorkspaceDir(t, repo, "a")
+	makeWorkspaceDir(t, repo, "b")
+
+	// "nope" doesn't resolve to anything; a and b do.
+	var err error
+	captureStdout(t, func() {
+		err = runWorkspaceRmMany([]string{"a", "nope", "b"}, true)
+	})
+	if err == nil {
+		t.Fatalf("expected an error when a name can't be removed")
+	}
+	var coded *errs.Coded
+	if !errors.As(err, &coded) || coded.Code != errs.NotFound {
+		t.Fatalf("runWorkspaceRmMany = %v, want errs.NotFound", err)
+	}
+	if workspace.Exists(repo, "a") || workspace.Exists(repo, "b") {
+		t.Errorf("the resolvable workspaces should still be removed")
+	}
+}
+
+// Duplicate names are collapsed so a workspace isn't removed (then reported as
+// already-gone) twice — `shed ws rm a a` succeeds and removes a once.
+func TestRunWorkspaceRmManyDeduplicates(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	saveConfig(t, &config.Config{
+		Repos: []config.Repo{{URL: "https://github.com/AndrewHannigan/shed"}},
+	})
+	const repo = "github.com/AndrewHannigan/shed"
+	makeWorkspaceDir(t, repo, "a")
+
+	captureStdout(t, func() {
+		if err := runWorkspaceRmMany([]string{"a", "a"}, true); err != nil {
+			t.Fatalf("runWorkspaceRmMany with a duplicate name: %v", err)
+		}
+	})
+	if workspace.Exists(repo, "a") {
+		t.Errorf("workspace a should be removed")
+	}
+}
+
 // `workspace path` now takes just the globally-unique workspace name and
 // resolves it to the one repo it lives under, the same lookup `rm`/`resume` use.
 func TestRunWorkspacePathByName(t *testing.T) {
