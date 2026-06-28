@@ -86,6 +86,9 @@ re-explaining it.
 | `shed repo ls` | List just the read-only repos (no owners or workspaces) |
 | `shed repo add <repo\|owner>` | Same as `shed add` (grouped under the `repo` noun) |
 | `shed repo rm <name>…` | Same as `shed rm` (grouped under the `repo` noun) |
+| `shed owner ls` | List just the tracked users/orgs and their repo counts |
+| `shed owner add <owner>` | Track a user/org (forces the owner reading, even for `owner/repo`) |
+| `shed owner rm <name>…` | Drop one or more tracked owners (resolves against owners only) |
 | `shed sync [<name>…]` | Fetch tracked repos and re-apply the read-only chmod (usually automatic) |
 | `shed status` | Report sync health; show a repo's error and the likely fix |
 | `shed workspace new <repo> <branch>` | Create a writable clone off the freshly-synced store; prints its path |

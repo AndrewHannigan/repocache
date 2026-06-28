@@ -119,6 +119,37 @@ func runRepoOnlyList(jsonOut bool) error {
 	return nil
 }
 
+// runOwnerOnlyList backs `shed owner ls`: the tracked owners only — the whole
+// users/orgs whose repos sync auto-adds — without the Repos or Workspaces
+// sections that top-level `shed ls` adds. The mirror of `shed repo ls` from the
+// owner side; `shed ls` shows all three.
+func runOwnerOnlyList(jsonOut bool) error {
+	c, err := config.Load()
+	if err != nil {
+		return errs.Wrap(errs.Config, err)
+	}
+	// Repos are intentionally dropped here; this view is owners only.
+	_, owners, err := collectRepoList(c)
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(struct {
+			Owners []ownerRow `json:"owners"`
+		}{owners})
+	}
+	if len(owners) == 0 {
+		fmt.Fprintln(os.Stdout, noOwnersTrackedHint)
+		return nil
+	}
+	// A single, standalone table — its rows sit flush-left under the caption
+	// (indent ""), matching `shed repo ls`, rather than nested as in `shed ls`.
+	writeOwnersSection(os.Stdout, owners, "")
+	return nil
+}
+
 // collectRepoList gathers the repo and owner rows behind `ls`, probing the
 // repo store for each tracked repo's last-sync time. The probes are
 // deliberately cheap (a stat and a small metadata read, no size walk or git
@@ -175,6 +206,11 @@ func collectWorkspaces(c *config.Config) ([]workspace.Info, error) {
 // is empty, pointing a newcomer at the command that fills it.
 const nothingTrackedHint = "(nothing tracked yet — add a repo with `shed add <url>`)"
 
+// noOwnersTrackedHint is shown by `shed owner ls` when no owners are tracked.
+// It is owner-specific: nothingTrackedHint speaks to an empty *library* (no
+// repos at all), but `shed owner ls` can have repos and still no owners.
+const noOwnersTrackedHint = "(no owners tracked yet — track one with `shed owner add <owner>`)"
+
 // writeLibrary renders the human-readable `ls` overview to out: a captioned
 // section per kind of thing shed manages, so a newcomer can tell at a glance
 // what each table is. Sections with no rows are omitted, except that
@@ -194,7 +230,9 @@ func writeLibrary(out io.Writer, owners []ownerRow, repos []repoRow, workspaces 
 	}
 	if len(owners) > 0 {
 		gap()
-		writeOwnersSection(out, owners)
+		// The overview indents each section's rows under its caption so the
+		// sections read as a nested hierarchy.
+		writeOwnersSection(out, owners, "  ")
 	}
 	if len(repos) > 0 {
 		gap()
@@ -209,12 +247,17 @@ func writeLibrary(out io.Writer, owners []ownerRow, repos []repoRow, workspaces 
 	return nil
 }
 
-func writeOwnersSection(out io.Writer, owners []ownerRow) {
+// writeOwnersSection renders the captioned Tracked Owners table. indent is
+// prepended to each table row (not the caption): the multi-section `shed ls`
+// overview passes two spaces so the rows nest under their heading, while the
+// standalone `shed owner ls` passes "" so its single table sits flush-left —
+// the same split writeReposSection makes.
+func writeOwnersSection(out io.Writer, owners []ownerRow, indent string) {
 	fmt.Fprintln(out, "Tracked Owners")
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  OWNER\tREPOS")
+	fmt.Fprintln(w, indent+"OWNER\tREPOS")
 	for _, o := range owners {
-		fmt.Fprintf(w, "  %s\t%d\n", o.Name, o.RepoCount)
+		fmt.Fprintf(w, "%s%s\t%d\n", indent, o.Name, o.RepoCount)
 	}
 	w.Flush()
 }

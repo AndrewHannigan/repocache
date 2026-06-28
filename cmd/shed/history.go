@@ -23,6 +23,8 @@ var recordedCommands = map[string]bool{
 	"rm":            true,
 	"repo add":      true,
 	"repo rm":       true,
+	"owner add":     true,
+	"owner rm":      true,
 	"prune":         true,
 	"init":          true,
 	"workspace new": true,

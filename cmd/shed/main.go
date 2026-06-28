@@ -61,6 +61,7 @@ func newRootCmd() *cobra.Command {
 		newRmCmd(),
 		newLsCmd(),
 		newRepoCmd(),
+		newOwnerCmd(),
 		newSyncCmd(),
 		newStatusCmd(),
 		newWorkspaceCmd(),
