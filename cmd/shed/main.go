@@ -172,7 +172,7 @@ func initExempt(c *cobra.Command) bool {
 }
 
 const rootLong = `shed maintains a read-only local store of GitHub repos and
-creates writable workspaces from it via 'git clone --reference'.
+creates writable workspaces by cloning from that local store (so it works offline).
 
 Designed for terminal coding agents (Claude Code, Cursor, opencode)
 to search across many repos and edit a few.`

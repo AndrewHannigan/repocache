@@ -36,10 +36,10 @@ func newWorkspaceNewCmd() *cobra.Command {
 	var base string
 	cmd := &cobra.Command{
 		Use:   "new <repo> <name>",
-		Short: "Create a workspace via `git clone --reference`",
+		Short: "Create a writable workspace from the local store (works offline)",
 		Long: `new creates a writable clone of the stored repo at
-~/.shed/workspaces/<repo>/<name>/ using
-'git clone --reference' so it shares object storage with the store.
+~/.shed/workspaces/<repo>/<name>/. It clones from the local store rather
+than the remote, so it works offline and shares object storage with the store.
 
 <name> is the workspace's identity: it is the directory shed owns, it must be
 unique across every repo (so 'shed resume <name>' is unambiguous), and it
@@ -114,12 +114,14 @@ func runWorkspaceNew(name, branch, base string) error {
 		}
 		fmt.Fprintf(os.Stderr, "warning: could not refresh %s (%s); using existing store\n", name, res.Error)
 	}
+	// workspace.New clones from the local store, so a failure here is a local
+	// git/disk error (or a lock), never a network one.
 	path, err := workspace.New(name, branch, base, repo.URL, repo.Git)
 	if err != nil {
 		if errors.Is(err, repostore.ErrLocked) {
 			return errs.Wrap(errs.Locked, err)
 		}
-		return errs.Wrap(errs.Network, err)
+		return errs.Wrap(errs.Config, err)
 	}
 	// Best-effort: link this workspace to the agent session that created it, so
 	// `shed resume <name>` can reopen it. The session comes from the

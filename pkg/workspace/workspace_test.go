@@ -109,21 +109,21 @@ func TestParseReflogUnix(t *testing.T) {
 
 func TestCloneArgs(t *testing.T) {
 	t.Run("no git config", func(t *testing.T) {
-		got := cloneArgs("/cache", "https://x/y", "main", "/dest", nil)
-		want := []string{"clone", "--reference", "/cache", "--branch", "main", "--", "https://x/y", "/dest"}
+		got := cloneArgs("/store", "/dest", nil)
+		want := []string{"clone", "--no-checkout", "--", "/store", "/dest"}
 		assertArgs(t, got, want)
 	})
 
 	t.Run("git config seeded as sorted --config flags before --", func(t *testing.T) {
-		got := cloneArgs("/cache", "https://x/y", "main", "/dest", map[string]string{
+		got := cloneArgs("/store", "/dest", map[string]string{
 			"user.email":     "me@work.com",
 			"core.hooksPath": ".githooks",
 		})
 		want := []string{
-			"clone", "--reference", "/cache", "--branch", "main",
+			"clone", "--no-checkout",
 			"--config", "core.hooksPath=.githooks", // sorted: core before user
 			"--config", "user.email=me@work.com",
-			"--", "https://x/y", "/dest",
+			"--", "/store", "/dest",
 		}
 		assertArgs(t, got, want)
 	})

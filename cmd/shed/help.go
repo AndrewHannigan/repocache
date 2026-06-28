@@ -120,9 +120,10 @@ Repo store
   ~/.shed/repos/<host>/<owner>/<repo>/.
 
 Workspace
-  An editable clone of a stored repo, derived via 'git clone --reference'.
-  Identified by (repo, branch). Multiple workspaces may exist per stored
-  repo, even on the same branch. Lives under
+  An editable clone of a stored repo, cloned from the local store (so it
+  works offline and shares the store's objects on disk). Identified by
+  (repo, branch). Multiple workspaces may exist per stored repo, even on the
+  same branch. Lives under
   ~/.shed/workspaces/<host>/<owner>/<repo>/<branch>/.
 
 Agent integration
@@ -338,17 +339,18 @@ repo that has not been synced into the store yet.
 
 	"workspace": `workspace — manage writable workspaces
 
-A workspace is a git clone created with --reference against the store,
-sharing object storage but with independent refs. Edits happen here.
+A workspace is a git clone of the local store, sharing its objects on disk
+but with independent refs. Cloning locally means it works offline. Edits
+happen here.
 
   shed workspace new <repo> <branch> [--base <branch>]
     Syncs the repo first (cloning it into the store if needed), so the
     workspace forks from up-to-date code; if the sync fails but a store
-    exists, it warns and uses that. Then clones --reference into
-    ~/.shed/workspaces/.../<branch>/. If <branch> exists on origin,
-    check it out. Otherwise create it off <base> (or origin/HEAD). Prints
-    the absolute workspace path on stdout; make changes there, then commit
-    and push.
+    exists, it warns and uses that — so new still works offline. Then clones
+    from the local store into ~/.shed/workspaces/.../<branch>/, repointing
+    origin at the real remote. If <branch> exists on origin, check it out.
+    Otherwise create it off <base> (or origin/HEAD). Prints the absolute
+    workspace path on stdout; make changes there, then commit and push.
 
   shed workspace ls [--json]
     Every workspace with repo, branch, dirty state, unpushed-commit count,
