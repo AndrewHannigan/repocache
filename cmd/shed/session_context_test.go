@@ -160,7 +160,7 @@ func TestSessionContextBodyNoWorkspaces(t *testing.T) {
 }
 
 // makeGitWorkspace creates a minimal git repo at path so workspace.List treats
-// it as a workspace (a dir containing .git) with a reflog backing its AGE.
+// it as a workspace (a dir containing .git) with a reflog backing its ACTIVE column.
 func makeGitWorkspace(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(path, 0o755); err != nil {

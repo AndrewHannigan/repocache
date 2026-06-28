@@ -249,7 +249,7 @@ func unpushedCount(path string) (int, bool) {
 	return n, true
 }
 
-// lastActivity reports when the workspace was last touched, used for its AGE
+// lastActivity reports when the workspace was last touched, used for its ACTIVE
 // column and for prune's age threshold. It reads the timestamp of the newest
 // reflog entry — i.e. when the most recent action happened *in this workspace*
 // (the clone, a commit, a checkout) — not the date of the commit that entry
@@ -260,7 +260,7 @@ func unpushedCount(path string) (int, bool) {
 // reflog's oldest entry is always the clone, so the newest entry's time is
 // never older than creation — it reads as the creation time for an untouched
 // workspace and advances to the commit time once work lands, which is what the
-// AGE column should show.
+// ACTIVE column should show.
 func lastActivity(path string) time.Time {
 	// %gd with --date=unix renders the reflog selector as "HEAD@{<unix>}",
 	// the entry's own time. (Plain %ct/%cd would give the pointed-at commit's

@@ -336,7 +336,7 @@ func lastSyncLabel(r repoRow) string {
 
 // sortWorkspacesByAge returns infos ordered most-recently-active first, so the
 // workspace a user just touched sits at the top of the `ls` Workspaces table.
-// It ranks by the same AGE field the table shows (reflog-based lastActivity),
+// It ranks by the same ACTIVE column the table shows (reflog-based lastActivity),
 // breaking ties by repo name then branch so the order is deterministic. The
 // input is left untouched — a copy is sorted, since callers share the slice.
 func sortWorkspacesByAge(infos []workspace.Info) []workspace.Info {
@@ -361,7 +361,7 @@ func writeWorkspacesSection(out io.Writer, infos []workspace.Info) {
 		return
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  NAME\tREPO\tDIRTY\tUNPUSHED\tAGE\tPATH")
+	fmt.Fprintln(w, "  NAME\tREPO\tDIRTY\tUNPUSHED\tACTIVE\tPATH")
 	for _, i := range sortWorkspacesByAge(infos) {
 		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
 			i.Branch, i.Name, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))
@@ -375,7 +375,7 @@ func writeWorkspacesSection(out io.Writer, infos []workspace.Info) {
 const recentWorkspaceReposLimit = 10
 
 // repoActivity pairs a repo with the age of its most recently active workspace
-// (the workspace AGE field — reflog-based lastActivity).
+// (the workspace ACTIVE column — reflog-based lastActivity).
 type repoActivity struct {
 	Name string
 	Age  time.Time
@@ -383,7 +383,7 @@ type repoActivity struct {
 
 // recentWorkspaceRepos collapses workspaces to one entry per repo, keeping each
 // repo's newest workspace activity, and returns them most-recent first, capped
-// at limit (limit <= 0 means no cap). Ranking reuses the same workspace AGE the
+// at limit (limit <= 0 means no cap). Ranking reuses the same workspace ACTIVE column the
 // `ls` Workspaces section shows, so "recent" means the same thing in both places.
 func recentWorkspaceRepos(infos []workspace.Info, limit int) []repoActivity {
 	newest := make(map[string]time.Time, len(infos))

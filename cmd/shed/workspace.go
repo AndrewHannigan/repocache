@@ -215,11 +215,11 @@ func runWorkspaceList(jsonOut bool) error {
 
 // writeWorkspaceListTable renders the `workspace ls` table most-recently-active
 // first, so the workspace you just touched sits at the top — matching the
-// Workspaces section of `shed ls`. It sorts by the same AGE field the table
+// Workspaces section of `shed ls`. It sorts by the same ACTIVE column the table
 // shows via the shared sortWorkspacesByAge helper.
 func writeWorkspaceListTable(out io.Writer, infos []workspace.Info) error {
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tREPO\tDIRTY\tUNPUSHED\tAGE\tPATH")
+	fmt.Fprintln(w, "NAME\tREPO\tDIRTY\tUNPUSHED\tACTIVE\tPATH")
 	for _, i := range sortWorkspacesByAge(infos) {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 			i.Branch, i.Name, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))

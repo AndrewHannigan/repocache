@@ -26,7 +26,7 @@ func git(t *testing.T, dir string, extraEnv []string, args ...string) {
 	}
 }
 
-// TestLastActivity is the regression for the AGE column: a workspace cloned
+// TestLastActivity is the regression for the ACTIVE column: a workspace cloned
 // from a repo whose newest commit is ancient must report its own (recent)
 // creation time, not the commit's date — and must advance once work is
 // committed.
