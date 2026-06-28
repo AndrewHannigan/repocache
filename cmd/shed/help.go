@@ -86,7 +86,7 @@ Getting started:
     shed add AndrewHannigan/shed       # Add a repo
     shed add octocat                   # Add an owner, auto-sync future repos
 
-    # Your agents know how to use shed from here. Ask for a tour.
+    # Your agents now know how to use shed.
 
 Supports claude, cursor-agent, and opencode.
 
