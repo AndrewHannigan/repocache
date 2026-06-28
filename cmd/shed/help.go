@@ -95,6 +95,7 @@ Commands:
   history       show recent shed commands
   init          bootstrap + integrate with detected agents (--uninstall reverses it)
   ls            list owners, repos, and workspaces (everything shed manages)
+  owner         {ls,add,rm} of tracked users/orgs
   prune         delete workspaces whose work has already landed
   repo          {ls,add,rm} of the read-only repo library
   resume        reopen the agent session that created a workspace
@@ -251,6 +252,18 @@ Reconciliation is additive: repos that disappear upstream are left in
 place (so a workspace with unpushed work is never deleted out from under
 you). Remove them yourself with 'shed rm <name>', or drop the
 whole owner with 'shed rm <owner>'.
+
+Owners also have their own noun (mirroring 'repo' and 'workspace'):
+
+  shed owner ls [--json]   list just the tracked owners and their repo counts
+  shed owner add <owner>   track an owner (forces the owner reading, so even
+                           an 'owner/repo' argument is tracked as an owner)
+  shed owner rm <name>...  drop one or more owners; names resolve against
+                           owners only (a repo name here is "not in the config")
+
+These are the owner-scoped forms of 'shed add'/'shed rm'/'shed ls': use them
+when you mean an owner specifically. 'shed owner add' is 'shed add --owner',
+and 'shed owner rm' is 'shed rm' restricted to owners.
 `,
 
 	"sync": `sync — fetch repos and re-apply read-only chmod
