@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -45,7 +47,12 @@ type hookInput struct {
 	// Claude PreToolUse
 	SessionID string `json:"session_id"`
 	CWD       string `json:"cwd"`
-	ToolInput struct {
+	// TranscriptPath is Claude's path to the session's JSONL transcript. Its
+	// parent dir encodes (and its first entry records) the directory the session
+	// was launched in — the dir `claude --resume` needs, which CWD above does not
+	// reliably give (see recordPendingFromHook). Claude-only; empty elsewhere.
+	TranscriptPath string `json:"transcript_path"`
+	ToolInput      struct {
 		Command string `json:"command"`
 	} `json:"tool_input"`
 	// Cursor beforeShellExecution
@@ -78,11 +85,54 @@ func recordPendingFromHook(stdin io.Reader, agentKey string) {
 	if agentKey == "" {
 		agentKey = "claude" // default mirrors __session-context
 	}
+	// Claude's hook `cwd` is the agent's *transient* working directory, which
+	// drifts as the model cd's during a session. But a session's transcript is
+	// stored under the directory it was *launched* in, and `claude --resume`
+	// only finds it from that same dir — so resume must cd there, not to wherever
+	// the agent happened to be when `workspace new` ran. The launch dir is
+	// recorded in the transcript, so prefer it. (transcript_path is Claude-only;
+	// other agents fall through to the hook cwd from normalize.)
+	if agentKey == "claude" && in.TranscriptPath != "" {
+		if launch, ok := launchCWDFromTranscript(in.TranscriptPath); ok {
+			cwd = launch
+		}
+	}
 	_ = workspace.WritePending(wsName, workspace.SessionLink{
 		Agent:     agentKey,
 		SessionID: sessionID,
 		CWD:       cwd,
 	})
+}
+
+// launchCWDFromTranscript returns the directory a Claude session was launched
+// in, read from the first entry of its JSONL transcript that records a `cwd`.
+// That first entry is the session's opening message, written from the launch
+// dir — the directory whose name (munged) is the transcript's parent folder and
+// the only place `claude --resume <id>` will find the session. Best-effort:
+// returns ("", false) if the transcript can't be opened or has no usable cwd,
+// so the caller falls back to the hook's transient cwd.
+func launchCWDFromTranscript(path string) (string, bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", false
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	// Transcript lines (a tool result, a pasted blob) can be large; give the
+	// scanner room so the opening entry isn't skipped as an over-long token.
+	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	for sc.Scan() {
+		var e struct {
+			CWD string `json:"cwd"`
+		}
+		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
+			continue
+		}
+		if e.CWD != "" {
+			return e.CWD, true
+		}
+	}
+	return "", false
 }
 
 // normalize collapses the per-agent field names into (sessionID, command, cwd).

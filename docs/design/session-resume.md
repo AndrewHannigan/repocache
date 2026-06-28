@@ -319,9 +319,17 @@ of `--help`.)
    (`conversation_id`) and opencode (`input.sessionID`). Claude is documented.
 2. **opencode `output.args.command` field name** on the installed version
    (documented for the built-in bash tool; confirm it hasn't drifted).
-3. **Claude cwd semantics**: the `PreToolUse` `cwd` should be the session's
-   project dir (= the resume dir). Confirm it doesn't drift if the model `cd`s
-   mid-session.
+3. **Claude cwd semantics** — *resolved: it does drift.* The `PreToolUse` `cwd`
+   is the agent's transient working directory, which moves as the model `cd`s
+   mid-session, so it is **not** the session's project dir and `claude --resume`
+   from it fails ("No conversation found"). The launch dir is instead derived
+   from the `PreToolUse` `transcript_path` (also delivered in the same event):
+   the transcript lives under `~/.claude/projects/<munge(launch-cwd)>/` and its
+   first entry records that launch cwd verbatim, so the hook reads it from there
+   (`launchCWDFromTranscript`) and links that. Falls back to the hook `cwd` if
+   the transcript can't be read. opencode/Cursor have no `transcript_path` and
+   keep the hook cwd — acceptable for Cursor (resume isn't cwd-scoped); opencode
+   is still open (see note below).
 4. **Link lifecycle (safety-critical).** A link is subordinate metadata; its
    staleness must **never** delete a workspace. The only things that remove a
    workspace stay exactly as today: the `shed prune` landed-work rule (merged
