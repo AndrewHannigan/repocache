@@ -219,10 +219,10 @@ func runWorkspaceList(jsonOut bool) error {
 // shows via the shared sortWorkspacesByAge helper.
 func writeWorkspaceListTable(out io.Writer, infos []workspace.Info) error {
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tREPO\tDIRTY\tUNPUSHED\tACTIVE\tPATH")
+	fmt.Fprintln(w, "NAME\tREPO\tDIRTY\tUNPUSHED\tACTIVE")
 	for _, i := range sortWorkspacesByAge(infos) {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			i.Branch, i.Name, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age), paths.Display(i.Path))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+			i.Branch, i.Name, dirtyLabel(i.Dirty), unpushedLabel(i.Unpushed), relTime(i.Age))
 	}
 	return w.Flush()
 }
