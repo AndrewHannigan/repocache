@@ -173,7 +173,14 @@ So read-only isn't the goal in itself — it's what makes the *writable* workspa
 
 ## Why `git clone --reference`, not `git worktree`
 
-A worktree modifies state in the originating repo's `./git/`, breaking the read-only invariant that keeps agents from modifying the repo store directly. `--reference` clones keep independent refs and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Shed sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race.
+A worktree would have shared the store's object database too — so it ties the clone on the one thing worktrees are *for*, disk savings. Everything else favors the clone:
+
+- **True isolation, not shared fate.** A worktree keeps every branch, every branch reflog, and a single `.git/config` in the *one* originating repo, shared across all worktrees. A `--reference` clone borrows only objects, read-only — its refs, reflogs, config, index, and `HEAD` are entirely its own. So a bad operation in one workspace — a botched rebase, a force-deleted branch, a stray `gc`, a corrupted ref — can't reach the store or any sibling. Worktrees leak all of that sideways; clones don't.
+- **No limits on the agent's git workflow.** Because `.git/config` isn't shared, an agent can rewrite remotes, change `user.email`, flip any git option, or rewrite history — whatever the task needs — without touching another workspace or the store. With worktrees that config is communal, so one agent's change is silently every agent's change.
+- **An independent branch namespace and reflog.** Worktrees share one `refs/heads/*` (and the branch reflogs under it), and git forbids the same branch being checked out in two of them at once. Independent clones each own their branches and history, so workspaces never collide over a name and each one's reflog reads as purely its own work.
+- **Teardown can't leave wreckage.** A `--reference` clone is removed with a plain `rm -rf`, so `shed prune` and `workspace rm` are just directory deletes. Deleting a worktree's directory instead orphans a registration back inside the store that needs `git worktree prune`, and moving or removing the store breaks every worktree pointing into it.
+
+Shed sets `gc.auto = 0` on the store so the objects workspaces borrow are never pruned out from under them, and holds a per-repo `flock` so sync and workspace creation can't race.
 
 ---
 
