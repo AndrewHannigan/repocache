@@ -173,7 +173,11 @@ So read-only isn't the goal in itself — it's what makes the *writable* workspa
 
 ## Why `git clone --reference`, not `git worktree`
 
-A worktree modifies state in the originating repo's `./git/`, breaking the read-only invariant that keeps agents from modifying the repo store directly. `--reference` clones keep independent refs and clean up with plain `rm -rf` — while still borrowing objects for the disk savings. Shed sets `gc.auto = 0` and holds a per-repo `flock` so sync and workspace creation can't race.
+Both share the store's object database — a worktree through the common `.git/`, a `--reference` clone through git's alternates — so the two tie on per-workspace disk. The reason to prefer the clone is the *shape* of the isolation, which fits disposable, hand-to-an-agent scratch space:
+
+- **Each workspace is just an ordinary repo, with no shared namespace to coordinate.** Worktrees pool one `refs/heads/*` (and the branch reflogs under it), and by default one `.git/config`, across every tree and the store — so git has to police the sharing: you can't check out or delete a branch another worktree holds, and giving a workspace its own identity or remote means opting into the `extensions.worktreeConfig` overlay. A clone owns its refs, branch reflogs, config, index, `HEAD`, and an `origin` pointing at the real upstream. An agent can branch, delete, retarget `origin`, change `user.email`, or rewrite history, and none of it touches another workspace or needs any special setup — fewer rules to know, no cross-workspace coupling to reason about.
+- **Teardown is a plain `rm -rf`** — all `shed prune` and `workspace rm` do. The worktree equivalent is `git worktree remove`; a bare `rm -rf` instead leaves a registration in the store for a later `git worktree prune` to sweep (harmless, but not nothing).
+- **A plain clone leaves room — for the agent and for shed.** Because a workspace is an ordinary git repo with no worktree rules bolted on, an agent can drive it however a task demands, and shed itself stays free to evolve — new layouts, workflows, or per-workspace setup — without designing around what worktrees permit. Worktrees would bake their constraints — one shared ref namespace, the same-branch lock, a shared config — into both the agent's workflow and shed's own design.
 
 ---
 
