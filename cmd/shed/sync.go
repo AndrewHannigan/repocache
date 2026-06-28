@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -108,6 +109,16 @@ func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) 
 		fmt.Printf("syncing %d repos (jobs=%d)\n", len(targets), jobs)
 	}
 
+	// Stream git's live clone/fetch progress meter only when a single repo is in
+	// scope and stderr is a terminal — the `shed add <repo>` case, and a targeted
+	// `shed sync <repo>`. With several repos fetching in parallel their meters
+	// would interleave into noise, and piped/JSON output wants no cursor control
+	// codes, so both fall back to the quiet per-line summary.
+	var progress io.Writer
+	if !jsonOut && len(targets) == 1 && isTerminal(os.Stderr) {
+		progress = os.Stderr
+	}
+
 	sem := make(chan struct{}, jobs)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -123,7 +134,7 @@ func runSync(names []string, jobs int, ifOlderThan time.Duration, jsonOut bool) 
 		go func(t syncTarget) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			r := syncOne(t.name, t.url, t.git, ifOlderThan)
+			r := syncOne(t.name, t.url, t.git, ifOlderThan, progress)
 			mu.Lock()
 			results = append(results, r)
 			if jsonOut {
@@ -344,12 +355,12 @@ func warnSync(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "warning: "+format+"\n", a...)
 }
 
-func syncOne(name, url string, git map[string]string, ifOlderThan time.Duration) syncResult {
+func syncOne(name, url string, git map[string]string, ifOlderThan time.Duration, progress io.Writer) syncResult {
 	start := time.Now()
 	r := syncResult{Name: name}
 
 	if !repostore.Exists(name) {
-		if err := repostore.Clone(url, name); err != nil {
+		if err := repostore.Clone(url, name, progress); err != nil {
 			return finishFetch(r, start, err)
 		}
 	}
@@ -382,7 +393,7 @@ func syncOne(name, url string, git map[string]string, ifOlderThan time.Duration)
 	if err := repostore.UnlockTree(name); err != nil {
 		return finishErr(r, start, fmt.Errorf("chmod u+w: %w", err))
 	}
-	if err := repostore.Fetch(name); err != nil {
+	if err := repostore.Fetch(name, progress); err != nil {
 		return finishFetch(r, start, err)
 	}
 	// Reconcile per-repo git config into the store's .git/config so options
