@@ -144,6 +144,36 @@ func TestWriteFileAtomicPreservesMode(t *testing.T) {
 	}
 }
 
+// Initialized requires both roots `shed init` creates — the config file and
+// the data dir — and reports false until both are present.
+func TestInitialized(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	if Initialized() {
+		t.Fatal("a fresh env with neither config file nor data dir should not be initialized")
+	}
+
+	// Config file alone is not enough — the data dir must exist too.
+	if err := os.MkdirAll(ConfigDir(), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ConfigFile(), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if Initialized() {
+		t.Fatal("config file without the data dir should not count as initialized")
+	}
+
+	// Data dir alone is not enough either; both together are.
+	if err := os.MkdirAll(DataDir(), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if !Initialized() {
+		t.Fatal("config file and data dir both present should count as initialized")
+	}
+}
+
 func TestIsSSHURL(t *testing.T) {
 	ssh := []string{
 		"git@github.com:foo/bar.git",

@@ -74,20 +74,22 @@ var helpTopics = map[string]string{
 
 	"overview": `shed — git repo management for terminal coding agents
 
-Keeps a read-only store of your git repos and hands your agents isolated,
-writable workspaces to change them in — so multiple agents can share the
-same repos without stepping on each other.
+Manages a read-only store of your git repos and hands your agents isolated,
+writable workspaces to make changes. Run `shed init` to begin.
+
+Supports claude, cursor-agent, and opencode.
 
 The whole loop:
 
-    shed init                            # one-time: dirs + agent integration
-    shed add <git-url>                   # add a repo (or a user/org) to the library
-    # ... your agent takes it from here: reads the store, and on demand ...
-    shed workspace new <repo> <branch>   # creates a writable clone, prints its path
-    # ... edits there, commits, pushes, opens a PR ...
-    shed workspace rm <name>             # tear down (or 'shed prune' to bulk-clean)
+    # One-time init to teach your agents how to use shed
+    shed init
 
-You curate the library ('add'/'rm'); let the agent manage workspaces on demand.
+	  # Add a repo or a user/org to the library (GitHub short-form allowed)
+    shed add AndrewHannigan/shed       # Add a repo
+    shed add octocat                   # Add an owner, auto-sync future repos
+
+    # That's it. Your agent knows how to use shed from here and will 
+		# manage workspaces on-demand.
 
 Commands:
   add           add a repo (or a whole user/org) to the library
