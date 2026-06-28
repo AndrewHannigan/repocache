@@ -29,6 +29,21 @@ func DataDir() string {
 func ConfigFile() string     { return filepath.Join(ConfigDir(), "config.toml") }
 func ConfigLockFile() string { return filepath.Join(ConfigDir(), ".lock") }
 
+// Initialized reports whether `shed init` has been run, by checking for the two
+// roots init creates that every command depends on: the config file (under
+// ConfigDir) and the data directory. It is a deliberately cheap presence check
+// — two stats, no parsing — so every command can run it on startup to fail with
+// a clear "run shed init" message instead of behaving like an empty library. It
+// does not validate contents; a malformed config still surfaces its own error
+// when loaded.
+func Initialized() bool {
+	if _, err := os.Stat(ConfigFile()); err != nil {
+		return false
+	}
+	fi, err := os.Stat(DataDir())
+	return err == nil && fi.IsDir()
+}
+
 func ReposDir() string      { return filepath.Join(DataDir(), "repos") }
 func WorkspacesDir() string { return filepath.Join(DataDir(), "workspaces") }
 func LogsDir() string       { return filepath.Join(DataDir(), "logs") }
