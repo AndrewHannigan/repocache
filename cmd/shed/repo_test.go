@@ -32,14 +32,15 @@ func TestRepoOnlyListShowsReposOnly(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"Repos", "github.com/acme/widget"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("repo ls output missing %q:\n%s", want, out)
-		}
+	if !strings.Contains(out, "github.com/acme/widget") {
+		t.Errorf("repo ls output missing the repo name:\n%s", out)
 	}
-	for _, unwanted := range []string{"Owners", "Workspaces"} {
+	// The section captions must be absent — including "Repos", which labels this
+	// table only inside the `shed ls` overview, not the standalone single-table
+	// view.
+	for _, unwanted := range []string{"Repos", "Owners", "Workspaces"} {
 		if strings.Contains(out, unwanted) {
-			t.Errorf("repo ls must not render the %s section:\n%s", unwanted, out)
+			t.Errorf("repo ls must not render the %q caption:\n%s", unwanted, out)
 		}
 	}
 }

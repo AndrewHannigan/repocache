@@ -97,37 +97,37 @@ func TestWriteLibraryWorkspaceHint(t *testing.T) {
 	}
 }
 
-// writeReposSection prepends its indent argument to the table rows but never to
-// the "Repos" caption: `shed repo ls` passes "" so its single table sits
-// flush-left, while the `shed ls` overview passes two spaces to nest the rows
-// under their caption.
-func TestWriteReposSectionIndent(t *testing.T) {
+// writeReposSection's caption and indent arguments are independent. The
+// standalone `shed repo ls` passes ("", false): no "Repos" heading (a lone table
+// needs no label) and rows flush-left. The `shed ls` overview passes ("  ", true)
+// to caption the section and nest its rows two spaces under that heading.
+func TestWriteReposSectionCaptionAndIndent(t *testing.T) {
 	repos := []repoRow{{
 		Name:       "github.com/acme/widget",
 		LastSyncAt: time.Now().UTC().Format(time.RFC3339),
 	}}
 
-	rowsOf := func(indent string) (caption string, rows []string) {
-		var buf bytes.Buffer
-		writeReposSection(&buf, repos, indent)
-		lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
-		return lines[0], lines[1:]
+	// Standalone: no caption, table rows flush-left.
+	var standalone bytes.Buffer
+	writeReposSection(&standalone, repos, "", false)
+	standaloneLines := strings.Split(strings.TrimRight(standalone.String(), "\n"), "\n")
+	if standaloneLines[0] == "Repos" {
+		t.Errorf("standalone view should omit the \"Repos\" caption, got:\n%s", standalone.String())
 	}
-
-	// Flush-left: caption present, no leading whitespace on any table row.
-	caption, flushRows := rowsOf("")
-	if caption != "Repos" {
-		t.Errorf("expected \"Repos\" caption on the first line, got %q", caption)
-	}
-	for _, line := range flushRows {
+	for _, line := range standaloneLines {
 		if strings.HasPrefix(line, " ") {
 			t.Errorf("flush-left table row should have no leading indent, got %q", line)
 		}
 	}
 
-	// Nested: every table row begins with the two-space indent.
-	_, nestedRows := rowsOf("  ")
-	for _, line := range nestedRows {
+	// Overview: caption on the first line, every table row indented two spaces.
+	var overview bytes.Buffer
+	writeReposSection(&overview, repos, "  ", true)
+	overviewLines := strings.Split(strings.TrimRight(overview.String(), "\n"), "\n")
+	if overviewLines[0] != "Repos" {
+		t.Errorf("expected \"Repos\" caption on the first line, got %q", overviewLines[0])
+	}
+	for _, line := range overviewLines[1:] {
 		if !strings.HasPrefix(line, "  ") {
 			t.Errorf("nested table row should be indented two spaces, got %q", line)
 		}

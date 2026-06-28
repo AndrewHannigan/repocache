@@ -113,9 +113,9 @@ func runRepoOnlyList(jsonOut bool) error {
 		return nil
 	}
 	// This is a single, standalone table — not the multi-section `shed ls`
-	// overview — so its rows sit flush-left under the caption (indent "")
-	// rather than nested two spaces in.
-	writeReposSection(os.Stdout, rows, "")
+	// overview — so it drops the section caption (a lone table needs no label)
+	// and its rows sit flush-left (indent "") rather than nested two spaces in.
+	writeReposSection(os.Stdout, rows, "", false)
 	return nil
 }
 
@@ -144,9 +144,10 @@ func runOwnerOnlyList(jsonOut bool) error {
 		fmt.Fprintln(os.Stdout, noOwnersTrackedHint)
 		return nil
 	}
-	// A single, standalone table — its rows sit flush-left under the caption
-	// (indent ""), matching `shed repo ls`, rather than nested as in `shed ls`.
-	writeOwnersSection(os.Stdout, owners, "")
+	// A single, standalone table — it drops the section caption and its rows sit
+	// flush-left (indent ""), matching `shed repo ls`, rather than nested as in
+	// `shed ls`.
+	writeOwnersSection(os.Stdout, owners, "", false)
 	return nil
 }
 
@@ -230,15 +231,15 @@ func writeLibrary(out io.Writer, owners []ownerRow, repos []repoRow, workspaces 
 	}
 	if len(owners) > 0 {
 		gap()
-		// The overview indents each section's rows under its caption so the
-		// sections read as a nested hierarchy.
-		writeOwnersSection(out, owners, "  ")
+		// The overview captions and indents each section's rows under its
+		// heading so the sections read as a nested hierarchy.
+		writeOwnersSection(out, owners, "  ", true)
 	}
 	if len(repos) > 0 {
 		gap()
-		// The overview indents each section's rows under its caption so the
-		// sections read as a nested hierarchy.
-		writeReposSection(out, repos, "  ")
+		// The overview captions and indents each section's rows under its
+		// heading so the sections read as a nested hierarchy.
+		writeReposSection(out, repos, "  ", true)
 	}
 	if len(workspaces) > 0 || (workspaceHint && len(repos) > 0) {
 		gap()
@@ -247,13 +248,18 @@ func writeLibrary(out io.Writer, owners []ownerRow, repos []repoRow, workspaces 
 	return nil
 }
 
-// writeOwnersSection renders the captioned Tracked Owners table. indent is
-// prepended to each table row (not the caption): the multi-section `shed ls`
-// overview passes two spaces so the rows nest under their heading, while the
-// standalone `shed owner ls` passes "" so its single table sits flush-left —
-// the same split writeReposSection makes.
-func writeOwnersSection(out io.Writer, owners []ownerRow, indent string) {
-	fmt.Fprintln(out, "Tracked Owners")
+// writeOwnersSection renders the Tracked Owners table. caption controls whether
+// the "Tracked Owners" heading precedes it: the multi-section `shed ls` overview
+// passes true so the heading distinguishes this table from the sibling Repos and
+// Workspaces sections, while the standalone `shed owner ls` passes false — a lone
+// table needs no label. indent is prepended to each table row (not the caption):
+// the overview passes two spaces so the rows nest under their heading, while the
+// standalone view passes "" so its single table sits flush-left — the same split
+// writeReposSection makes.
+func writeOwnersSection(out io.Writer, owners []ownerRow, indent string, caption bool) {
+	if caption {
+		fmt.Fprintln(out, "Tracked Owners")
+	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, indent+"OWNER\tREPOS")
 	for _, o := range owners {
@@ -262,12 +268,17 @@ func writeOwnersSection(out io.Writer, owners []ownerRow, indent string) {
 	w.Flush()
 }
 
-// writeReposSection renders the captioned Repos table. indent is prepended to
-// each table row (not the caption): the multi-section `shed ls` overview passes
-// two spaces so the rows nest visually under their heading, while the standalone
-// `shed repo ls` passes "" so its single table sits flush-left.
-func writeReposSection(out io.Writer, repos []repoRow, indent string) {
-	fmt.Fprintln(out, "Repos")
+// writeReposSection renders the Repos table. caption controls whether the
+// "Repos" heading precedes it: the multi-section `shed ls` overview passes true
+// so the heading distinguishes this table from the sibling Tracked Owners and
+// Workspaces sections, while the standalone `shed repo ls` passes false — a lone
+// table needs no label. indent is prepended to each table row (not the caption):
+// the overview passes two spaces so the rows nest visually under their heading,
+// while the standalone view passes "" so its single table sits flush-left.
+func writeReposSection(out io.Writer, repos []repoRow, indent string, caption bool) {
+	if caption {
+		fmt.Fprintln(out, "Repos")
+	}
 	// The "FROM" column only matters when an owner auto-added some repo;
 	// hide it otherwise so the common (no-owners) case isn't cluttered with
 	// a column of em-dashes.
