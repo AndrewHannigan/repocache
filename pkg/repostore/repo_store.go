@@ -3,10 +3,12 @@
 package repostore
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -274,7 +276,13 @@ func Remove(name string, timeout time.Duration) error {
 
 // Clone runs `git clone --no-checkout --config gc.auto=0 <url> <path>`.
 // If the destination exists, treats it as success (race with another sync).
-func Clone(url, name string) error {
+//
+// When progress is non-nil, git's live progress meter (Counting/Compressing/
+// Receiving objects) is streamed to it as the clone runs. Pass nil to stay
+// quiet — the default for parallel syncs, where many concurrent meters would
+// interleave into noise. See runGitProgress for how streaming and error
+// capture coexist.
+func Clone(url, name string, progress io.Writer) error {
 	dest := paths.RepoStorePath(name)
 	if _, err := os.Stat(dest); err == nil {
 		return nil
@@ -282,10 +290,14 @@ func Clone(url, name string) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 		return err
 	}
+	args := []string{"clone", "--no-checkout", "--config", "gc.auto=0"}
+	if progress != nil {
+		args = append(args, "--progress")
+	}
 	// "--" terminates options so a url beginning with "-" can't be parsed as a
 	// git flag (argument injection); url and dest are strictly positional.
-	cmd := exec.Command("git", "clone", "--no-checkout", "--config", "gc.auto=0", "--", url, dest)
-	out, err := cmd.CombinedOutput()
+	args = append(args, "--", url, dest)
+	out, err := runGitProgress(progress, args...)
 	if err != nil {
 		// Race: another process created the dir between our stat and clone.
 		if strings.Contains(string(out), "already exists") {
@@ -294,6 +306,27 @@ func Clone(url, name string) error {
 		return fmt.Errorf("git clone: %w (output: %s)", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// runGitProgress runs `git <args>`, returning the combined output for error
+// reporting. When progress is non-nil, git's stderr is additionally streamed
+// there live so the user sees the progress meter as it advances. Callers that
+// want a meter must also add `--progress` to args: stderr here is a pipe (the
+// MultiWriter, not the terminal), so git would otherwise suppress the meter as
+// it does for any non-TTY. With progress nil this is exactly the old
+// CombinedOutput() behavior.
+func runGitProgress(progress io.Writer, args ...string) ([]byte, error) {
+	cmd := exec.Command("git", args...)
+	if progress == nil {
+		return cmd.CombinedOutput()
+	}
+	// Tee stderr to the caller (the terminal) and a buffer: the user watches it
+	// scroll by, and a copy is still on hand for the error message if it fails.
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = io.MultiWriter(progress, &buf)
+	err := cmd.Run()
+	return buf.Bytes(), err
 }
 
 // SetConfig writes the given git config key/value pairs into the stored repo's
@@ -322,10 +355,14 @@ func SetConfig(name string, kv map[string]string) error {
 	return nil
 }
 
-// Fetch runs `git fetch --all --prune --tags` in the stored repo.
-func Fetch(name string) error {
-	cmd := exec.Command("git", "-C", paths.RepoStorePath(name), "fetch", "--all", "--prune", "--tags")
-	out, err := cmd.CombinedOutput()
+// Fetch runs `git fetch --all --prune --tags` in the stored repo. When
+// progress is non-nil, git's live progress meter is streamed to it (see Clone).
+func Fetch(name string, progress io.Writer) error {
+	args := []string{"-C", paths.RepoStorePath(name), "fetch", "--all", "--prune", "--tags"}
+	if progress != nil {
+		args = append(args, "--progress")
+	}
+	out, err := runGitProgress(progress, args...)
 	if err != nil {
 		return fmt.Errorf("git fetch: %w (output: %s)", err, strings.TrimSpace(string(out)))
 	}

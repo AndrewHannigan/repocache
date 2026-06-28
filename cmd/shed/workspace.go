@@ -105,7 +105,13 @@ func runWorkspaceNew(name, branch, base string) error {
 	// store already exists, fall back to it (so `new` still works offline);
 	// only hard-fail when there is nothing stored to fork from.
 	fmt.Fprintf(os.Stderr, "syncing %s...\n", name)
-	if res := syncOne(name, repo.URL, repo.Git, 0); res.Status == "error" {
+	// A single repo refresh, so streaming git's progress meter can't interleave;
+	// show it when interactive (nil when output is piped — see isTerminal).
+	var progress io.Writer
+	if isTerminal(os.Stderr) {
+		progress = os.Stderr
+	}
+	if res := syncOne(name, repo.URL, repo.Git, 0, progress); res.Status == "error" {
 		if !repostore.Exists(name) {
 			if res.locked {
 				return errs.New(errs.Locked, "could not sync %s: %s", name, res.Error)

@@ -6,9 +6,24 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"time"
 )
+
+// isTerminal reports whether f is attached to a terminal, so output that only
+// makes sense interactively — a live, cursor-updating progress meter — can be
+// gated on it. When f is a pipe or a regular file (output redirected, or run
+// under a harness) this is false and callers stay quiet. Stdlib-only: a
+// character device is what a tty presents as, which avoids a golang.org/x/term
+// dependency for this one check.
+func isTerminal(f *os.File) bool {
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
 
 // pluralize renders "1 repo" / "3 repos" for a count and singular noun.
 func pluralize(n int, noun string) string {
