@@ -25,7 +25,7 @@ import (
 func newOwnerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "owner",
-		Aliases: []string{"owners"},
+		Aliases: []string{"owners", "o"},
 		Short:   "Manage tracked users/orgs (list, add, remove owners)",
 	}
 	cmd.AddCommand(

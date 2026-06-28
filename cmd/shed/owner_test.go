@@ -105,15 +105,17 @@ func TestOwnerSubcommandsRecorded(t *testing.T) {
 	}
 }
 
-// The `owners` alias resolves to the same command as `owner`.
+// The `owners` and `o` aliases resolve to the same command as `owner`.
 func TestOwnerAliasResolves(t *testing.T) {
-	root := newRootCmd()
-	cmd, _, err := root.Find([]string{"owners", "ls"})
-	if err != nil {
-		t.Fatalf("find owners ls: %v", err)
-	}
-	if cmd.CommandPath() != "shed owner ls" {
-		t.Errorf("`owners` should alias `owner`, got command path %q", cmd.CommandPath())
+	for _, alias := range []string{"owners", "o"} {
+		root := newRootCmd()
+		cmd, _, err := root.Find([]string{alias, "ls"})
+		if err != nil {
+			t.Fatalf("find %s ls: %v", alias, err)
+		}
+		if cmd.CommandPath() != "shed owner ls" {
+			t.Errorf("`%s` should alias `owner`, got command path %q", alias, cmd.CommandPath())
+		}
 	}
 }
 
