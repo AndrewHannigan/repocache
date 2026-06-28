@@ -88,8 +88,7 @@ The whole loop:
     shed add AndrewHannigan/shed       # Add a repo
     shed add octocat                   # Add an owner, auto-sync future repos
 
-    # That's it. Your agent knows how to use shed from here and will
-    # manage workspaces on-demand.
+    # That's it. Your agent knows how to use shed from here. Ask it for a tour.
 
 Commands:
   add           add a repo (or a whole user/org) to the library
