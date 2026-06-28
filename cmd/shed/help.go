@@ -84,12 +84,12 @@ The whole loop:
     # One-time init to teach your agents how to use shed
     shed init
 
-	  # Add a repo or a user/org to the library (GitHub short-form allowed)
+    # Add a repo or a user/org to the library (GitHub short-form allowed)
     shed add AndrewHannigan/shed       # Add a repo
     shed add octocat                   # Add an owner, auto-sync future repos
 
-    # That's it. Your agent knows how to use shed from here and will 
-		# manage workspaces on-demand.
+    # That's it. Your agent knows how to use shed from here and will
+    # manage workspaces on-demand.
 
 Commands:
   add           add a repo (or a whole user/org) to the library
