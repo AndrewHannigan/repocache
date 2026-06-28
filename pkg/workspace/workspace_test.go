@@ -135,3 +135,101 @@ func assertArgs(t *testing.T, got, want []string) {
 		t.Fatalf("cloneArgs mismatch\n got: %v\nwant: %v", got, want)
 	}
 }
+
+// TestLandedInDefault covers the three states prune reports differently: a
+// branch whose own commits landed (a real merge), a branch that never committed
+// anything (tip still on the default branch — must NOT be called "merged"), and
+// a branch with commits not yet in the default branch (not landed at all).
+func TestLandedInDefault(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	root := t.TempDir()
+
+	// Upstream with default branch "main". feat adds its own commit and is then
+	// merged back with a merge commit, so its tip is contained in main but off
+	// main's first-parent line.
+	upstream := filepath.Join(root, "upstream")
+	git(t, root, nil, "init", "-q", "-b", "main", upstream)
+	writeFile(t, upstream, "a.txt", "1")
+	git(t, upstream, nil, "add", "a.txt")
+	git(t, upstream, nil, "commit", "-q", "-m", "first")
+	git(t, upstream, nil, "checkout", "-q", "-b", "feat")
+	writeFile(t, upstream, "b.txt", "2")
+	git(t, upstream, nil, "add", "b.txt")
+	git(t, upstream, nil, "commit", "-q", "-m", "feat work")
+	git(t, upstream, nil, "checkout", "-q", "main")
+	git(t, upstream, nil, "merge", "-q", "--no-ff", "-m", "merge feat", "feat")
+	// Advance main once more so a never-committed branch sits behind its tip.
+	writeFile(t, upstream, "c.txt", "3")
+	git(t, upstream, nil, "add", "c.txt")
+	git(t, upstream, nil, "commit", "-q", "-m", "later")
+
+	ws := filepath.Join(root, "ws")
+	git(t, root, nil, "clone", "-q", upstream, ws)
+
+	tests := []struct {
+		name       string
+		setup      func()
+		wantLanded bool
+		wantOwn    bool
+	}{
+		{
+			name: "merged with own commits",
+			setup: func() {
+				git(t, ws, nil, "checkout", "-q", "-B", "feat", "origin/feat")
+			},
+			wantLanded: true,
+			wantOwn:    true,
+		},
+		{
+			name: "never committed, tip still on main",
+			setup: func() {
+				// A fresh workspace branch at main's tip with no commits of its own.
+				git(t, ws, nil, "checkout", "-q", "main")
+				git(t, ws, nil, "checkout", "-q", "-B", "scratch")
+			},
+			wantLanded: true,
+			wantOwn:    false,
+		},
+		{
+			name: "not landed: has unmerged commit",
+			setup: func() {
+				git(t, ws, nil, "checkout", "-q", "main")
+				git(t, ws, nil, "checkout", "-q", "-B", "ahead")
+				writeFile(t, ws, "d.txt", "4")
+				git(t, ws, nil, "add", "d.txt")
+				git(t, ws, nil, "commit", "-q", "-m", "local only")
+			},
+			wantLanded: false,
+			wantOwn:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup()
+			branch, err := exec.Command("git", "-C", ws, "rev-parse", "--abbrev-ref", "HEAD").Output()
+			if err != nil {
+				t.Fatal(err)
+			}
+			landed, own, def, err := LandedInDefault(ws, strings.TrimSpace(string(branch)))
+			if err != nil {
+				t.Fatalf("LandedInDefault: %v", err)
+			}
+			if landed != tt.wantLanded || own != tt.wantOwn {
+				t.Errorf("LandedInDefault = (landed=%v, own=%v), want (landed=%v, own=%v)",
+					landed, own, tt.wantLanded, tt.wantOwn)
+			}
+			if landed && def != "main" {
+				t.Errorf("default branch = %q, want %q", def, "main")
+			}
+		})
+	}
+}
+
+func writeFile(t *testing.T, dir, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
