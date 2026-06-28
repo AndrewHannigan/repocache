@@ -94,6 +94,7 @@ re-explaining it.
 | `shed workspace ls` | List workspaces with dirty/unpushed state and age |
 | `shed workspace path <name>` | Print a workspace's absolute path (names are globally unique) |
 | `shed workspace rm <name>…` | Delete one or more workspaces (refuses dirty/unpushed work without `--force`) |
+| `shed cd <name>` | Open a shell in a repo or workspace by name (`--path` prints the path instead) |
 | `shed prune` | Delete workspaces whose work has already landed |
 | `shed resume <name>` | Reopen the agent session that created a workspace |
 | `shed history` | Show recent shed commands |

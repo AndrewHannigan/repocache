@@ -94,6 +94,13 @@ func runWorkspaceNew(name, branch, base string) error {
 		return errs.New(errs.Exists,
 			"workspace name %q already exists for repo %s; pick a distinct name", branch, other)
 	}
+	// Workspace and repo names share one namespace so `shed cd <name>` is
+	// unambiguous. Reject a workspace name that would resolve to a repo.
+	if repos := repoNamesMatching(c, branch); len(repos) > 0 {
+		return errs.New(errs.Exists,
+			"workspace name %q collides with repo %s; pick a distinct name so `shed cd %s` is unambiguous",
+			branch, repos[0], branch)
+	}
 	// Refresh the store first so the workspace forks from up-to-date code.
 	// syncOne clones the repo if it isn't stored yet. If the sync fails but a
 	// store already exists, fall back to it (so `new` still works offline);

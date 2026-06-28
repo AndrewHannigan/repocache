@@ -92,6 +92,7 @@ Supports claude, cursor-agent, and opencode.
 
 Commands:
   add           add a repo (or a whole user/org) to the library
+  cd            open a shell in a repo or workspace by name
   help <topic>  long-form docs (also accepts a command name, e.g. 'shed help add')
   history       show recent shed commands
   init          bootstrap + integrate with detected agents (--uninstall reverses it)
@@ -105,7 +106,7 @@ Commands:
   sync          fetch tracked repos and re-apply read-only chmod (usually automatic)
   workspace     {new,ls,path,rm} of writable workspaces
 
-Topics: agents, auth, concepts, history, init, library, locking, owner, prune, sync, workspace
+Topics: agents, auth, cd, concepts, history, init, library, locking, owner, prune, sync, workspace
 `,
 
 	"concepts": `Concepts
@@ -300,6 +301,33 @@ SessionStart hook) wraps this with a global flock so multiple sessions
 don't stampede.
 `,
 
+	"cd": `cd — open a shell in a repo or workspace by name
+
+  shed cd <name> [--path]
+    Open an interactive shell in a stored repo or a workspace, located by a
+    single name. A note says which it opened — the read-only repo, or the
+    write-ready workspace — and where.
+
+Names are unambiguous
+  Repo names and workspace names share one namespace: a workspace can never
+  have the same name as a repo, and a repo can never have the same name as a
+  workspace (enforced when each is created). So one name always picks one
+  target:
+
+    shed cd projects        # a repo: read-only  ~/.shed/repos/.../projects
+    shed cd my-workspace     # a workspace: writable ~/.shed/workspaces/...
+
+  A repo matches the same way the rest of shed resolves names: an exact name,
+  or an unambiguous trailing path segment (so "projects" finds
+  "github.com/you/projects").
+
+Scope
+  The shell runs as a subprocess, so quitting it (exit or Ctrl-D) returns you
+  to where you started — like 'shed resume', cd cannot change your parent
+  shell's working directory. Pass --path to print the resolved path instead,
+  for use as 'cd "$(shed cd --path <name>)"'.
+`,
+
 	"workspace": `workspace — manage writable workspaces
 
 A workspace is a git clone created with --reference against the store,
@@ -331,6 +359,9 @@ sharing object storage but with independent refs. Edits happen here.
 The workspace's origin remote points at the upstream URL, not the store,
 so 'git push' works normally. New branches have no upstream until your
 first 'git push -u origin <branch>'.
+
+A workspace name must also differ from every repo name, so 'shed cd <name>'
+resolves unambiguously to one or the other — see 'shed help cd'.
 
 To bulk-clean workspaces whose work has already landed, see 'shed help prune'.
 `,
