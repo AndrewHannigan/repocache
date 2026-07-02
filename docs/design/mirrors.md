@@ -288,13 +288,25 @@ point):
   `shed ls` should surface TRACK/SYNCED per repo as the authoritative
   answer.
 
-A rejected alternative for prompt-friendliness: shed-owned per-repo
-branches in the mirror (`shed/<name>`, force-moved each sync, checked out
-non-detached — upstream never fetches into that name, so no fetch
-refusal). Rejected: ref-namespace pollution, `checkout -B` choreography
-every sync, per-repo branch names to dodge the one-checkout-per-branch
-rule, and the visible label (`shed/airflow`) explains no more than
-`detached at main`.
+Two rejected alternatives for non-detached repos (both trade the design's
+sync properties for a prompt label):
+
+- **Shed-owned per-repo branches** (`shed/<name>`, force-moved each sync,
+  checked out non-detached — upstream never fetches into that name, so no
+  fetch refusal). Rejected: ref-namespace pollution, `checkout -B`
+  choreography every sync, per-repo branch names to dodge the
+  one-checkout-per-branch rule, and the visible label (`shed/airflow`)
+  explains no more than `detached at main`.
+- **Pull-through-worktree**: check out the real branch, exclude
+  checked-out branches from the mirror fetch (dynamic negative refspecs),
+  and `git pull` inside each worktree — allowed, since pull moves the ref
+  and working tree together. Rejected: pull has no local source to merge
+  from (the mirror has no separate remote-tracking refs), so each
+  branch-tracked repo fetches the network itself — breaking one-fetch-
+  per-upstream, fragmenting ref consistency across per-repo fetch times,
+  and re-interleaving network with tree mutation. Plus force-push needs a
+  reset path and tag repos stay detached anyway (two modes). Nothing is
+  saved: the tree unlock and the per-repo update step exist either way.
 
 ### Workspace creation
 
