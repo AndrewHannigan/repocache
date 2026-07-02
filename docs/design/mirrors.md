@@ -40,37 +40,39 @@ branch is a local branch in the mirror, so
 `git clone --branch <anything> <mirror> <dest>` is a single git command again
 — the same shape as today's network clone, with a local source.
 
-### Object sharing: hardlinks for workspaces, alternates for repos
+### Object sharing: hardlinks for workspaces, worktrees for repos
 
 Today every workspace is permanently welded to the store through
 `.git/objects/info/alternates` (the `--reference` clone has no `--dissociate`).
 That is why the store runs `gc.auto=0` forever: a repack in the store would
 corrupt every workspace.
 
-The new design picks a sharing mechanism per tier by one rule: **coupling to
-the mirror is acceptable exactly where shed can rebuild the artifact.**
+The new design picks a mechanism per tier by two questions: does the tier
+hold user work (then it must be independent of the mirror), and is it
+long-lived (then git itself must know it depends on the mirror, so
+maintenance respects it)?
 
 - **Workspaces** hold user work — corruption is unacceptable, so they get a
   plain local clone, no `--reference`. Git hardlinks the object files: same
   speed and near-zero disk (on one filesystem), but fully independent — the
   mirror can be repacked, rebuilt, or deleted and workspaces stay valid.
   Worst case sharing degrades and disk creeps until old workspaces are
-  pruned; never corruption.
-- **Repos** are shed-owned plumbing, rebuildable from the mirror in one
-  command — so they get `git clone --shared`: alternates pointing at the
-  mirror. Zero object storage, permanently: the initial clone copies
-  nothing, and every later fetch sees the mirror's objects through the
-  alternate and stores nothing. If a mirror gc ever races a repo into
-  corruption, the remedy is mechanical: re-derive it. (See "gc, repacking,
-  and incremental duplication" for why hardlinks alone are not enough for
-  long-lived advancing checkouts of large repos.)
+  pruned — acceptable precisely because workspaces are ephemeral.
+- **Repos** are long-lived, shed-owned, read-only, and never push — so they
+  are **detached worktrees of the mirror** (`git worktree add --detach`).
+  One object DB, zero duplication ever, and — decisively — **gc-safety by
+  construction**: the mirror's gc counts every worktree's HEAD as a
+  reachability root, so it can never prune objects a repo's checkout still
+  needs. The dependency is declared to git rather than managed by shed: no
+  `.keep` bookkeeping, no defensive gc scheduling, no broken-repo re-derive
+  path. (See "gc: owned by shed, run in prune" for the full accounting.)
 
 ## The three-tier model
 
 | Tier | What it is | Writable? | Lifetime | Created by |
 |---|---|---|---|---|
 | **mirror** | bare repo, all upstream branches + tags | network only | permanent, one per upstream URL | derived — never configured directly |
-| **repo** | read-only checkout of the mirror at a tracked ref | no (tree locked) | permanent, N per mirror | config (`[[repos]]`) |
+| **repo** | read-only detached worktree of the mirror at a tracked ref | no (tree locked) | permanent, N per mirror | config (`[[repos]]`) |
 | **workspace** | writable clone from the mirror | yes | disposable | agents (`shed workspace new`) |
 
 Only two of the three are user-facing vocabulary. Users add **repos** (things
@@ -124,8 +126,17 @@ In the rare case a branch and a tag share a name, `track` accepts the full
 ref form (`heads/2.7.3`, `tags/2.7.3`) as the escape hatch; the bare short
 name prefers branches, matching `git clone --branch`.
 
-The existing per-repo `Git` config map is unchanged: it applies per repo
-entity and is still seeded into workspaces at clone time via `--config`.
+**One repo per `(url, track)` is an invariant**, enforced by
+`config.Validate` even under explicit `name` overrides. Two repos of the
+same upstream at the same ref would be identical read-only trees — pure
+duplication with no use — and forbidding them is also what lets repos be
+worktrees without ever meeting git's same-branch-twice restriction.
+
+The existing per-repo `Git` config map is unchanged in meaning: it applies
+per repo entity and is still seeded into workspaces at clone time via
+`--config`. On repos — worktrees sharing the mirror's config file — per-repo
+values are set via `extensions.worktreeConfig`, so they never leak to the
+mirror or sibling repos.
 
 Owner auto-discovery always materializes default-branch repos; a `track`
 override is something the user adds by hand afterward, never auto-generated.
@@ -179,7 +190,7 @@ them.
 ├── repos/                                    # user/agent-facing: shed prints these paths
 │   └── github.com/apache/
 │       ├── airflow/                          # default branch — advances on sync
-│       │   └── .git/shed.meta                # per-repo state: checked-out ref
+│       │   └── .git                          # a FILE → worktree of the mirror
 │       ├── airflow@v2-7-stable/              # branch — advances on sync
 │       ├── airflow@release-2.8/              # branch "release/2.8", sanitized
 │       └── airflow@2.7.3/                    # tag — frozen
@@ -218,13 +229,15 @@ Decisions baked in:
   bare repos, visually unmistakable, and it separates "one per upstream"
   from "one per ref". This completes the hiding: mirrors are absent from
   config, from everyday vocabulary, and now from the visible tree. The
-  mild cost is longer paths baked into repo git configs (each read-only
-  repo's `origin` is its mirror path), invisible in practice.
+  mild cost is absolute mirror paths baked into each repo's `.git` pointer
+  file, invisible in practice.
 - **Bare repos have no `.git/` dir**, so `shed.lock` / `shed.meta` sit at the
   mirror's top level. The mirror's meta owns `LastSyncAt` / `LastError`
-  (the mirror owns the network); each repo's `.git/shed.meta` records only
-  local checkout state. First-clone failure records (`.sync-errors/`) key by
-  mirror.
+  (the mirror owns the network). A repo, being a worktree, needs almost no
+  state of its own — its checkout state *is* its HEAD and its identity is
+  in config; anything left (a per-repo error record, say) lives in the
+  mirror's `worktrees/<id>/` admin dir, which is `.internal` plumbing
+  anyway. First-clone failure records (`sync-errors/`) key by mirror.
 - **Tag vs. branch is invisible in the path**, deliberately: the checkouts
   are structurally identical directories; the behavioral difference comes
   from what `track` resolves to in the mirror.
@@ -247,8 +260,10 @@ per mirror (network, exclusive lock on mirror):
   3. write shed.meta
 
 per derived repo (local, deterministic, retryable):
-  4. unlock tree → fetch/checkout track from the mirror → lock tree
-  5. write .git/shed.meta
+  4. unlock tree → git checkout --detach <track tip> → lock tree
+     (a worktree reads the mirror's refs directly: no fetch, no objects
+      move; creating a repo is the same operation from zero, via
+      git worktree add --detach)
 ```
 
 The network call is no longer in the middle of a mutated working tree
@@ -261,28 +276,27 @@ and rebuildable offline. Two Airflow checkouts cost one fetch.
 ```
 1. optional best-effort mirror fetch (same warn-and-proceed-if-stale
    fallback as today; hard-fail only if no mirror exists at all)
-2. git clone --branch <branch> [--config k=v ...] -- <mirror-path> <dest>
+2. git clone --branch <branch> --config gc.auto=0 [--config k=v ...] \
+     -- <mirror-path> <dest>
    (local: objects hardlinked, no --reference, no alternates)
-3. touch objects/pack/<pack>.keep for every pack present at clone time —
-   marks the hardlinked base packs precious so gc/repack never rewrite them
-4. git remote set-url origin <upstream-url>
-5. new-branch case: git checkout -b <name>, as today
+3. git remote set-url origin <upstream-url>
+4. new-branch case: git checkout -b <name>, as today
 ```
 
-Steps 3–4 are the extra steps versus today, and both are benign: local file
-and config writes that cannot partially fail in an interesting way. Failure
-cleanup at any step
+Step 3 is the one extra step versus today, and it is benign: a config write
+that cannot partially fail in an interesting way. Failure cleanup at any step
 is `rm -rf <dest>` — already the teardown model. The workspace's
 remote-tracking refs were populated from the mirror and are semantically
 upstream's refs; the first real `git fetch` reconciles against the true
 remote.
 
 **Workspaces derive from the mirror, never from a repo.** The tiers are
-siblings, not a chain: a repo stores no objects (alternates) and holds only
-one ref, so cloning from it would chain alternates through disposable
-plumbing and scope workspaces to the repo's tracked ref. The repo named on
-the CLI is a resolution and defaults source only — it selects the mirror,
-supplies the base-branch default, and seeds the per-repo `Git` config.
+siblings, not a chain: a repo is a worktree — no object store of its own,
+one detached ref — so it cannot serve as a clone source, and routing user
+work through disposable plumbing would be wrong even if it could. The repo
+named on the CLI is a resolution and defaults source only — it selects the
+mirror, supplies the base-branch default, and seeds the per-repo `Git`
+config.
 
 **Base-branch default:** a workspace created via a tracked repo
 (`shed workspace new airflow@v2-7-stable my-fix`) bases on that repo's
@@ -292,91 +306,106 @@ wants to branch off 2.7. This falls out of the data model for free.
 Offline creation of a branch that exists upstream but not yet in the mirror
 fails with a clear error; acceptable.
 
-### gc, repacking, and incremental duplication
+### gc: owned by shed, run in prune
 
-Four events govern how object storage is shared over time (all on one
-filesystem). The asymmetry to internalize: **clone hardlinks, fetch copies.**
+`gc.auto=0` is pinned on every tier. That is not turning gc off — it is
+transferring the responsibility for running it from git's per-repo
+heuristics to shed, which knows the sharing topology. An auto-gc firing at
+a moment of git's choosing is exactly what the topology can't tolerate:
+inside a workspace it would rewrite the hardlinked packs and privatize the
+entire shared base (a ~20 GB disk event on a big monorepo — not corruption,
+but a shock); inside the mirror it would run outside shed's lock
+discipline. So shed runs gc itself.
 
-1. **Clone: free.** A local-path clone hardlinks the pack files; the shared
-   base costs ~nothing per workspace, even for a multi-GB monorepo.
-2. **Fetch: copies churn.** `git fetch` never hardlinks, even from a local
-   path — new objects arrive as a private pack in the fetching clone.
-   Irrelevant for workspaces (short-lived, rarely fetch much), but a
-   long-lived advancing checkout would accumulate the full repo churn
-   forever, × N advancing checkouts, plus one new pack per fetch (pack
-   proliferation slows object lookup long before disk hurts). This is why
-   repos use alternates: fetch through an alternate stores nothing, ever.
-   A tag-pinned repo never fetches at all.
-3. **Mirror repack: un-shares the base, once.** Repacking writes new inodes;
-   existing hardlinked clones keep the old packs alive and still share them
-   *with each other*, so the cost is one extra full copy of the base, total,
-   until those workspaces are pruned. Degradation, never corruption.
-   Alternates-based repos are unaffected — they see the new packs.
-4. **gc inside a clone: privatizes it — unless the base packs are kept.**
-   Auto-gc firing inside a hardlinked clone rewrites its packs, converting
-   the entire shared base into a private copy — a disk shock on a large
-   repo, though still not corruption. Disabling auto-gc (`gc.auto=0`) would
-   prevent that but creates the opposite problem for exactly the users who
-   care: a long-lived workspace on a big repo accumulates loose objects
-   from agent commits and one pack per fetch, and with maintenance off it
-   slowly degrades. Instead, workspace creation marks every pack present at
-   clone time with a `.keep` file — git's native "this pack is precious"
-   marker. gc/repack never rewrite kept packs (and by default never copy
-   their objects into new packs), so auto-gc stays fully enabled: loose
-   objects get packed, fetched packs get consolidated, and the shared base
-   is never touched. The `.keep` files are ordinary workspace-local files
-   next to the hardlinked packs; they affect neither the mirror nor sibling
-   workspaces. Repos store no objects, so there is nothing to gc.
+**It runs in `shed prune`, not sync.** Sync is frequent, fast, and should
+stay network-focused; prune is the explicit, comparatively rare "reclaim
+disk" moment, which the user is already watching. Prune's ordering is
+deliberate:
 
-Mirror gc policy: shed owns the only writer, so gc runs only inside sync,
-under the mirror's exclusive lock, before repos are updated, with a
-conservative prune expiry. The mirror pins `gc.auto=0` — not to avoid
-maintenance but to own its scheduling (a stray auto-gc triggered mid-fetch
-would run outside the lock discipline); it is the only tier that does. The residual race — an upstream force-push
-abandons objects a repo's current checkout still references, and prune
-removes them — corrupts only rebuildable plumbing: sync detects a broken
-repo and re-derives it from the mirror.
+1. remove landed/aged workspaces (as today)
+2. `git gc` each mirror, under its exclusive lock
+3. `git worktree prune` each mirror (clears admin records of removed repos)
+
+Removing workspaces first matters: a mirror repack writes new inodes, and
+surviving hardlinked workspaces keep the old packs alive (still one shared
+copy *among themselves*) — repacking after removal minimizes that
+un-shared remainder. No chmod dance is needed anywhere: gc writes only the
+mirror's own object/ref store, never a repo's locked working tree.
+
+Per tier:
+
+- **Mirror** — the only tier with garbage to collect. Worktree HEADs (the
+  repos) are gc reachability roots, so collection can never prune objects a
+  repo's checkout needs — safe by construction, at any time, with no
+  defensive scheduling. A conservative prune expiry remains cheap insurance.
+- **Repos** — no object store of their own; nothing to collect, ever.
+- **Workspaces** — shed never gc's them, and `gc.auto=0` (seeded at
+  creation) means git doesn't either. A long-lived workspace therefore
+  drifts: loose objects from agent commits accumulate, and a mirror repack
+  un-shares its base. Accepted deliberately — workspaces are ephemeral, the
+  bloat is temporary by definition, and prune deletes them wholesale.
+
+The underlying asymmetry that shaped all of this: **clone hardlinks, fetch
+copies.** A local-path clone hardlinks pack files (workspace creation is
+~free even at 20 GB), but fetch always writes new private packs — which is
+why long-lived advancing checkouts must not be fetching clones. Repos avoid
+fetching entirely: as worktrees they read the mirror's refs directly, and a
+tag-pinned repo touches nothing at all.
 
 Sizing intuition, large monorepo: 20 GB of objects, ~100 MB/week of packed
-churn, three advancing checkouts. The base is stored once (mirror), plus at
-most one more shared copy across hardlinked workspaces after a repack; repos
-add zero. The naive all-hardlink-clone alternative would instead grow
-~5 GB/year *per advancing checkout* on top.
+churn, three advancing repo checkouts. The base is stored once (mirror),
+plus at most one aging shared copy across surviving workspaces after a
+repack; repos add zero, permanently. Hardlink-cloned repos would instead
+grow ~5 GB/year per advancing checkout.
 
-## Alternative considered: repos as worktrees of the mirror
+## Alternatives considered for the repo tier
 
-The README's "why not `git worktree`" rationale is about *workspaces* — its
-strongest arguments (independent repo, own origin, agents may push, plain
-`rm -rf` teardown) don't apply to repos, which are shed-owned, read-only, and
-never push. So worktrees were considered seriously for the repo tier: a
-single object DB with zero duplication, repo state definitionally in sync
-with the mirror, and detached-HEAD worktrees sidestep the same-branch-twice
-limitation (repos are detached checkouts anyway). Mirror gc is
-worktree-aware, so gc stays safe.
+Three mechanisms were weighed for the long-lived read-only checkouts. The
+design initially chose (2) and was revised to (3) when the gc analysis was
+worked through.
 
-Rejected on four grounds:
+1. **Hardlink clones (like workspaces).** Zero cost at clone time, but
+   *fetch copies*: an advancing checkout accumulates the full upstream
+   churn privately, forever (~5 GB/year per checkout on a busy monorepo),
+   plus one pack per fetch. Fine for ephemeral workspaces, wrong for
+   permanent repos. (`.keep`-marking the base packs was considered to make
+   this safe under gc; rejected as hand-reimplementing the dependency
+   tracking worktrees give natively — which packs to mark, when removal is
+   safe.)
+2. **`--shared` clones (alternates to the mirror).** Zero duplication and a
+   real `.git` dir — but the dependency is *invisible to git*: the mirror's
+   gc doesn't know the repo exists, so a force-pushed upstream branch plus
+   prune could remove objects a repo's detached checkout still references.
+   Living with that means defensive gc scheduling, broken-repo detection,
+   and a re-derive path — shed hand-managing what git can't see.
+3. **Detached worktrees of the mirror (chosen).** Same zero duplication,
+   but the dependency is *declared*: worktree HEADs are gc reachability
+   roots, so the mirror can be collected at any time with no corruption
+   race and no bookkeeping. The costs are real but small and entirely
+   shed-internal: `.git` is a pointer file (per-repo state shrinks to
+   nearly nothing; leftovers live in the mirror's `worktrees/<id>/` admin
+   dir), per-repo git config needs `extensions.worktreeConfig`, removal is
+   `git worktree remove` rather than bare `rm -rf`, and worktree operations
+   serialize on the mirror's exclusive lock.
 
-1. **Hard coupling.** A worktree's `.git` is a pointer file into the mirror's
-   `worktrees/` admin area — delete or rebuild the mirror and every repo
-   breaks immediately, versus hardlinked clones where the failure mode is
-   only "disk sharing degrades". The design's best property is that every
-   tier is independently `rm -rf`-able and re-derivable; worktrees carve an
-   exception into it.
-2. **Sidecars.** With `.git` a file, there is no local dir for
-   `shed.meta`/`shed.lock`; they'd have to live in the mirror's per-worktree
-   admin dir, fracturing the uniform "sidecar rides inside the thing it
-   describes" pattern.
-3. **Two mechanisms.** Workspaces must stay clones; repos-as-worktrees means
-   two derivation mechanisms with different failure modes, cleanup
-   (`git worktree prune` after `rm -rf`), and locking (worktree ops mutate
-   mirror admin state → exclusive-lock contention instead of shared reads).
-4. **Alternates achieve the payoff cheaper.** The disk win worktrees offer
-   (zero incremental duplication for advancing checkouts) is had with
-   `git clone --shared` — the design repos actually use — while keeping a
-   real `.git` dir (sidecars intact), the identical clone code path (one
-   flag), and clean `rm -rf` teardown with no admin state registered in the
-   mirror. The coupling cost is the same for both and acceptable for
-   rebuildable plumbing; worktrees add costs 1–3 on top for nothing extra.
+Two worktree limitations are non-issues here, one by design and one by
+invariant:
+
+- **Detached HEADs are mandatory, not a preference.** Git refuses to fetch
+  into a branch that is checked out in *any* worktree — a repo worktree
+  sitting on `main` would make the mirror's own `+refs/heads/*` fetch fail
+  for `main`. Detached checkouts keep every branch fetchable; sync moves
+  the repo afterward with `checkout --detach`.
+- **Same-branch-twice never arises.** Two repos of one upstream at the same
+  `track` would be identical read-only trees — pure duplication with no
+  use. The derived `@track` naming already collides them at config time,
+  and `config.Validate` rejects duplicate `(url, track)` pairs even under
+  explicit `name` overrides. The constraint costs nothing because the
+  thing it forbids is worthless.
+
+The README's "why not `git worktree`" rationale is re-scoped, not reversed:
+it argued from user work, pushing, and independent teardown — all true of
+workspaces, none true of repos.
 
 ## No migration
 
@@ -390,34 +419,36 @@ package and a repo-checkout package, path helpers rename accordingly, and the
 README's design-rationale sections ("Why a read-only store…", "Why
 `git clone --reference`, not `git worktree`") are rewritten for the mirror
 model — the `--reference`/alternates justification no longer describes how it
-works. The worktree rejection itself still stands: workspaces remain ordinary
-independent repos with plain `rm -rf` teardown.
+works. The README's worktree rejection is re-scoped rather than reversed: it
+still holds for workspaces (user work, independence, plain `rm -rf`
+teardown), while repos — shed-owned read-only checkouts — are now exactly
+worktrees.
 
 ## Open questions / must-verify
 
 1. **Hardlink behavior across filesystems** — local clone falls back to
    copying when `~/.shed` spans devices; still correct, just slower/bigger.
    No action, but worth a note in docs.
-2. **`git clone --branch` with a tag source** — confirm the detached-HEAD
-   result for tag-tracked repos matches what the repo checkout step expects,
-   and that `--branch <tag>` from a bare local source behaves identically to
-   the network case.
+2. **`git clone --branch` with a tag** — a workspace based off a
+   tag-tracked repo clones with `--branch <tag>`; confirm the detached-HEAD
+   + `checkout -b` sequence behaves identically from a bare local source as
+   over the network.
 3. **Mirror HEAD refresh cadence** — `ls-remote --symref` is an extra network
    round-trip per sync; confirm it's cheap enough to do every sync or gate it
    (e.g. only when the fetch reports ref changes).
 4. **Lock ordering** — workspace creation takes a shared lock on the mirror
-   (replacing today's shared store lock); repo checkout updates take the repo
-   lock; sync takes exclusive mirror then per-repo locks. Verify no path
-   acquires in the opposite order.
-5. **`clone --shared` fetch behavior** — confirm on the installed git that a
-   repo's fetch from its mirror stores no objects (alternate-visible objects
-   excluded from the transferred pack) and that alternate-ref advertisement
-   doesn't degrade on very large ref counts.
-6. **`.keep` semantics on the installed git** — confirm `gc --auto`, `gc`,
-   and `gc --aggressive` all leave kept packs untouched and do not duplicate
-   kept objects into new packs (`repack.packKeptObjects` defaults off), and
-   that a local hardlink clone does not propagate stray `.keep` files from
-   the source (the mirror should never carry any).
+   (replacing today's shared store lock); worktree add/remove/update and gc
+   mutate mirror state and take the exclusive lock. Verify no path acquires
+   locks in conflicting order and that repo updates during sync serialize
+   acceptably.
+5. **Worktree mechanics on the installed git** — `git worktree add --detach`
+   from a bare repo; repeated `checkout --detach` updates; gc (including
+   `--aggressive` and `--prune=now`) treating worktree HEADs as reachability
+   roots; `git worktree remove` on a chmod-locked tree.
+6. **Worktree config + tree locking** — the read-only chmod walk currently
+   excludes the `.git` dir; with worktrees it must exclude (and never follow)
+   the `.git` pointer file. Verify `extensions.worktreeConfig` keeps per-repo
+   `Git` config out of the mirror and sibling repos.
 
 ## Implementation sequence
 
@@ -428,18 +459,22 @@ independent repos with plain `rm -rf` teardown.
    uniqueness and sanitized-path uniqueness).
 2. **Mirror package.** Bare clone with explicit refspec, fetch, HEAD-symref
    refresh, lock/meta sidecars at top level, `.sync-errors` keyed by mirror.
-3. **Repo checkout package.** Create/update a read-only checkout from a
-   mirror at `track` (`--shared` clone with alternates to the mirror →
-   detached checkout → tree lock); per-repo meta; broken-repo detection
-   that re-derives from the mirror.
-4. **Sync rewrite.** `syncOne` becomes fetch-mirror-then-update-checkouts;
-   one fetch per mirror across N repos; meta split.
-5. **Workspace creation rewrite.** Local clone from mirror + `.keep`-mark
-   the base packs + `remote set-url`; drop `--reference`; base-branch
-   defaulting from the source repo's `track`; keep the
-   best-effort-sync-first / stale-fallback behavior.
-6. **CLI + resolution.** `@`-suffixed names through `Resolve`, `shed add`
-   growing a way to specify `track`, orphan-dir pruning, `shed sync` output
-   that mentions mirrors.
-7. **Docs.** README model rewrite (repos you read, workspaces you write,
+3. **Repo worktree package.** Create a read-only checkout as a detached
+   worktree of the mirror (`git worktree add --detach` → tree lock); update
+   = unlock → `checkout --detach <track tip>` → lock; removal via
+   `git worktree remove` (+ prune); per-repo git config via
+   `extensions.worktreeConfig`.
+4. **Sync rewrite.** `syncOne` becomes fetch-mirror-then-update-worktrees;
+   one fetch per mirror across N repos; meta moves to the mirror.
+5. **Workspace creation rewrite.** Local clone from mirror (`gc.auto=0`
+   seeded) + `remote set-url`; drop `--reference`; base-branch defaulting
+   from the source repo's `track`; keep the best-effort-sync-first /
+   stale-fallback behavior.
+6. **Prune gains gc.** After workspace removal: `git gc` per mirror under
+   its exclusive lock, then `git worktree prune`; orphan repo-dir detection
+   (dirs with no config entry).
+7. **CLI + resolution.** `@`-suffixed names through `Resolve`, `shed add`
+   growing a way to specify `track`, `shed sync` output that mentions
+   mirrors.
+8. **Docs.** README model rewrite (repos you read, workspaces you write,
    mirrors as plumbing); embedded agent guide unchanged in vocabulary.
