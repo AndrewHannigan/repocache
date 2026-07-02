@@ -276,6 +276,13 @@ remote-tracking refs were populated from the mirror and are semantically
 upstream's refs; the first real `git fetch` reconciles against the true
 remote.
 
+**Workspaces derive from the mirror, never from a repo.** The tiers are
+siblings, not a chain: a repo stores no objects (alternates) and holds only
+one ref, so cloning from it would chain alternates through disposable
+plumbing and scope workspaces to the repo's tracked ref. The repo named on
+the CLI is a resolution and defaults source only — it selects the mirror,
+supplies the base-branch default, and seeds the per-repo `Git` config.
+
 **Base-branch default:** a workspace created via a tracked repo
 (`shed workspace new airflow@v2-7-stable my-fix`) bases on that repo's
 `track`, not the upstream default — an agent working against the 2.7 checkout
