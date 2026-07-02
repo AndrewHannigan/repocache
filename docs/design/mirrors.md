@@ -260,7 +260,7 @@ per mirror (network, exclusive lock on mirror):
   3. write shed.meta
 
 per derived repo (local, deterministic, retryable):
-  4. unlock tree → git checkout --detach <track tip> → lock tree
+  4. unlock tree → git checkout --detach <track, BY REF NAME> → lock tree
      (a worktree reads the mirror's refs directly: no fetch, no objects
       move; creating a repo is the same operation from zero, via
       git worktree add --detach)
@@ -270,6 +270,31 @@ The network call is no longer in the middle of a mutated working tree
 (today's unlock → network fetch → checkout → relock in `syncOne`). A mirror
 fetch is effectively atomic at the ref level; everything after it is local
 and rebuildable offline. Two Airflow checkouts cost one fetch.
+
+#### What a branch-tracked repo looks like from inside
+
+Detached HEAD raised a UX worry: a user who knows the repo "tracks main"
+cd's in and sees a bare SHA. The affordances mostly answer it, given one
+rule — **sync detaches by ref name, never raw SHA** (git records the detach
+point):
+
+- `git status` → `HEAD detached at main`
+- `git log -1` → tip commit decorated `(HEAD, main)` — a worktree shares
+  the mirror's refs, and the mirror's `main` is a real local branch at
+  that commit
+- shell prompts are the one uncontrolled surface: branch-aware prompts
+  typically render detached HEAD as a short SHA. Acceptable — the first
+  orienting command a confused user runs answers in the word "main", and
+  `shed ls` should surface TRACK/SYNCED per repo as the authoritative
+  answer.
+
+A rejected alternative for prompt-friendliness: shed-owned per-repo
+branches in the mirror (`shed/<name>`, force-moved each sync, checked out
+non-detached — upstream never fetches into that name, so no fetch
+refusal). Rejected: ref-namespace pollution, `checkout -B` choreography
+every sync, per-repo branch names to dodge the one-checkout-per-branch
+rule, and the visible label (`shed/airflow`) explains no more than
+`detached at main`.
 
 ### Workspace creation
 
