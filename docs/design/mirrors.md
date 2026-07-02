@@ -280,6 +280,43 @@ clones breaks and disk creeps until they're pruned. Reasonable default:
 leave `gc.auto=0` off the table initially and revisit; the safety property
 (degradation, never corruption) holds either way.
 
+## Alternative considered: repos as worktrees of the mirror
+
+The README's "why not `git worktree`" rationale is about *workspaces* — its
+strongest arguments (independent repo, own origin, agents may push, plain
+`rm -rf` teardown) don't apply to repos, which are shed-owned, read-only, and
+never push. So worktrees were considered seriously for the repo tier: a
+single object DB with zero duplication, repo state definitionally in sync
+with the mirror, and detached-HEAD worktrees sidestep the same-branch-twice
+limitation (repos are detached checkouts anyway). Mirror gc is
+worktree-aware, so gc stays safe.
+
+Rejected on four grounds:
+
+1. **Hard coupling.** A worktree's `.git` is a pointer file into the mirror's
+   `worktrees/` admin area — delete or rebuild the mirror and every repo
+   breaks immediately, versus hardlinked clones where the failure mode is
+   only "disk sharing degrades". The design's best property is that every
+   tier is independently `rm -rf`-able and re-derivable; worktrees carve an
+   exception into it.
+2. **Sidecars.** With `.git` a file, there is no local dir for
+   `shed.meta`/`shed.lock`; they'd have to live in the mirror's per-worktree
+   admin dir, fracturing the uniform "sidecar rides inside the thing it
+   describes" pattern.
+3. **Two mechanisms.** Workspaces must stay clones; repos-as-worktrees means
+   two derivation mechanisms with different failure modes, cleanup
+   (`git worktree prune` after `rm -rf`), and locking (worktree ops mutate
+   mirror admin state → exclusive-lock contention instead of shared reads).
+4. **Marginal payoff.** The initial clone hardlinks everything; worktrees
+   only eliminate the *incremental* duplication from later fetches (new
+   objects copied into repo-local packs), which grows with new commits only
+   — and a bloated repo can simply be re-cloned from the mirror, offline.
+
+Revisit if shed targets gigantic monorepos where incremental duplication
+across several checkouts is material; worktrees (or alternates, safe here
+because shed controls both sides and repos are rebuildable) become the right
+lever for the repo tier specifically.
+
 ## No migration
 
 shed is unreleased; the new layout lands as *the* layout in one change.
