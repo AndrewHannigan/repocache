@@ -261,16 +261,17 @@ and rebuildable offline. Two Airflow checkouts cost one fetch.
 ```
 1. optional best-effort mirror fetch (same warn-and-proceed-if-stale
    fallback as today; hard-fail only if no mirror exists at all)
-2. git clone --branch <branch> --config gc.auto=0 [--config k=v ...] \
-     -- <mirror-path> <dest>
-   (local: objects hardlinked, no --reference, no alternates; gc.auto=0 so
-   auto-gc can never rewrite the packs and privatize the shared base)
-3. git remote set-url origin <upstream-url>
-4. new-branch case: git checkout -b <name>, as today
+2. git clone --branch <branch> [--config k=v ...] -- <mirror-path> <dest>
+   (local: objects hardlinked, no --reference, no alternates)
+3. touch objects/pack/<pack>.keep for every pack present at clone time —
+   marks the hardlinked base packs precious so gc/repack never rewrite them
+4. git remote set-url origin <upstream-url>
+5. new-branch case: git checkout -b <name>, as today
 ```
 
-Step 3 is the one extra step versus today, and it is benign: a config write
-that cannot partially fail in an interesting way. Failure cleanup at any step
+Steps 3–4 are the extra steps versus today, and both are benign: local file
+and config writes that cannot partially fail in an interesting way. Failure
+cleanup at any step
 is `rm -rf <dest>` — already the teardown model. The workspace's
 remote-tracking refs were populated from the mirror and are semantically
 upstream's refs; the first real `git fetch` reconciles against the true
@@ -311,16 +312,27 @@ filesystem). The asymmetry to internalize: **clone hardlinks, fetch copies.**
    *with each other*, so the cost is one extra full copy of the base, total,
    until those workspaces are pruned. Degradation, never corruption.
    Alternates-based repos are unaffected — they see the new packs.
-4. **gc inside a clone: privatizes it.** Auto-gc firing inside a hardlinked
-   clone rewrites its packs, converting the entire shared base into a
-   private copy — a disk shock on a large repo, though still not corruption.
-   Workspaces therefore get `gc.auto=0` seeded via `--config` at creation:
-   harmless for disposable dirs that never live long enough to need
-   maintenance. Repos store no objects, so there is nothing to gc.
+4. **gc inside a clone: privatizes it — unless the base packs are kept.**
+   Auto-gc firing inside a hardlinked clone rewrites its packs, converting
+   the entire shared base into a private copy — a disk shock on a large
+   repo, though still not corruption. Disabling auto-gc (`gc.auto=0`) would
+   prevent that but creates the opposite problem for exactly the users who
+   care: a long-lived workspace on a big repo accumulates loose objects
+   from agent commits and one pack per fetch, and with maintenance off it
+   slowly degrades. Instead, workspace creation marks every pack present at
+   clone time with a `.keep` file — git's native "this pack is precious"
+   marker. gc/repack never rewrite kept packs (and by default never copy
+   their objects into new packs), so auto-gc stays fully enabled: loose
+   objects get packed, fetched packs get consolidated, and the shared base
+   is never touched. The `.keep` files are ordinary workspace-local files
+   next to the hardlinked packs; they affect neither the mirror nor sibling
+   workspaces. Repos store no objects, so there is nothing to gc.
 
 Mirror gc policy: shed owns the only writer, so gc runs only inside sync,
 under the mirror's exclusive lock, before repos are updated, with a
-conservative prune expiry. The residual race — an upstream force-push
+conservative prune expiry. The mirror pins `gc.auto=0` — not to avoid
+maintenance but to own its scheduling (a stray auto-gc triggered mid-fetch
+would run outside the lock discipline); it is the only tier that does. The residual race — an upstream force-push
 abandons objects a repo's current checkout still references, and prune
 removes them — corrupts only rebuildable plumbing: sync detects a broken
 repo and re-derives it from the mirror.
@@ -401,6 +413,11 @@ independent repos with plain `rm -rf` teardown.
    repo's fetch from its mirror stores no objects (alternate-visible objects
    excluded from the transferred pack) and that alternate-ref advertisement
    doesn't degrade on very large ref counts.
+6. **`.keep` semantics on the installed git** — confirm `gc --auto`, `gc`,
+   and `gc --aggressive` all leave kept packs untouched and do not duplicate
+   kept objects into new packs (`repack.packKeptObjects` defaults off), and
+   that a local hardlink clone does not propagate stray `.keep` files from
+   the source (the mirror should never carry any).
 
 ## Implementation sequence
 
@@ -417,9 +434,10 @@ independent repos with plain `rm -rf` teardown.
    that re-derives from the mirror.
 4. **Sync rewrite.** `syncOne` becomes fetch-mirror-then-update-checkouts;
    one fetch per mirror across N repos; meta split.
-5. **Workspace creation rewrite.** Local clone from mirror + `remote set-url`;
-   drop `--reference`; base-branch defaulting from the source repo's `track`;
-   keep the best-effort-sync-first / stale-fallback behavior.
+5. **Workspace creation rewrite.** Local clone from mirror + `.keep`-mark
+   the base packs + `remote set-url`; drop `--reference`; base-branch
+   defaulting from the source repo's `track`; keep the
+   best-effort-sync-first / stale-fallback behavior.
 6. **CLI + resolution.** `@`-suffixed names through `Resolve`, `shed add`
    growing a way to specify `track`, orphan-dir pruning, `shed sync` output
    that mentions mirrors.
