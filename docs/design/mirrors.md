@@ -166,28 +166,50 @@ them.
 
 ```
 ~/.shed/
-├── mirrors/
-│   └── github.com/apache/airflow.git/        # bare mirror, one per upstream URL
-│       ├── shed.lock                         # bare repo: sidecars at top level
-│       └── shed.meta                         # LastSyncAt / LastError live here
-├── repos/
+├── repos/                                    # user/agent-facing: shed prints these paths
 │   └── github.com/apache/
 │       ├── airflow/                          # default branch — advances on sync
 │       │   └── .git/shed.meta                # per-repo state: checked-out ref
 │       ├── airflow@v2-7-stable/              # branch — advances on sync
 │       ├── airflow@release-2.8/              # branch "release/2.8", sanitized
 │       └── airflow@2.7.3/                    # tag — frozen
-└── workspaces/
-    └── github.com/apache/
-        ├── airflow/fix-dag/                  # workspace off the default repo
-        └── airflow@v2-7-stable/fix-dag/      # same branch name, no collision
+├── workspaces/                               # user/agent-facing
+│   └── github.com/apache/
+│       ├── airflow/fix-dag/                  # workspace off the default repo
+│       └── airflow@v2-7-stable/fix-dag/      # same branch name, no collision
+├── logs/                                     # user-serviceable when debugging
+└── .internal/                                # plumbing — never printed as a destination
+    ├── mirrors/
+    │   └── github.com/apache/airflow.git/    # bare mirror, one per upstream URL
+    │       ├── shed.lock                     # bare repo: sidecars at top level
+    │       └── shed.meta                     # LastSyncAt / LastError live here
+    ├── sync-errors/                          # was .sync-errors/ — dot dropped
+    ├── sessions-pending/                     # was .sessions-pending/
+    ├── bg-sync.lock                          # was .bg-sync.lock
+    ├── history.jsonl
+    └── history-trim                          # was .history-trim
 ```
 
 Decisions baked in:
 
-- **Mirrors get their own root**, keyed by URL-derived `host/owner/repo` with
-  a `.git` suffix — the server-side convention for bare repos, visually
-  unmistakable, and it separates "one per upstream" from "one per ref".
+- **One `.internal/` bucket instead of per-file dot-prefixes.** The rule: if
+  shed ever prints a path for the user or an agent to visit, it's top-level
+  (`repos/`, `workspaces/`, `logs/`); everything else lives under
+  `.internal/`. This keeps `ls ~/.shed` showing exactly the two-concept
+  model (plus logs), matters for agents who `ls` the parent of a repo path
+  they were handed, and replaces the accumulating `.sync-errors` /
+  `.sessions-pending` / `.bg-sync.lock` dot-convention with one rule — the
+  moved entries lose their dots since the bucket already hides them.
+  Named `.internal` (singular) after the Go convention, carrying the right
+  meaning: works fine, not yours to depend on. `logs/` stays out because it
+  exists *for* the user to look at when something's wrong.
+- **Mirrors live under `.internal/mirrors/`**, keyed by URL-derived
+  `host/owner/repo` with a `.git` suffix — the server-side convention for
+  bare repos, visually unmistakable, and it separates "one per upstream"
+  from "one per ref". This completes the hiding: mirrors are absent from
+  config, from everyday vocabulary, and now from the visible tree. The
+  mild cost is longer paths baked into repo git configs (each read-only
+  repo's `origin` is its mirror path), invisible in practice.
 - **Bare repos have no `.git/` dir**, so `shed.lock` / `shed.meta` sit at the
   mirror's top level. The mirror's meta owns `LastSyncAt` / `LastError`
   (the mirror owns the network); each repo's `.git/shed.meta` records only
@@ -292,9 +314,11 @@ independent repos with plain `rm -rf` teardown.
 
 ## Implementation sequence
 
-1. **Paths + config.** New `mirrors/` path helpers; `Track` field on `Repo`;
-   name derivation with `@` + sanitization; `Validate` collision check
-   (name uniqueness and sanitized-path uniqueness).
+1. **Paths + config.** New `.internal/` root and `mirrors/` path helpers;
+   relocate existing plumbing paths (`sync-errors`, `sessions-pending`,
+   `bg-sync.lock`, history files) under it; `Track` field on `Repo`; name
+   derivation with `@` + sanitization; `Validate` collision check (name
+   uniqueness and sanitized-path uniqueness).
 2. **Mirror package.** Bare clone with explicit refspec, fetch, HEAD-symref
    refresh, lock/meta sidecars at top level, `.sync-errors` keyed by mirror.
 3. **Repo checkout package.** Create/update a read-only checkout from a
